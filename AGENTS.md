@@ -35,7 +35,26 @@ except the catalog entry and the mechanism it uses.
 
 It wraps `ddcutil` on Linux and `m1ddc` on macOS, permanently. There is no native I²C/IOKit backend and there never will be one.
 
-Requirements: [`docs/requirements.md`](docs/requirements.md).
+Requirements: [`docs/requirements.md`](docs/requirements.md) — the source document, kept as written.
+
+Documentation, and what each page is for:
+
+| Page                                                   | What it answers                                                          |
+| ------------------------------------------------------ | ------------------------------------------------------------------------ |
+| [`README.md`](README.md)                               | What monmux is, how to install it, how to run it.                        |
+| [`docs/architecture.md`](docs/architecture.md)         | How a switch is decided, and the five things that make it safe.          |
+| [`docs/backends.md`](docs/backends.md)                 | ddcutil and m1ddc specifics: version floor, probes, permissions, quirks. |
+| [`docs/compatibility.md`](docs/compatibility.md)       | The catalog, in prose. Checked against the code by a test.               |
+| [`docs/adding-a-monitor.md`](docs/adding-a-monitor.md) | The procedure for enabling a model or an input.                          |
+| [`docs/configuration.md`](docs/configuration.md)       | The configuration file, the flags, and which wins.                       |
+| [`docs/security.md`](docs/security.md)                 | Threat model, mitigations, trust boundaries, what monmux never does.     |
+| [`docs/testing.md`](docs/testing.md)                   | How the no-exec rule is enforced, and the human hardware checklist.      |
+| [`docs/troubleshooting.md`](docs/troubleshooting.md)   | Every refusal reason and its fix.                                        |
+| [`docs/release.md`](docs/release.md)                   | The release pipeline, as a design. Not implemented.                      |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md)                   | Prerequisites, workflow, and the catalog evidence rule.                  |
+
+A change to the catalog must update [`docs/compatibility.md`](docs/compatibility.md) in the same commit: a test compares them
+and fails the build if they disagree.
 
 ## Common commands
 
@@ -66,12 +85,16 @@ Repo-local make targets live in `.mk/cross.mk`.
 - `internal/edid` — EDID block-0 parser producing an `Identity`. Carries no raw EDID bytes.
 - `internal/catalog` — the supported-monitor catalog as Go source, the `Input` and `Mechanism` enums, and the opaque `Operation`.
 - `internal/policy` — pure decision logic: displays plus request in, `Decision` or refusal out. No I/O.
-- `internal/backend` — the `Backend` interface plus the `Display` and `Command` types. Imports no backend subpackage.
+- `internal/backend` — the `Backend` interface plus the `Display`, `Command` and `Check` types, the shared tool-path trust check
+  (`toolpath.go`), the shared doctor check helpers (`check.go`) and the `Fake` backend the app and CLI tests drive. Imports no
+  backend subpackage.
 - `internal/backend/exec` — the `Runner` interface, the real runner (with the no-exec guard) and the recording fake.
 - `internal/backend/select` — picks the backend by `runtime.GOOS`.
 - `internal/backend/ddcutil` — Linux backend (`//go:build linux`).
-- `internal/backend/m1ddc` — macOS backend (`//go:build darwin`), with the output parser in a tag-free `parse.go`.
-- `internal/app` — orchestration: preflight, enumerate, resolve, ready, plan, execute.
+- `internal/backend/m1ddc` — macOS backend (`//go:build darwin`), with the output parser and every decision taken from it in
+  tag-free `parse.go` and `decide.go`, unit-tested on Linux.
+- `internal/app` — orchestration: preflight, enumerate, resolve, ready, plan, execute; and `Info`, which never writes.
+- `internal/config` — the three-key configuration file (`serial`, `ddcutil_path`, `m1ddc_path`). Unknown keys are an error.
 
 ## Fail-closed invariants
 
@@ -112,3 +135,8 @@ run executes, by construction.
   `GO_LDFLAGS` in `.mk/go.mk`.
 - Every Go file starts with the Apache 2.0 header from `.idea/copyright/Apache_2_0.xml`.
 - Test fixtures contain synthetic serials and UUIDs only, from a fixed allowlist that a test enforces. Never commit a real serial.
+  The whitespace pre-commit hooks skip `testdata/`, so a capture keeps the bytes the real tool produced.
+- Exit codes are part of the interface: `0` sent, `2` refused with nothing written, `1` the tool ran and failed or the request
+  could not be made. Only a refusal may promise that nothing was written.
+- A read-only command that fails is worded as a diagnostic, not as a refused write: `info` and `doctor` print their report and
+  then one line naming the check that stopped them.

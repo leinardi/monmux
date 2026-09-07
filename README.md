@@ -20,8 +20,9 @@ The 38BR85QC row is in the catalog for a contributor who owns one: the values ar
 where they came from. Because no EDID fingerprint for it has been collected, it cannot match a display at all.
 
 `hdmi1` and `hdmi2` exist as symbolic inputs but are not enabled for any model: nobody has tested those values on a real unit
-yet, so monmux refuses them. Enabling one means testing it on a real unit and recording the evidence in the catalog, which is
-what the contributor documentation describes.
+yet, so monmux refuses them. Enabling one means testing it on a real unit and recording the evidence in the catalog — see
+[docs/adding-a-monitor.md](docs/adding-a-monitor.md). The full catalog, with the evidence for every value, is in
+[docs/compatibility.md](docs/compatibility.md).
 
 ## Install
 
@@ -85,9 +86,16 @@ Only exit `2` carries the promise that nothing was written.
 ## Documentation
 
 - [Architecture](docs/architecture.md) — how a switch is decided, and what stops it going wrong.
+- [Compatibility](docs/compatibility.md) — the catalog, with the evidence for every value.
 - [Configuration](docs/configuration.md) — the configuration file, the flags, and which wins.
+- [Troubleshooting](docs/troubleshooting.md) — every refusal reason, and what to do about it.
+- [Backends](docs/backends.md) — `ddcutil` and `m1ddc` specifics: versions, permissions, quirks.
+- [Adding a monitor](docs/adding-a-monitor.md) — the procedure for enabling a model or an input.
 - [Security](docs/security.md) — threat model, mitigations, trust boundaries, and what monmux never does.
+- [Testing](docs/testing.md) — why no test ever runs an external binary, and the human hardware checklist.
+- [Release](docs/release.md) — the release pipeline, as a design. Not implemented yet.
 - [Requirements](docs/requirements.md) — the source document this project was built from.
+- [Contributing](CONTRIBUTING.md) — prerequisites, workflow, and the catalog evidence rule.
 - [AGENTS.md](AGENTS.md) — repository conventions, including the rule that no AI agent may write to a monitor.
 
 ## Licence
