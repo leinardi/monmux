@@ -2,17 +2,92 @@
 
 Switch supported monitors between video inputs, from the command line, on Linux and macOS.
 
-`monmux` is fail-closed by design: it writes to a monitor only when that monitor is positively identified as a model in the
-built-in supported-monitor catalog **and** the requested input is explicitly enabled for that model. Anything else — an unknown
-monitor, an ambiguous match, an input without recorded evidence — is refused without a write. One model is verified so far.
+`monmux` is fail-closed by design. It writes to a monitor only when that monitor is positively identified, from its EDID, as a
+model in the built-in supported-monitor catalog, **and** the requested input is explicitly enabled for that model with recorded
+evidence that the value was tested on real hardware. Everything else — an unknown monitor, two candidates, an input nobody has
+verified — is refused without a write, and every refusal says so in as many words.
 
-It wraps `ddcutil` on Linux and `m1ddc` on macOS; there is no native I²C/IOKit backend.
+It wraps `ddcutil` on Linux and `m1ddc` on macOS; there is no native I²C or IOKit backend. One monitor model is verified so far.
 
-> **Status: work in progress.** This README is a placeholder and will be replaced once the CLI is implemented.
+## Supported monitors
+
+| Model         | EDID identity                 | Inputs                      | Status                                                                       |
+| ------------- | ----------------------------- | --------------------------- | ---------------------------------------------------------------------------- |
+| LG 38WR85QC-W | `GSM 0x77D3`, `GSM 0x77D4`    | `dp` (0xD0), `usb-c` (0xD1) | Verified on hardware, 2026-09-07, Linux and macOS                            |
+| LG 38BR85QC   | no EDID fingerprint collected | none enabled                | Recorded from the ddcutil wiki, unverified — never matches, never written to |
+
+The 38BR85QC row is in the catalog for a contributor who owns one: the values are written down, disabled, with a note saying
+where they came from. Because no EDID fingerprint for it has been collected, it cannot match a display at all.
+
+`hdmi1` and `hdmi2` exist as symbolic inputs but are not enabled for any model: nobody has tested those values on a real unit
+yet, so monmux refuses them. Enabling one means testing it on a real unit and recording the evidence in the catalog, which is
+what the contributor documentation describes.
+
+## Install
+
+Download a binary from the [releases page](https://github.com/leinardi/monmux/releases), or build from source:
+
+```sh
+go install github.com/leinardi/monmux/cmd/monmux@latest
+```
+
+A Homebrew formula will arrive together with the release pipeline.
+
+### Prerequisites
+
+**Linux** — `ddcutil` 2.2 or newer (2.2.5 is the version monmux was verified against; the `--i2c-source-addr` option it needs
+does not exist in older releases), and permission to open the monitor's `/dev/i2c-N` for reading and writing. On most
+distributions that means installing `ddcutil`, loading the `i2c-dev` module, and adding yourself to the `i2c` group or
+installing the udev rule that ships with `ddcutil`. Log in again afterwards.
+
+**macOS** — [`m1ddc`](https://github.com/waydabber/m1ddc), which requires Apple Silicon:
+
+```sh
+brew install m1ddc
+```
+
+`monmux doctor` reports which of these are missing.
+
+## Usage
+
+```sh
+monmux info                 # what is attached, and what monmux would do with it
+monmux info --json          # the same, for scripts
+monmux doctor               # can monmux reach the monitors at all?
+
+monmux switch usb-c --dry-run   # print the exact command, run nothing
+monmux switch usb-c             # send it
+monmux switch dp --serial ABC123456789   # pick one of two identical monitors
+```
+
+Serial numbers, macOS display UUIDs and raw EDID hex are redacted in every output by default, so what monmux prints is safe to
+paste into a bug report. `--show-serial` prints them verbatim, and is the only way to see them.
+
+A successful switch reports exactly what happened:
+
+```text
+Input-switch command sent (USB-C, 0xD1) to LG 38WR85QC-W via ddcutil. Switch not independently confirmed.
+```
+
+The second sentence is not hedging. The LG side channel monmux uses has no reliable read-back, so "the command was sent" is the
+strongest true statement available; monmux never claims a monitor switched.
+
+## Exit codes
+
+| Code | Meaning                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `0`  | The input-switch command was sent, or a read-only command succeeded.                                                           |
+| `1`  | The external tool ran and failed, or the request could not be made at all. The message says whether a write may have happened. |
+| `2`  | monmux refused. No DDC write was performed.                                                                                    |
+
+Only exit `2` carries the promise that nothing was written.
 
 ## Documentation
 
-- [Requirements](docs/requirements.md) — goal, verified findings, compatibility data and safety requirements.
+- [Architecture](docs/architecture.md) — how a switch is decided, and what stops it going wrong.
+- [Configuration](docs/configuration.md) — the configuration file, the flags, and which wins.
+- [Security](docs/security.md) — threat model, mitigations, trust boundaries, and what monmux never does.
+- [Requirements](docs/requirements.md) — the source document this project was built from.
 - [AGENTS.md](AGENTS.md) — repository conventions, including the rule that no AI agent may write to a monitor.
 
 ## Licence

@@ -2,7 +2,16 @@
 
 ## Goal, verified findings, compatibility data, and safety requirements
 
-**Status:** 2026-09-07
+> **Status: source document, kept as written.** This is the research and requirements document monmux was built from, dated
+> 2026-09-07. It is preserved as the record of what was investigated, measured on real hardware and decided, and it is what the
+> numbered requirements referenced elsewhere in the repository (9.5, 9.7, 9.12, and the rest) refer to.
+>
+> It is not a description of the current implementation, and it is not updated as the code changes. For what monmux does today,
+> see the [README](../README.md), [architecture.md](architecture.md), [configuration.md](configuration.md) and
+> [security.md](security.md). Where this document says "should", the implementation notes in those files say what it actually
+> does.
+
+**Original status:** 2026-09-07
 **Initial target platforms:** Linux and macOS
 
 ## 1. Goal
