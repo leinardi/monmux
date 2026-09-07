@@ -1,0 +1,35 @@
+# Backend test fixtures
+
+Everything in this directory is fed to a backend's parser by a test. Nothing here
+is ever sent to a monitor, and no test in this repository executes `ddcutil` or
+`m1ddc`: the real runner refuses to start a process from a test binary at all.
+
+## Fixtures carry synthetic identifiers only
+
+A fixture is a capture of real hardware output, so it starts life containing the
+serial number of somebody's monitor. Before it is committed, every identifier is
+replaced with one of the values below, and `TestFixturesCarryOnlySyntheticSerials`
+fails if any other value appears.
+
+| Identifier                | Value                                    |
+|---------------------------|------------------------------------------|
+| EDID numeric serial       | `0x01020304`                             |
+| EDID serial string (0xFF) | `TESTSERIAL01`                           |
+| m1ddc alphanumeric serial | `TESTSERIAL01`                           |
+| m1ddc binary serial       | `16909060` (`0x01020304` in decimal)     |
+| macOS display UUID        | `00000000-0000-4000-8000-00000000000N`   |
+
+The values are format-valid rather than obviously fake: a parser must accept them
+exactly as it accepts the real thing, or the fixture would prove nothing.
+
+## Sanitizing a capture
+
+1. Capture the tool's output, or copy the connector's `edid` from sysfs.
+2. Replace every serial and UUID with the value from the table above.
+3. For an EDID, recompute the block-0 checksum: the 128 bytes must sum to zero
+   modulo 256, or `edid.Parse` will reject the fixture.
+4. Run `make go-test`. The allowlist test reads every fixture in every
+   `testdata` directory in the repository, at any depth.
+
+If a fixture needs an identifier the table does not cover, add it to the table
+and to the allowlist in the test, in the same commit as the fixture.

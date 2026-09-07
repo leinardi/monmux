@@ -20,18 +20,15 @@ package selectbackend
 
 import (
 	"github.com/leinardi/monmux/internal/backend"
-	"github.com/leinardi/monmux/internal/refusal"
+	"github.com/leinardi/monmux/internal/backend/ddcutil"
 )
 
-// TODO(phase 7): construct the ddcutil backend here.
-//
-// newBackend returns the ddcutil backend. Until that backend lands, Linux has
-// no backend compiled in and monmux refuses rather than pretending otherwise.
+// newBackend returns the ddcutil backend, which is the only one Linux has.
 //
 //nolint:ireturn // this is the constructor the Backend contract exists for
-func newBackend(_ Options) (backend.Backend, error) {
-	return nil, refusal.New(
-		refusal.BackendUnavailable,
-		"No ddcutil backend is compiled into this build.",
-	)
+func newBackend(opts Options) (backend.Backend, error) {
+	return ddcutil.New(ddcutil.Options{
+		Runner: opts.Runner,
+		Path:   opts.DDCUtilPath,
+	}), nil
 }
