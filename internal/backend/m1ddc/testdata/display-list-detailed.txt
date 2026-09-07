@@ -1,0 +1,24 @@
+[1] LG ULTRAWIDE (00000000-0000-4000-8000-000000000001)
+ - Product name:  LG ULTRAWIDE
+ - Manufacturer:  GSM
+ - AN Serial:     TESTSERIAL01
+ - Vendor:        7789 (0x1e6d)
+ - Model:         30676 (0x77d4)
+ - Serial:        16909060 (0x01020304)
+ - Display ID:    1
+ - System UUID:   00000000-0000-4000-8000-000000000001
+ - EDID UUID:     00000000-0000-4000-8000-000000000001
+ - IO Location:   IOService:/AppleARMPE/arm-io/AppleT8103IO/dispext0
+ - Adapter:       4294967295
+[2] EXAMPLE DISPLAY ()
+ - Product name:  EXAMPLE DISPLAY
+ - Manufacturer:  XXX
+ - AN Serial:     (null)
+ - Vendor:        25368 (0x6318)
+ - Model:         4660 (0x1234)
+ - Serial:        16909060 (0x01020304)
+ - Display ID:    2
+ - System UUID:   
+ - EDID UUID:     
+ - IO Location:   IOService:/AppleARMPE/arm-io/AppleT8103IO/dispext1
+ - Adapter:       4294967295

@@ -20,18 +20,15 @@ package selectbackend
 
 import (
 	"github.com/leinardi/monmux/internal/backend"
-	"github.com/leinardi/monmux/internal/refusal"
+	"github.com/leinardi/monmux/internal/backend/m1ddc"
 )
 
-// TODO(phase 8): construct the m1ddc backend here.
-//
-// newBackend returns the m1ddc backend. Until that backend lands, macOS has
-// no backend compiled in and monmux refuses rather than pretending otherwise.
+// newBackend returns the m1ddc backend, which is the only one macOS has.
 //
 //nolint:ireturn // this is the constructor the Backend contract exists for
-func newBackend(_ Options) (backend.Backend, error) {
-	return nil, refusal.New(
-		refusal.BackendUnavailable,
-		"No m1ddc backend is compiled into this build.",
-	)
+func newBackend(opts Options) (backend.Backend, error) {
+	return m1ddc.New(m1ddc.Options{
+		Runner: opts.Runner,
+		Path:   opts.M1DDCPath,
+	}), nil
 }

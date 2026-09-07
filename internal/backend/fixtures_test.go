@@ -36,6 +36,14 @@ const (
 	syntheticSerialNumber = 0x01020304
 	syntheticSerialString = "TESTSERIAL01"
 	syntheticBinarySerial = "16909060"
+
+	// m1ddc prints a numeric field twice, as "16909060 (0x01020304)". Both
+	// halves are checked rather than one of them ignored.
+	syntheticHexSerial = "(0x01020304)"
+
+	// absentField is what m1ddc prints for a value the IORegistry did not
+	// supply. It is the absence of a serial, so it is allowed wherever one is.
+	absentField = "(null)"
 )
 
 // allowedUUID is the shape every fixture UUID must have: the documented
@@ -174,7 +182,20 @@ func checkText(t *testing.T, path, contents string) {
 		}
 
 		value := strings.TrimSpace(match[1])
-		if value == syntheticSerialString || value == syntheticBinarySerial {
+
+		decimal, hexadecimal, paired := strings.Cut(value, " ")
+		if paired {
+			if hexadecimal != syntheticHexSerial {
+				t.Errorf("%s reports the serial %q, which is not synthetic", path, value)
+
+				continue
+			}
+
+			value = decimal
+		}
+
+		if value == syntheticSerialString || value == syntheticBinarySerial ||
+			value == absentField {
 			continue
 		}
 

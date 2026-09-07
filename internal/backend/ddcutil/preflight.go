@@ -20,16 +20,12 @@ package ddcutil
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"os"
-	osexec "os/exec"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/leinardi/monmux/internal/backend"
 	"github.com/leinardi/monmux/internal/refusal"
 )
 
@@ -39,10 +35,6 @@ const (
 	// was verified against, and --i2c-source-addr is not in older releases.
 	minMajor = 2
 	minMinor = 2
-
-	// worldWritableBits are the write bits for group and other. A tool that
-	// anyone can rewrite is not a tool monmux is willing to run.
-	worldWritableBits os.FileMode = 0o022
 )
 
 // requiredOptions are the options monmux's plan depends on. Their presence in
@@ -80,85 +72,12 @@ func (b *Backend) Preflight(ctx context.Context) error {
 	return nil
 }
 
-// resolvePath finds the ddcutil binary and checks that it can be trusted.
-//
-// PATH, or the configured path, is a trust boundary rather than a threat monmux
-// mitigates: these checks catch a binary anyone could overwrite, not one that
-// was replaced with correct ownership and permissions.
+// resolvePath finds the ddcutil binary and checks that it can be trusted. The
+// checks themselves live in internal/backend, because the macOS backend applies
+// exactly the same ones and a security check must not exist twice.
 func (b *Backend) resolvePath() (string, error) {
-	candidate := b.configured
-
-	if candidate == "" {
-		found, err := osexec.LookPath(Name)
-		if err != nil {
-			return "", refusal.New(
-				refusal.BackendNotReady,
-				Name+" was not found on PATH: "+err.Error(),
-			)
-		}
-
-		candidate = found
-	} else if !filepath.IsAbs(candidate) {
-		return "", refusal.New(
-			refusal.BackendNotReady,
-			"ddcutil_path must be an absolute path, and "+candidate+" is not.",
-		)
-	}
-
-	absolute, err := filepath.Abs(candidate)
-	if err != nil {
-		return "", refusal.New(
-			refusal.BackendNotReady,
-			"Could not resolve "+candidate+": "+err.Error(),
-		)
-	}
-
-	// A symlink from a safe directory into a writable one is exactly the case
-	// these checks exist for, so judge the file the link actually resolves to.
-	resolved, err := filepath.EvalSymlinks(absolute)
-	if err != nil {
-		return "", refusal.New(
-			refusal.BackendNotReady,
-			absolute+" cannot be inspected: "+err.Error(),
-		)
-	}
-
-	err = trusted(resolved)
-	if err != nil {
-		return "", err
-	}
-
-	return resolved, nil
-}
-
-// trusted refuses a binary that is not a plain file, or that either it or its
-// directory allows anyone but its owner to rewrite.
-func trusted(path string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return refusal.New(refusal.BackendNotReady, path+" cannot be inspected: "+err.Error())
-	}
-
-	if !info.Mode().IsRegular() {
-		return refusal.New(refusal.BackendNotReady, path+" is not a regular file.")
-	}
-
-	if info.Mode().Perm()&worldWritableBits != 0 {
-		return refusal.New(refusal.BackendNotReady, path+" is group- or world-writable.")
-	}
-
-	directory := filepath.Dir(path)
-
-	parent, err := os.Stat(directory)
-	if err != nil {
-		return refusal.New(refusal.BackendNotReady, directory+" cannot be inspected: "+err.Error())
-	}
-
-	if parent.Mode().Perm()&worldWritableBits != 0 {
-		return refusal.New(refusal.BackendNotReady, directory+" is group- or world-writable.")
-	}
-
-	return nil
+	//nolint:wrapcheck // a refusal is passed through unchanged; wrapping would corrupt its message
+	return backend.ResolveTool(Name, b.configured, "ddcutil_path")
 }
 
 // checkVersion runs ddcutil --version, a read-only call, and refuses anything
@@ -239,17 +158,4 @@ func (b *Backend) checkCapabilities(ctx context.Context, path string) error {
 	}
 
 	return nil
-}
-
-// fingerprint returns the SHA-256 of the resolved binary, so doctor can show
-// which file it is about to run.
-func fingerprint(path string) (string, error) {
-	contents, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("reading %s: %w", path, err)
-	}
-
-	sum := sha256.Sum256(contents)
-
-	return hex.EncodeToString(sum[:]), nil
 }

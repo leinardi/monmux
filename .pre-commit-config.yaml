@@ -3,8 +3,13 @@ repos:
     rev: v6.0.0
     hooks:
       - id: check-merge-conflict
+      # Fixtures are byte-for-byte captures of another tool's output, and a
+      # formatter that tidies them makes them prove something other than what
+      # was captured.
       - id: end-of-file-fixer
+        exclude: (^|/)testdata/
       - id: trailing-whitespace
+        exclude: (^|/)testdata/
       - id: check-yaml
       - id: check-json
       - id: check-toml

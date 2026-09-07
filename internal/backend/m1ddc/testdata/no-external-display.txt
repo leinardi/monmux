@@ -1,0 +1,1 @@
+No external display found, aborting
