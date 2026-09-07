@@ -1,0 +1,90 @@
+# The supported-monitor catalog: the complete set of bytes monmux is willing to
+# send to a monitor, with the evidence for each one next to it.
+#
+# This file is the source of truth. internal/catalog/models_gen.go is rendered
+# from it and is what the binary compiles; nothing reads this file at run time.
+# After editing, run `make go-generate` and commit both files. A test fails the
+# build if the two ever disagree.
+#
+# Rules for editing it, enforced by the generator and by the tests in
+# catalog_test.go, and spelled out in docs/adding-a-monitor.md:
+#
+#   - A write-enabled model needs at least one EDID identity. An entry with no
+#     identities can never match, and so can never be written to.
+#   - A model that is not write-enabled must record no identities at all, so it
+#     cannot match a display in the first place.
+#   - Every input carries its own evidence string. "Another model in the same
+#     family uses this value" is not evidence.
+#   - A value that has not been observed on the model itself, or confirmed for
+#     that exact model by a named source, does not go in.
+#
+# Inputs are keyed by the symbolic name typed on the command line: dp, usb-c,
+# hdmi1, hdmi2. The mechanism is a per-model property and never a fallback; the
+# only one implemented today is lg-alt-input.
+
+models:
+  - name: 38WR85QC-W
+    vendor: LG
+    # The same physical unit reports 0x77D3 over DisplayPort and 0x77D4 over
+    # USB-C, which is why a model carries several identities.
+    identities:
+      - manufacturer: GSM
+        product_code: 0x77D3
+      - manufacturer: GSM
+        product_code: 0x77D4
+    write_enabled: true
+    # HDMI is deliberately absent: the values were never tested on this unit,
+    # and another LG model using them is not evidence for this one.
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence: >-
+          Direct test on the unit, 2026-09-07, Linux (ddcutil) and macOS (m1ddc):
+          switched from USB-C to DisplayPort
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xD1
+        evidence: >-
+          Direct test on the unit, 2026-09-07, Linux (ddcutil) and macOS (m1ddc):
+          switched from DisplayPort to USB-C
+    sources:
+      - >-
+        Direct observation on the tested unit: EDID GSM/0x77D3 (DisplayPort) and
+        GSM/0x77D4 (USB-C), model string LG ULTRAWIDE
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+
+  - name: 38BR85QC
+    vendor: LG
+    # No identities: no EDID fingerprint for this model has been collected, so
+    # it can never match and monmux can never write to it. The mapping is
+    # recorded because it is useful to a contributor who owns the monitor.
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence: >-
+          Reported by a tester on the ddcutil LG wiki page; not verified here:
+          https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xD1
+        evidence: >-
+          Reported by a tester on the ddcutil LG wiki page; not verified here:
+          https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence: >-
+          Reported by a tester on the ddcutil LG wiki page; not verified here:
+          https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence: >-
+          Reported by a tester on the ddcutil LG wiki page; not verified here:
+          https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors

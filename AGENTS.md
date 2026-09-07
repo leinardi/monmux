@@ -53,8 +53,9 @@ Documentation, and what each page is for:
 | [`docs/release.md`](docs/release.md)                   | The release pipeline, as a design. Not implemented.                      |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md)                   | Prerequisites, workflow, and the catalog evidence rule.                  |
 
-A change to the catalog must update [`docs/compatibility.md`](docs/compatibility.md) in the same commit: a test compares them
-and fails the build if they disagree.
+A change to the catalog must update [`docs/compatibility.md`](docs/compatibility.md) and re-render `models_gen.go` in the same
+commit: one test compares the document against the catalog and another compares the catalog against its YAML, and both fail the build
+if they disagree.
 
 ## Common commands
 
@@ -62,6 +63,7 @@ and fails the build if they disagree.
 make go-build          # build ./dist/monmux for the host OS
 make go-test           # CGO_ENABLED=1 go test -race ./...
 make go-vet
+make go-generate       # re-render internal/catalog/models_gen.go from models.yaml
 make go-build-darwin   # GOOS=darwin go build ./...  (compile-check the macOS backend from Linux)
 make go-vet-darwin     # GOOS=darwin go vet ./...
 make go-tidy           # go mod tidy + go mod verify
@@ -83,7 +85,10 @@ Repo-local make targets live in `.mk/cross.mk`.
 - `cmd/monmux` — cobra commands: `info`, `switch`, `doctor`, `version`, `completion`. Owns flags, config loading, output formatting, and exit codes.
 - `internal/refusal` — the one typed refusal error used by every layer, with the reason enum and the rendered message.
 - `internal/edid` — EDID block-0 parser producing an `Identity`. Carries no raw EDID bytes.
-- `internal/catalog` — the supported-monitor catalog as Go source, the `Input` and `Mechanism` enums, and the opaque `Operation`.
+- `internal/catalog` — the supported-monitor catalog, the `Input` and `Mechanism` enums, and the opaque `Operation`. The catalog is
+  written in `models.yaml` and rendered into the committed `models_gen.go` by `make go-generate`; a test fails the build if the two
+  disagree. `internal/catalog/internal/generate` is that renderer, and it deliberately does not import `internal/catalog`, so a
+  deleted or corrupt `models_gen.go` can still be regenerated.
 - `internal/policy` — pure decision logic: displays plus request in, `Decision` or refusal out. No I/O.
 - `internal/backend` — the `Backend` interface plus the `Display`, `Command` and `Check` types, the shared tool-path trust check
   (`toolpath.go`), the shared doctor check helpers (`check.go`) and the `Fake` backend the app and CLI tests drive. Imports no
@@ -117,8 +122,10 @@ Do not weaken any of these. They are the reason the tool exists.
 
 **Never add a raw VCP command.** No code path may take a VCP code or value from a flag, a config file, an environment variable, or any
 other input. The only bytes that reach a monitor come from a `catalog.Operation` built by the catalog's package-private constructor from
-a compiled-in table entry with recorded evidence. Adding an input or a model means editing `internal/catalog/models.go` and supplying
-the evidence — see [`docs/adding-a-monitor.md`](docs/adding-a-monitor.md).
+a compiled-in table entry with recorded evidence. Adding an input or a model means editing `internal/catalog/models.yaml`, supplying
+the evidence, and running `make go-generate` to re-render `models_gen.go` — commit both — see
+[`docs/adding-a-monitor.md`](docs/adding-a-monitor.md). The YAML is a build input read at development time only: the binary contains no
+catalog parser and reads no catalog file at run time.
 
 **Backends only execute a `Command` produced by `Plan`.** `Command` is returned by `Plan` for display only and is never accepted as
 input by any method. `Execute` takes the `catalog.Operation`, not a `Command`, and rebuilds the invocation through the same private

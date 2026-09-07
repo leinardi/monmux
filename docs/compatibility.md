@@ -1,6 +1,6 @@
 # Compatibility
 
-This page is the human-readable copy of the supported-monitor catalog in `internal/catalog/models.go`. The catalog is what the
+This page is the human-readable copy of the supported-monitor catalog in `internal/catalog/models.yaml`. The catalog is what the
 binary uses; this page is checked against it by `TestCompatibilityDocumentMatchesTheCatalog`, so the two cannot drift apart
 without failing the build.
 

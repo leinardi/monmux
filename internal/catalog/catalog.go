@@ -17,15 +17,22 @@
 // Package catalog is the built-in supported-monitor catalog and the only place
 // in monmux where the bytes that reach a monitor are decided.
 //
-// The catalog is Go source rather than data read at run time. That is the point:
-// entries are compile-time typed, there is no parser to trust, and adding a model
-// is a reviewable diff of literal bytes with recorded evidence next to them. No
+// The catalog is written in models.yaml and rendered into models_gen.go, which is
+// committed and is what the binary compiles. The rendering happens at development
+// time, so the binary carries no catalog parser and reads no catalog file at run
+// time: entries are compile-time typed, and adding a model is a reviewable diff of
+// literal bytes with recorded evidence next to them, in both files at once. No
 // flag, config key or environment variable can introduce a value here.
+//
+// Edit models.yaml, run `make go-generate`, and commit both files.
+// TestGeneratedCatalogMatchesTheYAML fails the build if the two ever disagree.
 //
 // The types enforce the fail-closed rule structurally. An [Operation] can only be
 // built by this package from a catalog entry; its zero value is invalid and every
 // backend rejects it.
 package catalog
+
+//go:generate go run ./internal/generate/cmd -in models.yaml -out models_gen.go
 
 import (
 	"errors"

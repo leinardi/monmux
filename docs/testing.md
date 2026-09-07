@@ -58,7 +58,12 @@ including the redaction. Output is an interface too.
 
 **Invariant tests.** The catalog's rules are tested rather than trusted: a write-enabled model has at least one identity, an
 identity belongs to one model, every recorded input has evidence, a disabled model never matches, the zero operation is
-invalid. `TestCompatibilityDocumentMatchesTheCatalog` compares `docs/compatibility.md` against the catalog itself.
+invalid. `TestCompatibilityDocumentMatchesTheCatalog` compares `docs/compatibility.md` against the catalog itself, and
+`TestGeneratedCatalogMatchesTheYAML` compares the catalog against `internal/catalog/models.yaml`, so a hand-edit of the
+generated Go fails the build instead of shipping. The `go-test-repo-mod` pre-commit hook is filtered to Go files and `go.mod`,
+which would let a commit that edits only the catalog file skip that test; `.pre-commit-config.yaml` widens the filter to include
+`models.yaml` so an edit without a regeneration cannot be committed. The generator has its own tests for every rule it enforces, and
+`TestGeneratorKnowsEveryInputAndMechanism` keeps its copy of the input and mechanism enums in step with the real ones.
 
 **Structural tests.** A reflection test walks the `Backend` interface and fails if any method could be handed a `Command`,
 however deeply wrapped — that is what makes a command unforgeable.

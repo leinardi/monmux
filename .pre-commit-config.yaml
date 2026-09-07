@@ -86,4 +86,11 @@ repos:
   - repo: https://github.com/tekwizely/pre-commit-golang
     rev: v1.0.0-rc.4
     hooks:
+      # The hook's own filter is Go files and go.mod. The supported-monitor
+      # catalog is written in internal/catalog/models.yaml and rendered into a
+      # committed Go file, so a commit that edits only the YAML would stage no Go
+      # file, skip the suite, and let a stale models_gen.go through.
+      # TestGeneratedCatalogMatchesTheYAML is what catches that, so the suite has
+      # to run for the catalog file too.
       - id: go-test-repo-mod
+        files: '(\.go$)|(\bgo\.mod$)|(^internal/catalog/models\.yaml$)'

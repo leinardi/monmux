@@ -59,7 +59,7 @@ Two things are worth doing deliberately:
 
 ## Versioning
 
-Semantic versioning, with one project-specific rule: **any change to `internal/catalog/models.go` that enables a model or an
+Semantic versioning, with one project-specific rule: **any change to `internal/catalog/models.yaml` that enables a model or an
 input is at least a minor release, and is called out in the release notes.** Somebody deciding whether to upgrade needs to know
 that the new version is willing to write something the old one refused.
 

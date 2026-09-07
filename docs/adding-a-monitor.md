@@ -60,8 +60,9 @@ not exist yet, and adding it is part of your change. Two rules:
   `invalid-operation` rather than trying another one. In particular, monmux does not write `VCP 0x60` because a monitor happens
   to read it.
 
-Implementing a new mechanism means: a value in the enum, the planner code in each backend that supports it, `ValidateOperation`
-accepting it there, and a golden test pinning the exact arguments it produces.
+Implementing a new mechanism means: a value in the enum, the name table in `internal/catalog/internal/generate` that lets the
+catalog file spell it, the planner code in each backend that supports it, `ValidateOperation` accepting it there, and a golden
+test pinning the exact arguments it produces.
 
 ## 4. Test it, by hand
 
@@ -81,35 +82,51 @@ Write down: the date, the operating system, the backend, the exact command, and 
 
 ## 5. Add the catalog entry
 
-`internal/catalog/models.go` is Go source, deliberately: the bytes that reach a monitor are reviewable in a diff, and there is no
-parser between the file and the write.
+The catalog is `internal/catalog/models.yaml`. Add your entry to the `models:` list:
 
-```go
-{
-    Name:   "MODEL-NAME",
-    Vendor: "VENDOR",
-    Identities: []Identity{
-        {Manufacturer: "ABC", ProductCode: 0x1234},
-    },
-    WriteEnabled: true,
-    Inputs: map[Input]inputOp{
-        InputDP: {
-            mechanism: MechanismLGAltInput,
-            value:     0xD0,
-            evidence:  "Direct test on the unit, 2026-01-01, Linux (ddcutil): switched from USB-C to DisplayPort",
-        },
-    },
-    Sources: []string{"…"},
-},
+```yaml
+- name: MODEL-NAME
+  vendor: VENDOR
+  identities:
+      - manufacturer: ABC
+        product_code: 0x1234
+  write_enabled: true
+  inputs:
+      dp:
+          mechanism: lg-alt-input
+          value: 0xD0
+          evidence: >-
+              Direct test on the unit, 2026-01-01, Linux (ddcutil): switched from
+              USB-C to DisplayPort
+  sources:
+      - "…"
 ```
 
-Rules the invariant tests enforce:
+Then re-render the Go the binary actually compiles, and commit both files:
+
+```sh
+make go-generate
+```
+
+`internal/catalog/models_gen.go` is generated and must never be edited by hand; `TestGeneratedCatalogMatchesTheYAML` fails the
+build if it does not match the YAML. Both files land in the same diff, so a reviewer still reads the literal bytes, and the
+rendering happens at development time — the binary has no catalog parser and reads no catalog file at run time.
+
+Rules the generator refuses and the invariant tests re-check:
 
 - A write-enabled model has at least one identity. Without one it can never match, and an entry that can never match must not
   claim to be enabled.
-- An identity belongs to exactly one model, across the whole catalog.
-- Every recorded input has non-empty evidence.
+- A model that is not write-enabled records no identity at all. Matching does not consult the flag, so an entry with a
+  fingerprint would match a real display and then refuse late instead of never matching.
+- An identity belongs to exactly one model, across the whole catalog, and a manufacturer is three uppercase letters.
+- Every recorded input is one of `dp`, `usb-c`, `hdmi1`, `hdmi2`, and has non-empty evidence.
 - Every recorded input uses a mechanism some backend implements.
+- Every model names at least one source.
+- Every identity writes a `product_code`, and every input writes a `value`. Leaving one out is an error, not a zero: a byte
+  nobody recorded must never reach a monitor.
+
+An unknown key is an error rather than something ignored, so a misspelled field cannot silently drop an entry, and the file
+must hold exactly one YAML document, so entries cannot hide after a `---` where the generator would never read them.
 
 ## 6. What stays disabled
 
@@ -135,8 +152,10 @@ A disabled entry is not a lesser contribution. It is the thing that stops the ne
 - [ ] `monmux info --json` output for each connector, with serials redacted (the default), included in the description.
 - [ ] Evidence recorded per input: date, OS, backend, command, and what the monitor did — in both directions.
 - [ ] Every value you tested yourself; nothing enabled on somebody else's say-so.
-- [ ] Catalog entry added, with `Sources` naming where the values came from.
+- [ ] Catalog entry added to `models.yaml`, with `sources` naming where the values came from.
+- [ ] `make go-generate` run, and `models_gen.go` committed alongside the YAML.
 - [ ] `compatibility.md` updated to match.
 - [ ] Any new fixture sanitized, and `make go-test` passing.
 - [ ] `make check` clean.
-- [ ] If you added a mechanism: the enum value, both backends' handling of it, and a golden test for the exact arguments.
+- [ ] If you added a mechanism: the enum value, the generator's name table, both backends' handling of it, and a golden test for
+      the exact arguments.

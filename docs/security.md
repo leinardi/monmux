@@ -13,8 +13,13 @@ write is not recoverable by software, which is why the default in this project i
 **Risk.** A value that means "switch to USB-C" on one model means something else on another, and manufacturer-specific
 registers are not a documented, portable interface.
 
-**Mitigation.** A byte can only reach a monitor if it is written in the catalog, in Go source, next to evidence that someone
-tested it on that exact model. `catalog.Operation` has unexported fields and a package-private constructor, so no value that is
+**Mitigation.** A byte can only reach a monitor if it is written in the catalog next to evidence that someone tested it on that
+exact model. The catalog is `internal/catalog/models.yaml`, rendered by `make go-generate` into the committed
+`internal/catalog/models_gen.go` that the binary compiles. That rendering is a development-time step, so the shipped binary has
+no catalog parser and reads no catalog file at run time; both files appear in the same diff, and a test fails the build if they
+disagree, so the bytes a reviewer approved are the bytes that ship. The generator refuses a file that leaves a product code or
+a value out rather than defaulting it to zero, refuses a key it does not know, and refuses a second YAML document, so no byte
+reaches the generated catalog that the file did not spell out. `catalog.Operation` has unexported fields and a package-private constructor, so no value that is
 not in the catalog can exist as an operation at all; the zero value is invalid and every backend rejects it. The CLI accepts
 symbolic inputs only — `dp`, `usb-c`, `hdmi1`, `hdmi2` — and has no flag that takes a VCP code or a raw value (requirement 9.5).
 An input nobody has tested on a model is not enabled for it, and asking for it is refused.
@@ -57,7 +62,8 @@ The tool path is resolved once during preflight and executed directly, with no `
 mechanism or pick a backend, then editing a YAML file would be enough to write anything anywhere.
 
 **Mitigation.** It cannot do any of those things. The file has three keys — a serial to pin to, and the two tool paths. The
-catalog is compiled in; the backend is chosen by the operating system with no override. An unknown key is an error rather than
+catalog is compiled in, and `models.yaml` is a build input that a running monmux never opens; the backend is chosen by the
+operating system with no override. An unknown key is an error rather than
 something ignored, so a typo cannot silently disable a pin the user believes is protecting them.
 
 ### Serial and UUID leakage

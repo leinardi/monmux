@@ -51,8 +51,10 @@ them. Repo-local targets live in `.mk/cross.mk`.
 
 ## The catalog is evidence, not configuration
 
-`internal/catalog/models.go` decides which bytes may reach which monitor. It is Go source so that every byte is reviewable in a
-diff, with no parser between the file and the write.
+`internal/catalog/models.yaml` decides which bytes may reach which monitor. Edit it, run `make go-generate` to re-render
+`internal/catalog/models_gen.go`, and commit both: the YAML is the readable source of truth and the generated Go is what the
+binary compiles. A test fails the build if the two disagree, so every byte is still reviewable in a diff, and the rendering
+happens at development time — the shipped binary has no catalog parser and reads no catalog file at run time.
 
 **A model becomes write-enabled when somebody with that monitor in front of them switched it with that value and wrote down what
 happened.** Not because the manufacturer is the same, not because the product family is similar, not because a value is

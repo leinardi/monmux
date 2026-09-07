@@ -10,7 +10,7 @@ reaching a monitor.
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `internal/edid`            | Parses EDID block 0 into an identity: manufacturer, product code, serials, model name. No raw bytes leave it.             |
 | `internal/refusal`         | The one refusal error, its closed set of reasons, and the message template every refusal renders through.                 |
-| `internal/catalog`         | The supported-monitor catalog, as Go source. Which models, which inputs, which value, and the evidence for each.          |
+| `internal/catalog`         | The supported-monitor catalog, written in YAML and rendered to Go. Which models, which inputs, which value, why.          |
 | `internal/policy`          | Pure decision: given the attached displays and a request, which display and which operation — or which refusal.           |
 | `internal/backend`         | What a backend *is*: `Display`, `Command`, `Check`, the `Backend` interface, and the shared tool-path trust check.        |
 | `internal/backend/exec`    | The only place monmux runs an external program, and the fake that lets tests observe invocations without performing them. |
@@ -58,7 +58,10 @@ command reached the monitor is unknown."
 ### 1. An operation can only come from the catalog
 
 `catalog.Operation` carries the mechanism and the byte to write, and its fields are unexported. Its constructor is
-package-private, so the only operations that exist are the ones written in the catalog's Go source. The zero value is invalid,
+package-private, so the only operations that exist are the ones compiled in from the catalog. The catalog is written in
+`internal/catalog/models.yaml` and rendered into the committed `models_gen.go` by `make go-generate`; the rendering happens at
+development time, so the binary contains no catalog parser and reads no catalog file at run time, and a test fails the build if
+the two files disagree. The zero value is invalid,
 and every backend rejects it with `invalid-operation`. There is no code path that turns a number a user typed into an
 operation — the CLI takes symbolic inputs (`dp`, `usb-c`, `hdmi1`, `hdmi2`) and nothing else.
 

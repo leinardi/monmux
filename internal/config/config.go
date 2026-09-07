@@ -18,8 +18,9 @@
 // on purpose: a serial to pin to, and where the two external tools live.
 //
 // Nothing here can widen what monmux is willing to do. The catalog decides which
-// monitors and which inputs are write-enabled, and it is Go source; the backend
-// is chosen by the operating system and cannot be overridden. A configuration
+// monitors and which inputs are write-enabled, and it is generated into the binary
+// from a file read only at development time; the backend is chosen by the
+// operating system and cannot be overridden. A configuration
 // file can narrow a request or point at a different binary, and that is all -
 // which is why an unknown key is an error rather than something to ignore.
 package config

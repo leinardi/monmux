@@ -4,8 +4,8 @@ monmux works with no configuration at all. The file exists for two things: pinni
 tool that is not on `PATH`.
 
 Nothing in it can widen what monmux is willing to do. Which monitors and which inputs are write-enabled is decided by the
-catalog, which is Go source compiled into the binary, and the backend is chosen by the operating system with no override. A
-configuration file can narrow a request or name a different binary, and that is all.
+catalog, which is generated into the binary from a file read only at development time, and the backend is chosen by the operating
+system with no override. A configuration file can narrow a request or name a different binary, and that is all.
 
 ## The file
 
