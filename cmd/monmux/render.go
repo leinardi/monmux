@@ -32,6 +32,9 @@ import (
 // has none.
 const noModel = "not in the catalog"
 
+// noneListed is what is printed where a list would be, when it is empty.
+const noneListed = "none"
+
 // printer writes lines and remembers the first failure, so the rendering code
 // reads as the output it produces instead of as error handling.
 type printer struct {
@@ -147,7 +150,7 @@ func monitor(identity edid.Identity) string {
 // serial renders the serial fields, redacted unless the user asked for them.
 func serial(identity edid.Identity, showSerial bool) string {
 	if !identity.HasSerial() {
-		return "none"
+		return noneListed
 	}
 
 	if !showSerial {
@@ -182,7 +185,7 @@ func model(reported *app.DisplayReport) string {
 // inputs renders the inputs monmux is willing to switch a display to.
 func inputs(enabled []catalog.Input) string {
 	if len(enabled) == 0 {
-		return "none"
+		return noneListed
 	}
 
 	names := make([]string, 0, len(enabled))

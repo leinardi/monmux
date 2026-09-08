@@ -21,7 +21,9 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -662,5 +664,268 @@ func TestCompletionIsAvailable(t *testing.T) {
 
 	if !strings.Contains(stdout, "monmux") {
 		t.Error("the completion script does not mention monmux")
+	}
+}
+
+// --- catalog ---
+
+// catalogRows returns the model rows of `monmux catalog list`, without the
+// header, the blank line or the summary, plus the summary itself.
+func catalogRows(t *testing.T, stdout string) (rows []string, summary string) {
+	t.Helper()
+
+	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("catalog list printed only:\n%s", stdout)
+	}
+
+	if !strings.HasPrefix(lines[0], "VENDOR") {
+		t.Errorf("the first line is not the header: %q", lines[0])
+	}
+
+	if lines[len(lines)-2] != "" {
+		t.Errorf("the summary is not preceded by a blank line: %q", lines[len(lines)-2])
+	}
+
+	return lines[1 : len(lines)-2], lines[len(lines)-1]
+}
+
+// writeEnabledCount is how many catalog entries monmux may write to.
+func writeEnabledCount(entries []catalog.Model) int {
+	count := 0
+
+	for index := range entries {
+		if entries[index].WriteEnabled {
+			count++
+		}
+	}
+
+	return count
+}
+
+func TestCatalogListIsInCatalogOrder(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, stderr, code := world.run("catalog", "list")
+	if code != exitSent || stderr != "" {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	entries := catalog.Models()
+
+	rows, summary := catalogRows(t, stdout)
+	if len(rows) != len(entries) {
+		t.Fatalf("catalog list printed %d models, want %d", len(rows), len(entries))
+	}
+
+	for index := range entries {
+		entry := &entries[index]
+
+		if !strings.HasPrefix(rows[index], entry.Vendor) ||
+			!strings.Contains(rows[index], entry.Name) {
+			t.Fatalf("row %d is %q, want %s %s", index, rows[index], entry.Vendor, entry.Name)
+		}
+	}
+
+	want := fmt.Sprintf("%d models, %d write-enabled.", len(entries), writeEnabledCount(entries))
+	equal(t, "the summary", summary, want)
+
+	if world.wrote() {
+		t.Error("catalog list wrote to a monitor")
+	}
+}
+
+func TestCatalogListFiltersCaseInsensitively(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, _, code := world.run("catalog", "list", "aOc")
+	if code != exitSent {
+		t.Fatalf("exit = %d", code)
+	}
+
+	wanted := 0
+
+	for _, entry := range catalog.Models() {
+		if strings.EqualFold(entry.Vendor, "AOC") {
+			wanted++
+		}
+	}
+
+	rows, _ := catalogRows(t, stdout)
+	if len(rows) != wanted {
+		t.Fatalf("the filter kept %d models, want %d:\n%s", len(rows), wanted, stdout)
+	}
+
+	for _, row := range rows {
+		if !strings.HasPrefix(row, "AOC") {
+			t.Errorf("the filter kept %q", row)
+		}
+	}
+}
+
+func TestCatalogListVerboseCarriesValueAndGrade(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, _, code := world.run("catalog", "list", "Q27P1B", "--verbose")
+	if code != exitSent {
+		t.Fatalf("exit = %d", code)
+	}
+
+	rows, _ := catalogRows(t, stdout)
+	if len(rows) != 1 {
+		t.Fatalf("the filter kept %d models, want 1:\n%s", len(rows), stdout)
+	}
+
+	if !strings.Contains(rows[0], "dp 0x0F reported") ||
+		!strings.Contains(rows[0], "vga 0x01 reported") {
+		t.Errorf("--verbose printed %q", rows[0])
+	}
+}
+
+func TestCatalogListJSONDecodes(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, _, code := world.run("catalog", "list", "--json")
+	if code != exitSent {
+		t.Fatalf("exit = %d", code)
+	}
+
+	var document struct {
+		Models []struct {
+			Vendor       string   `json:"vendor"`
+			Name         string   `json:"name"`
+			FullName     string   `json:"fullName"`
+			WriteEnabled bool     `json:"writeEnabled"`
+			Identities   []string `json:"identities"`
+			Mechanisms   []string `json:"mechanisms"`
+			Inputs       []struct {
+				Name      string `json:"name"`
+				Mechanism string `json:"mechanism"`
+				Value     uint16 `json:"value"`
+				ValueHex  string `json:"valueHex"`
+				Grade     string `json:"grade"`
+				Evidence  string `json:"evidence"`
+			} `json:"inputs"`
+		} `json:"models"`
+		Count        int `json:"count"`
+		WriteEnabled int `json:"writeEnabled"`
+	}
+
+	err := json.Unmarshal([]byte(stdout), &document)
+	if err != nil {
+		t.Fatalf("catalog list --json did not decode: %v", err)
+	}
+
+	entries := catalog.Models()
+	if document.Count != len(entries) || len(document.Models) != len(entries) {
+		t.Fatalf(
+			"count = %d, models = %d, want %d",
+			document.Count,
+			len(document.Models),
+			len(entries),
+		)
+	}
+
+	if document.WriteEnabled != writeEnabledCount(entries) {
+		t.Errorf("writeEnabled = %d, want %d", document.WriteEnabled, writeEnabledCount(entries))
+	}
+
+	first := document.Models[0]
+	if first.Vendor != entries[0].Vendor || first.Name != entries[0].Name ||
+		first.FullName != entries[0].FullName() || !first.WriteEnabled {
+		t.Errorf("the first entry decoded as %+v", first)
+	}
+
+	if len(first.Inputs) == 0 || first.Inputs[0].ValueHex != "0xD0" ||
+		first.Inputs[0].Grade != "verified" {
+		t.Errorf("the first entry's inputs decoded as %+v", first.Inputs)
+	}
+}
+
+func TestCatalogShowPrintsAWriteEnabledEntry(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, stderr, code := world.run("catalog", "show", "lg/38WR85QC-W")
+	if code != exitSent || stderr != "" {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	for _, wanted := range []string{
+		"LG 38WR85QC-W\n",
+		"  Write-enabled: yes\n",
+		"  Identities:    GSM/0x77D3, GSM/0x77D4\n",
+		"    dp     lg-alt-input  0xD0  verified  Direct test on the unit",
+		"    usb-c  lg-alt-input  0xD1  verified  Direct test on the unit",
+		"  Notes:\n",
+		"  Sources:\n",
+	} {
+		if !strings.Contains(stdout, wanted) {
+			t.Errorf("catalog show did not print %q:\n%s", wanted, stdout)
+		}
+	}
+
+	if strings.Contains(stdout, "--unsafe-model") {
+		t.Error("a write-enabled entry pointed at the override")
+	}
+
+	if world.wrote() {
+		t.Error("catalog show wrote to a monitor")
+	}
+}
+
+func TestCatalogShowPointsARecordedOnlyEntryAtTheOverride(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, _, code := world.run("catalog", "show", "AOC Q27P1B")
+	if code != exitSent {
+		t.Fatalf("exit = %d", code)
+	}
+
+	for _, wanted := range []string{
+		"AOC Q27P1B\n",
+		"  Write-enabled: no\n",
+		"  Identities:    none (can never match a display)\n",
+		"    vga   vcp-input-source  0x01  reported  Reported working",
+		"--unsafe-model AOC/Q27P1B",
+		"docs/adding-a-monitor.md",
+	} {
+		if !strings.Contains(stdout, wanted) {
+			t.Errorf("catalog show did not print %q:\n%s", wanted, stdout)
+		}
+	}
+}
+
+func TestCatalogShowOfAnUnknownNameIsAnError(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, stderr, code := world.run("catalog", "show", "Acme/Nothing")
+	if code != exitToolError {
+		t.Fatalf("exit = %d, want %d", code, exitToolError)
+	}
+
+	if stdout != "" {
+		t.Errorf("an unknown model printed %q", stdout)
+	}
+
+	if !strings.Contains(stderr, "monmux catalog list") {
+		t.Errorf("the error does not point at the listing: %q", stderr)
+	}
+
+	if strings.Contains(stderr, "No DDC write was performed") {
+		t.Errorf("a read-only command talked about writes: %q", stderr)
 	}
 }

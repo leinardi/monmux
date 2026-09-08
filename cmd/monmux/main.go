@@ -121,6 +121,7 @@ func newRootCmd(state *cli) *cobra.Command {
 	root.AddCommand(
 		newInfoCmd(state),
 		newSwitchCmd(state),
+		newCatalogCmd(),
 		newDoctorCmd(state),
 		newVersionCmd(),
 	)
