@@ -19,6 +19,7 @@ package generate_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"go/format"
 	"strings"
 	"testing"
@@ -51,6 +52,50 @@ const entry = `  - name: TEST-1
 `
 
 const valid = "models:\n" + entry
+
+// renamed returns entry under another model name, with a product code of its own
+// so that the two entries do not also collide on their identity.
+func renamed(name string, productCode uint16) string {
+	body := strings.Replace(entry, "name: TEST-1", "name: "+name, 1)
+
+	return strings.Replace(
+		body,
+		"product_code: 0x0001",
+		fmt.Sprintf("product_code: 0x%04X", productCode),
+		1,
+	)
+}
+
+// disabledEntry returns entry as a model monmux will not write to: the flag
+// cleared and, as the catalog requires of such a model, no identity at all.
+func disabledEntry(name string) string {
+	body := strings.Replace(entry, "name: TEST-1", "name: "+name, 1)
+
+	body = strings.Replace(body, "write_enabled: true", "write_enabled: false", 1)
+
+	return strings.Replace(
+		body,
+		"    identities:\n      - manufacturer: ACM\n        product_code: 0x0001\n",
+		"    identities: []\n",
+		1,
+	)
+}
+
+// The order the catalog file is written in is a rule the generator enforces:
+// the write-enabled models first, then by vendor, then by model name. A file
+// that keeps it is accepted whatever the names happen to look like.
+func TestModelsInCatalogOrderAreAccepted(t *testing.T) {
+	t.Parallel()
+
+	source := "models:\n" + entry +
+		disabledEntry("TEST-0") +
+		strings.Replace(disabledEntry("ZULU"), "vendor: ACME", "vendor: ZENITH", 1)
+
+	_, err := generate.Generate([]byte(source))
+	if err != nil {
+		t.Errorf("a catalog in order was rejected: %v", err)
+	}
+}
 
 func TestTheSmallestValidCatalogRenders(t *testing.T) {
 	t.Parallel()
@@ -212,6 +257,25 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 				1,
 			),
 			want: generate.ErrDuplicateModel,
+		},
+		"two models of one vendor written out of name order": {
+			document: valid + renamed("TEST-0", 0x0002),
+			want:     generate.ErrOutOfOrder,
+		},
+		"two vendors written out of order": {
+			document: valid + strings.Replace(
+				renamed("TEST-2", 0x0002),
+				"vendor: ACME",
+				"vendor: ABCO",
+				1,
+			),
+			want: generate.ErrOutOfOrder,
+		},
+		"a write-enabled model written after one that is not": {
+			// TEST-0 sorts before TEST-1 by name, so the only rule this pair
+			// breaks is that the write-enabled models come first.
+			document: "models:\n" + disabledEntry("TEST-0") + entry,
+			want:     generate.ErrOutOfOrder,
 		},
 		"a product code that was never written": {
 			document: strings.Replace(valid, "        product_code: 0x0001\n", "", 1),

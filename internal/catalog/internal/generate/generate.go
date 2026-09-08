@@ -29,6 +29,7 @@ package generate
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -58,6 +59,11 @@ var (
 	ErrMissing = errors.New("generate: missing value")
 	// ErrDuplicateModel reports two entries with the same model name.
 	ErrDuplicateModel = errors.New("generate: duplicate model name")
+	// ErrOutOfOrder reports two neighboring entries the file writes the wrong
+	// way round. The catalog is rendered in file order, so the file order is the
+	// order of the generated table and of the documentation; fixing it here is
+	// what keeps a new entry landing next to its family instead of at the end.
+	ErrOutOfOrder = errors.New("generate: models are out of catalog order")
 	// ErrDuplicateIdentity reports one EDID fingerprint claimed by two models,
 	// which would make every match ambiguous.
 	ErrDuplicateIdentity = errors.New("generate: duplicate identity")
@@ -375,6 +381,19 @@ func (d Document) Validate() error {
 
 		problems = append(problems, model.validate()...)
 
+		// Sortedness is a property of every neighboring pair, so comparing each
+		// entry with the one before it reports every inversion and names the two
+		// entries a contributor has to swap.
+		if index > 0 {
+			previous := &d.Models[index-1]
+			if compareModels(previous, model) > 0 {
+				problems = append(problems, fmt.Errorf(
+					"%w: %s %q must come before %s %q",
+					ErrOutOfOrder, model.Vendor, model.Name, previous.Vendor, previous.Name,
+				))
+			}
+		}
+
 		if names[model.Name] {
 			problems = append(problems, fmt.Errorf("%w: %q", ErrDuplicateModel, model.Name))
 		}
@@ -417,6 +436,46 @@ func (d Document) Validate() error {
 	}
 
 	return errors.Join(problems...)
+}
+
+// compareModels is the order the catalog file is written in: the write-enabled
+// models first, then by vendor, then by model name. Enabled first because the
+// first question the compatibility table answers is which monitors monmux will
+// actually write to; vendor and name after it because a contributor looking for
+// a model, or for the place to add one, looks for its family.
+func compareModels(first, second *Model) int {
+	// Reversed, because a write-enabled entry sorts before one that is not.
+	if order := cmp.Compare(rank(second.WriteEnabled), rank(first.WriteEnabled)); order != 0 {
+		return order
+	}
+
+	if order := compareText(first.Vendor, second.Vendor); order != 0 {
+		return order
+	}
+
+	return compareText(first.Name, second.Name)
+}
+
+// rank turns a flag into something [cmp.Compare] can order.
+func rank(flag bool) int {
+	if flag {
+		return 1
+	}
+
+	return 0
+}
+
+// compareText orders two catalog fields the way a reader scanning the file
+// would: case-insensitively, since `LC49G95T` and `Dark Matter 40776` sit in one
+// list and a capital letter is not a section break. Equal-but-for-case strings
+// fall back to the byte order so that the result is a total order and the check
+// cannot depend on which of two entries the file wrote first.
+func compareText(first, second string) int {
+	if folded := cmp.Compare(strings.ToLower(first), strings.ToLower(second)); folded != 0 {
+		return folded
+	}
+
+	return cmp.Compare(first, second)
 }
 
 // validate applies the rules that concern one entry on its own.

@@ -102,7 +102,12 @@ Write down: the date, the operating system, the backend, the exact command, and 
 
 ## 5. Add the catalog entry
 
-The catalog is `internal/catalog/models.yaml`. Add your entry to the `models:` list:
+The catalog is `internal/catalog/models.yaml`. Add your entry to the `models:` list, in the place the list's order puts it:
+the write-enabled models first, then by vendor, then by model name, both compared without regard to case. The generator
+refuses a file written any other way and names the two entries to swap, so a new model lands next to its family rather than
+at the end of the file, and the table in [compatibility.md](compatibility.md) — which is rendered in file order — reads the
+same way. The file's two section banners and its vendor headings follow from that order and are comments, which nothing checks:
+put your entry under the right heading, and add a heading if you are the first model of a vendor.
 
 ```yaml
 - name: MODEL-NAME
@@ -175,6 +180,7 @@ Rules the generator refuses and the invariant tests re-check:
 - A `url` starts with `https://`.
 - No text the documentation renders — `by`, `tool`, `date`, `url`, `note`, a `notes` entry or a source — holds a `|` or a line
   break, because the document test reads Markdown table cells and single-line bullets.
+- The models are written in catalog order: write-enabled first, then by vendor, then by model name.
 - Every model names at least one source.
 - Every identity writes a `product_code`, and every input writes a `value`. Leaving one out is an error, not a zero: a value
   nobody recorded must never reach a monitor.

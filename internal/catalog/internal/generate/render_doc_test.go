@@ -172,9 +172,9 @@ func TestGenerateDocumentAutolinksAURLFollowedByProse(t *testing.T) {
 	}
 }
 
-// Models keep the order of the catalog file and inputs are sorted by kind and
-// then by port, so the table order is decided by the grammar rather than by Go's
-// map iteration.
+// Models keep the order of the catalog file - here vendor order, which puts
+// SECOND before FIRST - and inputs are sorted by kind and then by port, so the
+// table order is decided by the grammar rather than by Go's map iteration.
 func TestRenderDocumentOrdersModelsAndInputs(t *testing.T) {
 	t.Parallel()
 
@@ -203,7 +203,7 @@ func TestRenderDocumentOrdersModelsAndInputs(t *testing.T) {
     notes: ["second"]
     sources: [https://example.invalid/a]
   - name: FIRST
-    vendor: Acme
+    vendor: Bravo
     identities: []
     write_enabled: false
     inputs:
@@ -241,7 +241,7 @@ func TestRenderDocumentOrdersModelsAndInputs(t *testing.T) {
 	}
 
 	second := indexOfPrefix(lines, "### Acme SECOND")
-	first := indexOfPrefix(lines, "### Acme FIRST")
+	first := indexOfPrefix(lines, "### Bravo FIRST")
 
 	if second < 0 || first < 0 || second > first {
 		t.Errorf("the notes sections are in the wrong order: %d and %d", second, first)
