@@ -68,9 +68,26 @@ which would let a commit that edits only the catalog file skip that test; `.pre-
 **Structural tests.** A reflection test walks the `Backend` interface and fails if any method could be handed a `Command`,
 however deeply wrapped — that is what makes a command unforgeable.
 
-**Cross-compilation.** The macOS backend is built and vetted from the Linux development host with `make go-build-darwin` and
-`make go-vet-darwin`, which type-check its darwin-tagged tests too. Its parser and decisions carry no build tag, so they run in
+**Cross-compilation.** Only one of the two backends is visible to the host toolchain at a time, so `make go-build-cross` and
+`make go-vet-cross` run it over `GOOS=linux` and then `GOOS=darwin`, type-checking each backend's build-tagged tests too. Both
+are named outright rather than derived as "the OS the host is not": `go env GOOS` reports the target rather than the host, and
+`go-build`/`go-vet` set no `GOOS` of their own, so any value derived from one of them has a case where both aim at the same OS
+and a backend is left checked by nothing at all. A backend's parser and decisions carry no build tag, so they run in
 `make go-test` like everything else.
+
+`make go-lint-cross` does the same for the linter, and it is the one that matters: lint is where the two backends diverge most,
+and three findings in `internal/backend/m1ddc` went unreported for as long as the linter only ever ran on Linux. `make check`
+still covers the host's backend alone, so run the cross target before pushing a change to either one.
+
+It is also the one target that can fail for reasons outside this repository. When cross-targeting, `golangci-lint` typechecks
+the standard library from source using the `go/types` it was built with; if that is older than your toolchain it aborts inside
+`GOROOT` and then reports **nothing at all** about this repository — a violation planted in a build-tagged file is reported
+nowhere. v2.12.2, built with go1.26.5, does exactly that against a Go 1.27 toolchain; v2.13.2, built with go1.27.0, is clean.
+
+If the target fails inside `GOROOT` rather than inside monmux, your linter is older than your toolchain: update
+`.pre-commit-config.yaml`, or skip the target for now. **Never silence that typecheck error with a path exclusion.** It does not
+restore the analysis, it only hides the abort, and the run then goes green having checked nothing. Running the linter natively
+on each OS in CI is still the durable answer — [release.md](release.md).
 
 ## Fixtures
 
@@ -97,9 +114,10 @@ produced.
 
 ```sh
 make go-test          # go test -race ./...
-make go-build-darwin  # cross-compile check
-make go-vet-darwin    # cross-vet, including darwin-tagged tests
-make check            # everything pre-commit runs
+make go-build-cross   # compile-check both OS backends, whatever the host
+make go-vet-cross     # cross-vet both, including their build-tagged tests
+make go-lint-cross    # lint both, which `make check` does not
+make check            # everything pre-commit runs, for the host OS only
 ```
 
 ## Hardware validation — for a human, by hand

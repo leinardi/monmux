@@ -43,14 +43,21 @@ has no Dockerfile, no image and no `hadolint` or `dclint` hooks.
 
 | Job           | What it does                                                                                                                                   |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pre-commit`  | Runs the whole hook suite on every pull request, the same one `make check` runs.                                                               |
-| `test`        | `go test -race ./...` on Linux.                                                                                                                |
-| `cross`       | `GOOS=darwin go build ./...` and `GOOS=darwin go vet ./...`, so the macOS backend and its build-tagged tests are type-checked on every change. |
+| `pre-commit`  | Runs the whole hook suite on every pull request, the same one `make check` runs — on a Linux **and** a macOS runner, see below.                |
+| `test`        | `go test -race ./...`, on both runners: a backend's build-tagged tests only ever execute on their own OS.                                      |
+| `cross`       | `make go-build-cross`, `make go-vet-cross` and `make go-lint-cross`, which cover both OS backends from either runner.                          |
 | `govulncheck` | Vulnerability scan of the module.                                                                                                              |
 | `release`     | `goreleaser release` on a tag, publishing the artifacts and updating the tap.                                                                  |
 
-Two things are worth doing deliberately:
+Three things are worth doing deliberately:
 
+- **Run `pre-commit` and `test` on both a Linux and a macOS runner.** Each backend sits behind a build tag, so a linter running
+  on one OS does not analyse the other's files at all, and three real findings in `internal/backend/m1ddc` sat unreported until
+  the first `make check` was run on a Mac. The `cross` job narrows the gap but does not close it: `make go-lint-cross` depends
+  on `golangci-lint` being built with a Go no older than the toolchain, and aborts in `GOROOT` — reporting nothing about this
+  repository — when it is not, which is a bad thing to have as the only line of defence. Running each linter natively on its own
+  OS has no such dependency. The macOS runner is also the only place the darwin-tagged unit tests execute; it needs no `m1ddc`
+  installed, because the suite executes no external binary — [testing.md](testing.md).
 - **Warm the pre-commit cache.** The hook suite installs golangci-lint, markdownlint and the rest on first run; caching
   `~/.cache/pre-commit` keyed on `.pre-commit-config.yaml` turns a slow job into a fast one.
 - **Do not add a job that runs monmux against hardware.** There is no monitor in CI, and the rule that no automation writes to a
@@ -65,7 +72,7 @@ that the new version is willing to write something the old one refused.
 
 ## Before the first release
 
-- [ ] A CI workflow, with the jobs above.
+- [ ] A CI workflow, with the jobs above, running `pre-commit` and `test` on both a Linux and a macOS runner.
 - [ ] A `goreleaser` configuration, verified with `goreleaser release --snapshot --clean`.
 - [ ] A tap repository for the Homebrew formula.
 - [ ] Hardware validation completed and recorded for every model the release enables.

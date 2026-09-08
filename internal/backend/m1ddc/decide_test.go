@@ -325,9 +325,7 @@ func TestExecutionOutcomeSeparatesNotStartedFromFailed(t *testing.T) {
 
 	err = executionOutcome(&target, exec.Result{ExitCode: 3}, errFailed)
 
-	var declined *refusal.Refusal
-
-	if errors.As(err, &declined) {
+	if _, ok := errors.AsType[*refusal.Refusal](err); ok {
 		t.Errorf("a tool that ran and failed was reported as a refusal: %v", err)
 	}
 

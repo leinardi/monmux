@@ -60,11 +60,12 @@ func (b *Backend) Doctor(ctx context.Context) []backend.Check {
 		Detail: backend.DisplayCount(len(records)),
 	})
 
-	for _, current := range records {
+	for index := range records {
+		current := &records[index].display
 		checks = append(checks, backend.Check{
-			Name:   current.display.Label,
-			OK:     current.display.Writable,
-			Detail: current.display.Status,
+			Name:   current.Label,
+			OK:     current.Writable,
+			Detail: current.Status,
 		})
 	}
 

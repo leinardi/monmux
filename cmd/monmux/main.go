@@ -175,13 +175,11 @@ func (f *readOnlyError) Unwrap() error {
 // promise that no DDC write was performed. Its identities are redacted unless
 // the user asked for them.
 func message(err error, showSerial bool) string {
-	var readOnly *readOnlyError
-	if errors.As(err, &readOnly) {
+	if readOnly, ok := errors.AsType[*readOnlyError](err); ok {
 		return diagnostic(readOnly.Err)
 	}
 
-	var declined *refusal.Refusal
-	if errors.As(err, &declined) {
+	if declined, ok := errors.AsType[*refusal.Refusal](err); ok {
 		return declined.Render(showSerial)
 	}
 
@@ -207,8 +205,7 @@ func diagnostic(err error) string {
 
 // exitCode maps a failure onto the process's exit status.
 func exitCode(err error) int {
-	var declined *refusal.Refusal
-	if errors.As(err, &declined) {
+	if _, ok := errors.AsType[*refusal.Refusal](err); ok {
 		return exitRefused
 	}
 

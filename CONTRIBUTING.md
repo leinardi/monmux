@@ -1,7 +1,7 @@
 # Contributing
 
 monmux writes to hardware. The rules below are stricter than a typical Go project's for that reason, and one of them is
-absolute — read [The rule](#the-rule) first.
+absolute — read [The rule](#the-rule-no-ai-agent-writes-to-a-monitor) first.
 
 ## Prerequisites
 
@@ -9,13 +9,18 @@ absolute — read [The rule](#the-rule) first.
 - [`pre-commit`](https://pre-commit.com/) — install the hooks once with `make pre-commit-install`
 - For running monmux against real hardware: `ddcutil` 2.2+ on Linux, or `m1ddc` on macOS. Neither is needed to build or test.
 
-Development works from either operating system. The macOS backend is cross-compiled and vetted from Linux, and everything that
-is not a backend is tag-free and tested on both.
+Development works from either operating system. `make go-build-cross` and `make go-vet-cross` compile-check and vet both OS
+backends whichever host you are on, and everything that is not a backend is tag-free and tested on both. Note that the linter
+only ever sees your host's backend — see [docs/testing.md](docs/testing.md).
 
-## The rule
+## The rule: no AI agent writes to a monitor
 
-**No AI agent — an assistant in an editor, a coding agent, a subagent, a review bot, any tool-driven automation — may run a
-command that writes to a monitor.** Only a human runs a writing command, by hand, deliberately.
+**AI agents are welcome to work on monmux. What no AI agent may do is run a command that writes to a monitor.**
+
+The restriction is on one class of command, not on who contributes. An assistant in an editor, a coding agent, a subagent, a
+review bot or any other tool-driven automation may write, refactor, test and review this project like any other Go codebase —
+during implementation and during review alike. It must stop at the point where a command would change a monitor's state. Only a
+human runs a writing command, by hand, deliberately.
 
 Forbidden for agents: `ddcutil setvcp …`, any `ddcutil` invocation with `--i2c-source-addr`, `m1ddc … set …`, `monmux switch`
 without `--dry-run`, `i2cset`, `i2ctransfer`, any direct write to `/dev/i2c-*`, and any test or script that executes the real
@@ -34,8 +39,9 @@ becomes evidence in the catalog.
 make go-build          # ./dist/monmux for the host OS
 make go-test           # go test -race ./...
 make go-vet
-make go-build-darwin   # cross-compile the macOS backend from Linux
-make go-vet-darwin
+make go-build-cross    # compile-check both OS backends, whatever the host
+make go-vet-cross      # and vet both, their build-tagged tests included
+make go-lint-cross     # and lint both, which `make check` does not
 make check             # the full pre-commit suite
 make check-stage       # the same, on staged files only
 ```
