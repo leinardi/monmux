@@ -5,16 +5,18 @@ Switch supported monitors between video inputs, from the command line, on Linux 
 `monmux` is fail-closed by design. It writes to a monitor only when that monitor is positively identified, from its EDID, as a
 model in the built-in supported-monitor catalog, **and** the requested input is explicitly enabled for that model with recorded
 evidence that the value was tested on real hardware. Everything else — an unknown monitor, two candidates, an input nobody has
-verified — is refused without a write, and every refusal says so in as many words.
+verified — is refused without a write, and every refusal says so in as many words. The one documented exception is the
+`--unsafe-model` override below, which has to be typed on the command line it applies to.
 
 It wraps `ddcutil` on Linux and `m1ddc` on macOS; there is no native I²C or IOKit backend. One monitor model is verified so far.
 
 ## Supported monitors
 
 One model is verified on hardware: the LG 38WR85QC-W, on `dp` and `usb-c`. Another 70 models from twelve vendors are recorded
-from public reports, every one of them disabled and without an EDID fingerprint, so monmux can neither match them nor write to
-them. They are written down for the contributor who owns one — enabling a row means testing it on a real unit and recording the
-evidence, see [docs/adding-a-monitor.md](docs/adding-a-monitor.md). The full list, with the evidence and the conflicts behind
+from public reports, every one of them disabled and without an EDID fingerprint, so monmux can never match them, and will not
+write to them unless you take the identification off yourself with [`--unsafe-model`](#the---unsafe-model-override). They are
+written down for the contributor who owns one — enabling a row means testing it on a real unit and recording the evidence, see
+[docs/adding-a-monitor.md](docs/adding-a-monitor.md). The full list, with the evidence and the conflicts behind
 every value, is in [docs/compatibility.md](docs/compatibility.md).
 
 Two mechanisms are implemented: `lg-alt-input`, the LG side channel, and `vcp-input-source`, the standard `VCP 0x60` Input
@@ -56,7 +58,15 @@ monmux doctor               # can monmux reach the monitors at all?
 monmux switch usb-c --dry-run   # print the exact command, run nothing
 monmux switch usb-c             # send it
 monmux switch dp --serial ABC123456789   # pick one of two identical monitors
+
+monmux catalog list             # every model in this binary's catalog
+monmux catalog list aoc         # filter by vendor, model, or vendor/name
+monmux catalog list --verbose   # with the value and evidence grade of every input
+monmux catalog show AOC/Q27P1B  # one entry in full, evidence included
 ```
+
+`monmux catalog` reads nothing outside the binary: no backend, no configuration file, no monitor. It is the offline view of
+[docs/compatibility.md](docs/compatibility.md), for the build you are actually running.
 
 Serial numbers, macOS display UUIDs and raw EDID hex are redacted in every output by default, so what monmux prints is safe to
 paste into a bug report. `--show-serial` prints them verbatim, and is the only way to see them.
@@ -70,6 +80,28 @@ Input-switch command sent (USB-C, 0xD1) to LG 38WR85QC-W via ddcutil. Switch not
 The second sentence is not hedging. monmux never reads a monitor back to confirm a switch — the LG side channel has no reliable
 read-back, and a read of `VCP 0x60` is no better — so "the command was sent" is the strongest true statement available; monmux
 never claims a monitor switched.
+
+### The `--unsafe-model` override
+
+Seventy of the seventy-one entries are recorded from somebody else's report and are not write-enabled, so `monmux switch`
+refuses them. `--unsafe-model` is the deliberate way past that, for the person who owns the monitor and is trying to produce
+the evidence that would enable it:
+
+```sh
+monmux switch hdmi --unsafe-model AOC/Q27P1B --dry-run   # always start here
+monmux switch hdmi --unsafe-model AOC/Q27P1B
+```
+
+It treats the attached display as the catalog entry you name, instead of identifying it from its EDID, and it skips the
+write-enabled gate. It weakens those two things and nothing else: the value still comes from the compiled-in catalog, so there
+is still no way to send a VCP code or a value of your own; an input the named entry does not record is still refused; monmux
+still refuses when more than one attached display is writable, so pin with `--serial` rather than letting it guess; the
+identity is still re-verified immediately before the write; and no configuration key can arm the flag — it is per invocation,
+on purpose. A warning naming the display, the assumed model and the value goes to stderr before anything is written, and the
+result line says the identification was bypassed.
+
+A wrong value can leave a monitor on an input with no signal, so have the monitor's OSD within reach, and read
+[docs/adding-a-monitor.md](docs/adding-a-monitor.md) before you record what happened.
 
 ## Exit codes
 

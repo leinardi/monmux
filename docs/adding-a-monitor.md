@@ -100,6 +100,31 @@ both, and record both.
 
 Write down: the date, the operating system, the backend, the exact command, and what the monitor did.
 
+### Testing a model the catalog already records
+
+Most entries are already in the catalog, recorded from somebody else's report, disabled and without an identity — so
+`monmux switch` refuses them, and there is nothing to test yet. `--unsafe-model` is how you get from a `reported` row to a
+`verified` one **without editing the catalog first**:
+
+```sh
+monmux catalog show AOC/Q27P1B                            # read the values and the evidence behind them
+monmux switch hdmi --unsafe-model AOC/Q27P1B --dry-run    # always start here: read the command
+monmux switch hdmi --unsafe-model AOC/Q27P1B              # then run it, with the OSD within reach
+```
+
+It treats the display as the entry you name and skips the write-enabled gate; it still sends only the value that entry
+records. Before you run it without `--dry-run`, have a second input connected and displaying, and know how to reach the
+monitor's OSD: a value that is wrong for your unit can leave it on an input with no signal. Warnings and what the override
+does not weaken are in [security.md](security.md); the flag has no configuration key, by design —
+[configuration.md](configuration.md).
+
+If the entry is not in the catalog at all, or your unit needs a value it does not record, there is nothing to assume: go back
+to step 2, and add the entry disabled first if you want the values reviewed before you run them.
+
+What you write down is the same either way — the date, the operating system, the backend, the exact command, and what the
+monitor did. That is a `grade: verified` record, and it is what turns the entry into a write-enabled one: add the identities
+you collected in step 1, set `write_enabled: true`, and replace the evidence of every input you tested.
+
 ## 5. Add the catalog entry
 
 The catalog is `internal/catalog/models.yaml`. Add your entry to the `models:` list, in the place the list's order puts it:

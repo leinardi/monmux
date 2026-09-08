@@ -57,13 +57,15 @@ display. On Linux, check that the monitor is on and that `monmux doctor` lists a
 
 ### `display-not-writable`
 
-The monitor is recognised, but the only display monmux could select cannot be written to. `monmux info` gives the reason in its
-status:
+The display monmux would have written to cannot be written to. `monmux info` gives the reason in its status:
 
 - `no-ddc-channel` — the connector exposes no `ddc` link. Common on ports wired through some docks and adapters, and on
   DisplayPort MST hubs. Try connecting the monitor directly.
 - `edid-unreadable` — the EDID could not be read or did not parse. Often a cable or an adapter; try another one.
 - `no-uuid` — macOS gave the display no system UUID, which is the only way monmux can address it there.
+
+With `--unsafe-model` this is also what an unidentified display is refused with, naming each display and its status: the
+catalog is not consulted on that path, so the answer that is actually true of the display is that monmux cannot reach it.
 
 ### `unknown-monitor`
 
@@ -80,7 +82,7 @@ invariant test is supposed to make it impossible. Please open an issue with the 
 
 ### `multiple-candidates`
 
-More than one attached display matched a supported model, and monmux will not pick one for you. Pin the one you mean:
+More than one attached display could be the one you meant, and monmux will not pick for you. Pin the one you mean:
 
 ```sh
 monmux info --show-serial          # read the alphanumeric serial
@@ -89,12 +91,32 @@ monmux switch usb-c --serial ABC123456789
 
 Or set `serial:` in the configuration file if it is always the same monitor.
 
+With `--unsafe-model`, this refusal counts the displays monmux could **write** to, matched or not, because identification is
+exactly what you bypassed — so it can appear where a normal switch would have been unambiguous. The detail names them:
+
+```text
+Writable: card1-DP-1, card1-HDMI-A-1. An assumed model identifies nothing, so monmux will not choose between them; pin one with --serial.
+```
+
+Pinning is the answer there too. An override that picked the first display would send an unverified value to whichever monitor
+happened to be listed first.
+
 ### `input-not-enabled`
 
 The monitor is supported, but that input is not enabled for it — nobody has tested that value on that model. `monmux info` lists
 the inputs that are enabled. `hdmi1` and `hdmi2` are not enabled for any model today.
 
 This refusal is not a limitation to work around. Enabling an input means testing it on a real unit and recording the evidence.
+
+With `--unsafe-model` the write-enabled gate is already bypassed, so this refusal means something narrower: the entry you named
+does not **record** that input at all, and there is therefore no value to send. The detail lists what it does record, rather
+than what it enables, which for an entry that is not write-enabled would be nothing:
+
+```text
+Requested usb-c on AOC Q27P1B; recorded inputs: dp, hdmi, dvi, vga.
+```
+
+`monmux catalog show AOC/Q27P1B` prints the same list with the evidence behind every value.
 
 ### `serial-mismatch`
 
@@ -166,6 +188,16 @@ thunderbolt - optionally followed by a port number, e.g. hdmi2; run "monmux info
 An input name is a connector kind and, optionally, a port number: a positive decimal integer with no leading zero and no
 separator. `dp`, `hdmi2` and `usb-c` are names; `HDMI`, `hdmi0`, `hdmi01`, `hdmi-1` and `scart` are not. This is a usage error,
 exit code 1, and nothing is started for it.
+
+### An unknown `--unsafe-model` name
+
+```text
+Error: no catalog entry is named "AOC/Q27P1C" (run "monmux catalog list" to see every entry)
+```
+
+The override names a catalog entry, so a name that is not one is a usage error, exit code 1, and nothing is started for it.
+The accepted spellings are `Vendor/Name` and `Vendor Name`, case-insensitively — `monmux catalog list` prints them, and shell
+completion offers them.
 
 A name that is well formed but not enabled for the monitor you have is a different thing: it is refused with
 `input-not-enabled` and exit code 2, and `monmux info` lists the inputs the attached monitor is enabled for. Symbolic inputs

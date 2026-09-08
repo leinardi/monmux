@@ -191,6 +191,11 @@ Run this later, from the machine on the other input.
 1. `monmux switch hdmi1` — refused with `input-not-enabled`, exit code `2`, and nothing was written. HDMI was never tested on
    this unit and must stay refused.
 2. `monmux switch usb-c --serial NOTMYSERIAL` — refused with `serial-mismatch`, exit code `2`.
+3. `monmux switch usb-c --unsafe-model AOC/Q27P1B --dry-run` — refused with `input-not-enabled`, exit code `2`, listing that
+   entry's **recorded** inputs, because it does not record `usb-c`. No warning banner is printed: the banner names the display
+   and the value, so it appears only once those have been chosen, and this is refused before that.
+4. `monmux switch hdmi --unsafe-model Acme/Nothing` — a name that is not a catalog entry is a usage error, exit code `1`, and
+   nothing is started for it.
 
 Record what you ran, on what date, on which OS, and what the monitor did. Those are the `date`, `tool` and `note` fields of a
 `grade: verified` evidence record, which is the only grade a write-enabled model may carry — see
@@ -203,10 +208,22 @@ is in that state today. Enabling the first model that uses one is therefore two 
 checklist above:
 
 1. Work through the whole checklist for the model, substituting that mechanism's command line — the two are in
-   [backends.md](backends.md).
+   [backends.md](backends.md). The model is not write-enabled yet, so `monmux switch` refuses it: the run goes through
+   `--unsafe-model`, which assumes the entry you name and skips the write-enabled gate while still sending only the value that
+   entry records.
+
+   ```sh
+   monmux catalog show VENDOR/MODEL                            # the values, and the evidence behind them
+   monmux switch <input> --unsafe-model VENDOR/MODEL --dry-run # the recommended first step, every time
+   monmux switch <input> --unsafe-model VENDOR/MODEL           # a human runs this one, never an agent
+   ```
+
+   `--dry-run` is not optional politeness: it is how you check that the value and the mechanism in the printed command are the
+   ones you meant before anything is sent. The warning banner on stderr names the display, the assumed model and the value, and
+   is worth reading rather than scrolling past.
 2. Do it on **both** operating systems if you can reach them, because the two backends build the invocation separately and only
    the catalog is shared.
 3. Have a second input already connected and displaying before you switch. At least one recorded model wedges its DDC engine
    when switched to an input with no signal, and the OSD is then the only way back.
-4. Say in the pull request that it is the first hardware run of that mechanism, and add the end-to-end `Plan` golden test that
-   was impossible to write until a model using it was enabled.
+4. Say in the pull request that it is the first hardware run of that mechanism, say that it went through `--unsafe-model`, and
+   add the end-to-end `Plan` golden test that was impossible to write until a model using it was enabled.
