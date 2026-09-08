@@ -9,12 +9,21 @@
 # Rules for editing it, enforced by the generator and by the tests in
 # catalog_test.go, and spelled out in docs/adding-a-monitor.md:
 #
+#   - The models are written in one order: the write-enabled ones first, then by
+#     vendor, then by model name, neither compared for case. The generator
+#     refuses any other order and names the two entries to swap. The table in
+#     docs/compatibility.md is rendered in file order, so this is its order too.
+#     The two section banners and the vendor headings below follow from that
+#     order; they are comments, so nothing checks them - keep them right when
+#     an entry arrives, and add a heading with the first model of a new vendor.
 #   - A write-enabled model needs at least one EDID identity. An entry with no
 #     identities can never match, and so can never be written to.
 #   - A model that is not write-enabled must record no identities at all, so it
 #     cannot match a display in the first place.
-#   - Every input carries its own evidence string. "Another model in the same
-#     family uses this value" is not evidence.
+#   - Every input carries its own evidence, and the evidence carries a grade.
+#     "Another model in the same family uses this value" is not evidence.
+#   - A write-enabled model needs the grade `verified` on every one of its
+#     inputs: a value nobody ran on that unit never becomes writable.
 #   - A value that has not been observed on the model itself, or confirmed for
 #     that exact model by a named source, does not go in.
 #
@@ -22,71 +31,2360 @@
 # kind (dp, hdmi, usb-c, dvi, vga, thunderbolt) plus an optional port number
 # (hdmi1, usb-c2). Write a kind bare when the model has one port of it, numbered
 # when it has several; never both. The mechanism is a per-model property and
-# never a fallback; the only one implemented today is lg-alt-input.
+# never a fallback. Two are implemented: lg-alt-input, the LG side channel
+# (source address 0x50, VCP 0xF4), and vcp-input-source, the standard Input
+# Source feature (VCP 0x60). Only the first has ever reached a monitor.
+#
+# An identity may pin `model_name`, the EDID descriptor 0xFC text, because LG
+# assigns one product code to several products. Leave it out unless two models
+# have to share a code: a bare identity next to a pinned one is rejected.
+#
+# The evidence of an input is a record, not a sentence. The generator composes
+# the sentence that reaches models_gen.go and docs/compatibility.md, so every
+# entry of one grade reads the same way:
+#
+#   grade: verified    a direct test on the unit; needs date, tool and note
+#   grade: documented  the manufacturer documents it; needs by and url
+#   grade: reported    somebody reports switching that input; needs by, tool, url
+#   grade: quoted      somebody quotes the values and says they work, without
+#                      saying which inputs were tried; needs by, tool, url
+#
+# `note` is optional free text folded into the sentence. No field rendered into
+# the document - by, tool, date, url, note, a note entry or a source - may hold
+# a `|` or a newline, because the document test reads Markdown table cells and
+# single-line bullets.
+#
+# `notes` is per-model prose: negative reports, conflicts, aliases and quirks.
+# It is rendered under the model in docs/compatibility.md and is never an
+# Operation, so nothing written there can reach a monitor.
 
 models:
+  # ==========================================================================
+  # Write-enabled: the models monmux will switch.
+  #
+  # Each one carries at least one EDID identity, so it can match a display,
+  # and the grade `verified` on every input, so nothing here was enabled on
+  # somebody else's report.
+  # ==========================================================================
+
+  # --------------------------------------------------------------------------
+  # LG
+  # --------------------------------------------------------------------------
   - name: 38WR85QC-W
     vendor: LG
-    # The same physical unit reports 0x77D3 over DisplayPort and 0x77D4 over
-    # USB-C, which is why a model carries several identities.
     identities:
       - manufacturer: GSM
         product_code: 0x77D3
       - manufacturer: GSM
         product_code: 0x77D4
     write_enabled: true
-    # HDMI is deliberately absent: the values were never tested on this unit,
-    # and another LG model using them is not evidence for this one.
     inputs:
       dp:
         mechanism: lg-alt-input
         value: 0xD0
-        evidence: >-
-          Direct test on the unit, 2026-09-07, Linux (ddcutil) and macOS (m1ddc):
-          switched from USB-C to DisplayPort
+        evidence:
+          grade: verified
+          tool: "Linux (ddcutil) and macOS (m1ddc)"
+          date: "2026-09-07"
+          note: "switched from USB-C to DisplayPort"
       usb-c:
         mechanism: lg-alt-input
         value: 0xD1
-        evidence: >-
-          Direct test on the unit, 2026-09-07, Linux (ddcutil) and macOS (m1ddc):
-          switched from DisplayPort to USB-C
+        evidence:
+          grade: verified
+          tool: "Linux (ddcutil) and macOS (m1ddc)"
+          date: "2026-09-07"
+          note: "switched from DisplayPort to USB-C"
+    notes:
+      - "Two identities, because the same physical unit reports `GSM/0x77D3` while displaying DisplayPort and `GSM/0x77D4` while displaying USB-C. Both were observed directly; the model string is `LG ULTRAWIDE`, which is not used for matching."
+      - "`hdmi1` and `hdmi2` are deliberately absent rather than disabled. The values were never tested on this unit, and another LG model using them is not evidence for this one. Asking for them is refused with `input-not-enabled`. Several sources say the HDMI inputs of a 38WR85QC-W respond to `0x90` and `0x91`; because this model is write-enabled, recording them would enable a write, so they stay out until somebody runs them on this unit by hand, the way [testing.md](testing.md) describes."
     sources:
-      - >-
-        Direct observation on the tested unit: EDID GSM/0x77D3 (DisplayPort) and
-        GSM/0x77D4 (USB-C), model string LG ULTRAWIDE
+      - "Direct observation on the tested unit: EDID GSM/0x77D3 (DisplayPort) and GSM/0x77D4 (USB-C), model string LG ULTRAWIDE"
       - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
 
-  - name: 38BR85QC
+  # ==========================================================================
+  # Recorded only: the models monmux refuses to switch.
+  #
+  # None of them records an identity, so none can ever match a display and
+  # none can ever be written to. They are here because the values are worth
+  # having for whoever owns the hardware and can test them, which is the
+  # procedure in docs/adding-a-monitor.md.
+  # ==========================================================================
+
+  # --------------------------------------------------------------------------
+  # Alienware
+  # --------------------------------------------------------------------------
+  - name: AW2725DF
+    vendor: Alienware
+    identities: []
+    write_enabled: false
+    inputs:
+      dp1:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "markhagemann (display-switch issue 157)"
+          tool: "display-switch 1.4.0 on Linux"
+          url: https://github.com/haimgel/display-switch/issues/157
+      dp2:
+        mechanism: vcp-input-source
+        value: 0x13
+        evidence:
+          grade: reported
+          by: "markhagemann (display-switch issue 157)"
+          tool: "display-switch 1.4.0 on Linux"
+          url: https://github.com/haimgel/display-switch/issues/157
+          note: "the capabilities string lists 0x13 as an unrecognised value; 0x10 does not switch"
+      hdmi:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: reported
+          by: "markhagemann (display-switch issue 157)"
+          tool: "display-switch 1.4.0 on Linux"
+          url: https://github.com/haimgel/display-switch/issues/157
+          note: "used as the working alternative before 0x13 was found"
+    notes:
+      - "A Dell brand. display-switch's own `DisplayPort2` name sends 0x10, which reports success while the monitor stays on DP 1; the second DisplayPort answers to 0x13."
+    sources:
+      - https://github.com/haimgel/display-switch/issues/157
+
+  # --------------------------------------------------------------------------
+  # AOC
+  # --------------------------------------------------------------------------
+  - name: AG493UCX
+    vendor: AOC
+    identities: []
+    write_enabled: false
+    inputs:
+      dp1:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "Prydon9 (ddcutil issue 314)"
+          tool: "ddcutil on Debian 11, sent from an Intel NUC on HDMI-1"
+          url: https://github.com/rockowitz/ddcutil/issues/314
+          note: "switched from HDMI-1 and back repeatedly, also while USB-C was displayed"
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: reported
+          by: "Prydon9 (ddcutil issue 314)"
+          tool: "ddcutil on Debian 11, sent from an Intel NUC on HDMI-1"
+          url: https://github.com/rockowitz/ddcutil/issues/314
+    notes:
+      - "Marketed as the AGON AG493UCX. USB-C cannot be selected: 0x13 from the capabilities string and 0x02, which is what VCP 0x60 reads while USB-C is displayed, both do nothing. The reporter's workaround is to switch to an unconnected input so the monitor falls back to USB-C on its own."
+      - "HDMI-2 and DP-2 were not tried; 0x12 and 0x10 come from the capabilities string only and are not recorded. The monitor accepts commands on an input that is not displayed."
+      - "EDID, as text only: manufacturer `AOC`, model string `AG493UG7R4`, product code 18736 (0x4930)."
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/314
+  - name: Q27P1B
+    vendor: AOC
+    identities: []
+    write_enabled: false
+    inputs:
+      vga:
+        mechanism: vcp-input-source
+        value: 0x01
+        evidence:
+          grade: reported
+          by: "denilsonsa (ddcutil issue 385)"
+          tool: "ddcutil 2.1.3 on Manjaro Linux, sent over DisplayPort"
+          url: https://github.com/rockowitz/ddcutil/issues/385
+          note: "reads back 0x01 once the switch completes"
+      dvi:
+        mechanism: vcp-input-source
+        value: 0x03
+        evidence:
+          grade: reported
+          by: "denilsonsa (ddcutil issue 385)"
+          tool: "ddcutil 2.1.3 on Manjaro Linux, sent over DisplayPort"
+          url: https://github.com/rockowitz/ddcutil/issues/385
+          note: "never read back; 0x300 is read after the switch"
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "denilsonsa (ddcutil issue 385)"
+          tool: "ddcutil 2.1.3 on Manjaro Linux, sent over DisplayPort"
+          url: https://github.com/rockowitz/ddcutil/issues/385
+          note: "never read back; 0x305 is read while DisplayPort is displayed"
+      hdmi:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: reported
+          by: "denilsonsa (ddcutil issue 385)"
+          tool: "ddcutil 2.1.3 on Manjaro Linux, sent over DisplayPort"
+          url: https://github.com/rockowitz/ddcutil/issues/385
+          note: "never read back; 0x300 is read after the switch"
+    notes:
+      - "The reporter had two units, both connected over DisplayPort, and not enough machines to feed every input at once; each value was written and the monitor observed switching to that input. 0x02 and 0x04 also switch to VGA and DVI respectively; 0x10 and 0x12 do nothing. The capabilities string declares only 0x01 and 0x03."
+      - "Reading VCP 0x60 back returns a 16-bit status (0x300 to 0x305) that never equals the value written, and the monitor does not answer DDC for several seconds while switching. Neither matters to monmux, which never reads a monitor to confirm a switch."
+      - "EDID, as text only: manufacturer `AOC`, model string `Q27P1B`, product code 9985 (0x2701), taken from the `AOC-Q27P1B-9985.mccs` file name in the report."
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/385
+  - name: U2790B
+    vendor: AOC
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "Evgeni Golov (die-welt.net, Building a simple KVM switch for 30 EUR)"
+          tool: "ddcutil on Linux, run from a udev rule on keyboard hot-plug"
+          url: https://github.com/evgeni/die-welt.net/blob/devel/posts/2021/01/building-a-simple-kvm-switch-for-30eur.md
+          note: "VCP 0x60 read 0x0F while DisplayPort was displayed before the test"
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: reported
+          by: "Evgeni Golov (die-welt.net, Building a simple KVM switch for 30 EUR)"
+          tool: "ddcutil on Linux, run from a udev rule on keyboard hot-plug"
+          url: https://github.com/evgeni/die-welt.net/blob/devel/posts/2021/01/building-a-simple-kvm-switch-for-30eur.md
+    notes:
+      - "Written up on 2021-01-18. HDMI-2 (0x12 in the capabilities string) was not tried."
+    sources:
+      - https://github.com/evgeni/die-welt.net/blob/devel/posts/2021/01/building-a-simple-kvm-switch-for-30eur.md
+  - name: U27N3R
+    vendor: AOC
+    identities: []
+    write_enabled: false
+    inputs:
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: reported
+          by: "zhufeng (ddcutil issue 580)"
+          tool: "ddcutil on an Ubuntu 24.04.3 live CD (Lenovo laptop)"
+          url: https://github.com/rockowitz/ddcutil/issues/580
+      hdmi2:
+        mechanism: vcp-input-source
+        value: 0x12
+        evidence:
+          grade: reported
+          by: "zhufeng (ddcutil issue 580)"
+          tool: "ddcutil on an Ubuntu 24.04.3 live CD (Lenovo laptop)"
+          url: https://github.com/rockowitz/ddcutil/issues/580
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "zhufeng (ddcutil issue 580)"
+          tool: "ddcutil on an Ubuntu 24.04.3 live CD (Lenovo laptop)"
+          url: https://github.com/rockowitz/ddcutil/issues/580
+    notes:
+      - "The report says the three values work fine to switch to. USB-C cannot be selected: VCP 0x60 reads 0x00 or 0x02 (the latter with ddcutil 2.2.0-dev on a Debian 13 live CD) while USB-C is displayed and writing either does nothing. With the OSD input set to Auto, switching to the unconnected DisplayPort makes the monitor fall through to USB-C (its input order is HDMI1, HDMI2, DP, USB-C)."
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/580
+  - name: U27U2DS
+    vendor: AOC
+    identities: []
+    write_enabled: false
+    inputs:
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: quoted
+          by: "Ding998 (ddcctl issue 67)"
+          tool: "not stated"
+          url: https://github.com/kfix/ddcctl/issues/67
+      hdmi2:
+        mechanism: vcp-input-source
+        value: 0x12
+        evidence:
+          grade: quoted
+          by: "Ding998 (ddcctl issue 67)"
+          tool: "not stated"
+          url: https://github.com/kfix/ddcctl/issues/67
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: quoted
+          by: "Ding998 (ddcctl issue 67)"
+          tool: "not stated"
+          url: https://github.com/kfix/ddcctl/issues/67
+    notes:
+      - "USB-C cannot be selected: the value 0 the monitor reports for it does nothing when written. With the OSD input on Auto and nothing on DisplayPort, switching to DisplayPort makes the monitor fall through to USB-C."
+    sources:
+      - https://github.com/kfix/ddcctl/issues/67
+
+  # --------------------------------------------------------------------------
+  # Asus
+  # --------------------------------------------------------------------------
+  - name: PA328Q
+    vendor: Asus
+    identities: []
+    write_enabled: false
+    inputs:
+      dp1:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "Mahmud Ridwan (hjr265.me, Switch Monitor Input from Linux Command Line)"
+          tool: "ddcutil on Linux"
+          url: https://github.com/hjr265/hjr265.me/blob/master/content/blog/switch-monitor-input-from-linux-command-line.md
+      dp2:
+        mechanism: vcp-input-source
+        value: 0x10
+        evidence:
+          grade: reported
+          by: "Mahmud Ridwan (hjr265.me, Switch Monitor Input from Linux Command Line)"
+          tool: "ddcutil on Linux"
+          url: https://github.com/hjr265/hjr265.me/blob/master/content/blog/switch-monitor-input-from-linux-command-line.md
+          note: "the Mini DisplayPort connector"
+    notes:
+      - "Written up on 2023-10-24. The three HDMI inputs answer to 0x11, 0x12 and 0x13 per the capabilities string and the author mapped them by trial, but the mapping is not stated, so they are left out. ddcutil cannot parse this monitor's capabilities string."
+    sources:
+      - https://github.com/hjr265/hjr265.me/blob/master/content/blog/switch-monitor-input-from-linux-command-line.md
+  - name: VG279Q1A
+    vendor: Asus
+    identities: []
+    write_enabled: false
+    inputs:
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: reported
+          by: "wbeuil (ddcctl issue 97)"
+          tool: "ddcctl on a MacBook Pro 16 through a CalDigit TS3 Plus dock on HDMI"
+          url: https://github.com/kfix/ddcctl/issues/97
+    notes:
+      - "Switching to HDMI 1 works while DisplayPort is displayed. Switching back to DisplayPort with 0x0F blinks the screen and returns to HDMI 1, so DisplayPort is not recorded; the reporter's workaround is switching to the unconnected HDMI 2, from which the monitor falls back to DisplayPort."
+    sources:
+      - https://github.com/kfix/ddcctl/issues/97
+
+  # --------------------------------------------------------------------------
+  # BenQ
+  # --------------------------------------------------------------------------
+  - name: PD3220U
+    vendor: BenQ
+    identities: []
+    write_enabled: false
+    inputs:
+      thunderbolt:
+        mechanism: vcp-input-source
+        value: 0x14
+        evidence:
+          grade: reported
+          by: "eljobe (BetterDisplay discussion 2903)"
+          tool: "BetterDisplay on two MacBook Pros"
+          url: https://github.com/waydabber/BetterDisplay/discussions/2903
+          note: "the entry BetterDisplay labels Other 2"
+    notes:
+      - "The Thunderbolt input answers to 20 (0x14), which no tool labels as such. The report also switches to DisplayPort through BetterDisplay's DisplayPort 1 entry, but never states the value that entry sends, so DisplayPort is not recorded. HDMI was not reported."
+    sources:
+      - https://github.com/waydabber/BetterDisplay/discussions/2903
+  - name: PD3226G
+    vendor: BenQ
+    identities: []
+    write_enabled: false
+    inputs:
+      thunderbolt:
+        mechanism: vcp-input-source
+        value: 0x13
+        evidence:
+          grade: reported
+          by: "manzoorwanijk (BetterDisplay discussion 5647)"
+          tool: "BetterDisplay 4.3.5 on an Apple Silicon Mac over HDMI"
+          url: https://github.com/waydabber/BetterDisplay/discussions/5647
+          note: "the entry BetterDisplay labels HDMI 3"
+    notes:
+      - "The capabilities string is `60(0F 11 13)`; 0x19, which BetterDisplay sends for USB-C, is silently ignored. DisplayPort and HDMI were not reported switched."
+    sources:
+      - https://github.com/waydabber/BetterDisplay/discussions/5647
+
+  # --------------------------------------------------------------------------
+  # Dell
+  # --------------------------------------------------------------------------
+  - name: AW3425DW
+    vendor: Dell
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: quoted
+          by: "a contributor on the ddcutil Dell wiki page"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Dell
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: quoted
+          by: "a contributor on the ddcutil Dell wiki page"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Dell
+      hdmi2:
+        mechanism: vcp-input-source
+        value: 0x12
+        evidence:
+          grade: quoted
+          by: "a contributor on the ddcutil Dell wiki page"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Dell
+    notes:
+      - "An Alienware model listed on the ddcutil Dell wiki page with `ddcutil setvcp 60 0x0F` as the example for DisplayPort. The page also documents PiP and PbP layouts on VCP 0xE9 and game presets on VCP 0xF0, which are out of scope."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Dell
+  - name: P2720DC
+    vendor: Dell
+    identities: []
+    write_enabled: false
+    inputs:
+      usb-c:
+        mechanism: vcp-input-source
+        value: 0x1B
+        evidence:
+          grade: reported
+          by: "nichcuta (display-switch issue 86)"
+          tool: "display-switch on a MacBook Pro (Catalina) over USB-C"
+          url: https://github.com/haimgel/display-switch/issues/86
+      hdmi:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: reported
+          by: "nichcuta (display-switch issue 86)"
+          tool: "display-switch on Windows 10 over a DisplayPort-to-HDMI cable"
+          url: https://github.com/haimgel/display-switch/issues/86
+    notes:
+      - 'Quirk: on the second switch cycle the monitor sometimes goes to soft power-off and reports "No source detected on USB-C"; the reporter recovers by switching back to HDMI and then to USB-C again, with a delay between the two. monmux does one write and never retries.'
+    sources:
+      - https://github.com/haimgel/display-switch/issues/86
+  - name: S3423DWC
+    vendor: Dell
+    identities: []
+    write_enabled: false
+    inputs:
+      usb-c:
+        mechanism: vcp-input-source
+        value: 0x1B
+        evidence:
+          grade: quoted
+          by: "idanizi (dell-monitor-switch README)"
+          tool: "m1ddc set input on Apple Silicon over USB-C"
+          url: https://github.com/idanizi/dell-monitor-switch
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: quoted
+          by: "idanizi (dell-monitor-switch README)"
+          tool: "m1ddc set input on Apple Silicon over USB-C"
+          url: https://github.com/idanizi/dell-monitor-switch
+      hdmi2:
+        mechanism: vcp-input-source
+        value: 0x12
+        evidence:
+          grade: quoted
+          by: "idanizi (dell-monitor-switch README)"
+          tool: "m1ddc set input on Apple Silicon over USB-C"
+          url: https://github.com/idanizi/dell-monitor-switch
+    notes:
+      - 'The README says "tested on Dell S3423DWC", ships one script per input (27, 17, 18) and says `set input` works reliably; it calls the values standard Dell values and warns that reads return garbage. No input is described being switched individually.'
+    sources:
+      - https://github.com/idanizi/dell-monitor-switch
+  - name: U2412M
+    vendor: Dell
+    identities: []
+    write_enabled: false
+    inputs:
+      dvi:
+        mechanism: vcp-input-source
+        value: 0x03
+        evidence:
+          grade: reported
+          by: "pranavanmaru (ddcctl issue 103)"
+          tool: "ddcctl on macOS over DisplayPort"
+          url: https://github.com/kfix/ddcctl/issues/103
+    notes:
+      - "Switching from DisplayPort to DVI works. Switching back with 15 (0x0F), sent from the DisplayPort side while DVI is displayed, does nothing; whether 0x0F works when sent from the displayed input is not reported, so DisplayPort is not recorded."
+    sources:
+      - https://github.com/kfix/ddcctl/issues/103
+  - name: U2720Q
+    vendor: Dell
+    identities: []
+    write_enabled: false
+    inputs:
+      usb-c:
+        mechanism: vcp-input-source
+        value: 0x1B
+        evidence:
+          grade: reported
+          by: "nmostafavi (display-switch issue 6)"
+          tool: "display-switch on Windows (dxva2 SetVCPFeature)"
+          url: https://github.com/haimgel/display-switch/issues/6
+    notes:
+      - "The value was found with NirSoft ControlMyMonitor and then used by display-switch: the report says it is working great. DisplayPort and HDMI were not reported."
+    sources:
+      - https://github.com/haimgel/display-switch/issues/6
+  - name: U2723QE
+    vendor: Dell
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "tjk213 (tk-dotfiles, swap-sources.sh)"
+          tool: "m1ddc set input 15 on an M1 MacBook driving two U2723QE"
+          url: https://github.com/tjk213/tk-dotfiles/blob/main/core/swap-sources.sh
+          note: "the script comments that the display switches as desired even when m1ddc then reports a DDC communication failure"
+    notes:
+      - "Only the DisplayPort switch is described as observed. The same script sends `setvcp 0x60 0x1b` for USB-C on Linux, and homer0's ddc-switcher bridge configures 27 for USB-C and 17 for HDMI on two U2723QE, but neither source says those switches happened, so USB-C and HDMI are not recorded."
+      - "After a switch, m1ddc may exit non-zero because its read-back fails once the input is gone, and the script switches its displays from the highest m1ddc index down because switching one display can make the next one fail."
+    sources:
+      - https://github.com/tjk213/tk-dotfiles/blob/main/core/swap-sources.sh
+      - https://github.com/homer0/ddc-switcher/blob/main/m1ddc-bridge.sh
+  - name: U2724DE
+    vendor: Dell
+    identities: []
+    write_enabled: false
+    inputs:
+      usb-c:
+        mechanism: vcp-input-source
+        value: 0x19
+        evidence:
+          grade: reported
+          by: "manzoorwanijk (BetterDisplay discussion 5647)"
+          tool: "BetterDisplay 4.3.5 on an Apple Silicon Mac"
+          url: https://github.com/waydabber/BetterDisplay/discussions/5647
+    notes:
+      - "The capabilities string is `60(19 0F 11)`, so USB-C is 0x19 here rather than the 0x1B most Dell reports use. DisplayPort and HDMI were not reported switched."
+    sources:
+      - https://github.com/waydabber/BetterDisplay/discussions/5647
+  - name: U3219Q
+    vendor: Dell
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "hawktang (ddcctl issue 120)"
+          tool: "ddcctl on a MacBook Pro 2017"
+          url: https://github.com/kfix/ddcctl/issues/120
+    notes:
+      - "Mentioned as the working monitor in a report about an ASUS VG27A that does not switch. HDMI and USB-C were not reported."
+    sources:
+      - https://github.com/kfix/ddcctl/issues/120
+  - name: U3421WE
+    vendor: Dell
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "Jean-Charles Quillet (blog post: How to use ddcutil to switch input of a Dell screen)"
+          tool: "ddcutil on NixOS, a toggle script between the two inputs"
+          url: https://github.com/jecaro/jeancharles.quillet/blob/master/posts/2021-08-20-How-to-use-ddcutil-to-switch-input-of-a-Dell-screen.md
+      usb-c:
+        mechanism: vcp-input-source
+        value: 0x1B
+        evidence:
+          grade: reported
+          by: "Jean-Charles Quillet (blog post: How to use ddcutil to switch input of a Dell screen)"
+          tool: "ddcutil on NixOS, a toggle script between the two inputs"
+          url: https://github.com/jecaro/jeancharles.quillet/blob/master/posts/2021-08-20-How-to-use-ddcutil-to-switch-input-of-a-Dell-screen.md
+    notes:
+      - "A second user, ManTreff, drives USB-C on the same model with `setvcp 60 0x1b` from the DellDisplayManagerLite README. The two reports give different EDID product codes, 41349 (0xA185) and 41345 (0xA181); text only, neither is an identity."
+      - "The two HDMI inputs (0x11 and 0x12 in the capabilities string) were not tried."
+    sources:
+      - https://github.com/jecaro/jeancharles.quillet/blob/master/posts/2021-08-20-How-to-use-ddcutil-to-switch-input-of-a-Dell-screen.md
+      - https://github.com/ManTreff/DellDisplayManagerLite
+  - name: U3818DW
+    vendor: Dell
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "tsarath (ddcctl issue 76)"
+          tool: "ddcctl on a Mac mini 2018 over DisplayPort"
+          url: https://github.com/kfix/ddcctl/issues/76
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: reported
+          by: "tsarath (ddcctl issue 76)"
+          tool: "ddcctl on a Mac mini 2018 over DisplayPort"
+          url: https://github.com/kfix/ddcctl/issues/76
+      hdmi2:
+        mechanism: vcp-input-source
+        value: 0x12
+        evidence:
+          grade: reported
+          by: "tsarath (ddcctl issue 76)"
+          tool: "ddcctl on a Mac mini 2018 over DisplayPort"
+          url: https://github.com/kfix/ddcctl/issues/76
+      usb-c:
+        mechanism: vcp-input-source
+        value: 0x1B
+        evidence:
+          grade: reported
+          by: "hdansou (ddcctl issue 76)"
+          tool: "ddcctl on macOS"
+          url: https://github.com/kfix/ddcctl/issues/76
+          note: "switched to USB-C and back to DisplayPort with 15"
+    notes:
+      - "ddcctl writes the standard VCP 0x60 feature. aryoda reports the same 0x1B for USB-C from the capabilities string of another U3818DW in ddcutil issue 70, and the ddcutil Dell wiki page lists the model; neither is a switch test and neither adds a value."
+    sources:
+      - https://github.com/kfix/ddcctl/issues/76
+      - https://github.com/rockowitz/ddcutil/issues/70
+
+  # --------------------------------------------------------------------------
+  # HKC
+  # --------------------------------------------------------------------------
+  - name: G27M7Pro
+    vendor: HKC
+    identities: []
+    write_enabled: false
+    inputs:
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x05
+        evidence:
+          grade: quoted
+          by: "Star-ZER0 (Twinkle Tray issue 1156)"
+          tool: "Twinkle Tray custom VCP on Windows"
+          url: https://github.com/xanderfrangos/twinkle-tray/issues/1156
+      hdmi2:
+        mechanism: vcp-input-source
+        value: 0x06
+        evidence:
+          grade: quoted
+          by: "Star-ZER0 (Twinkle Tray issue 1156)"
+          tool: "Twinkle Tray custom VCP on Windows"
+          url: https://github.com/xanderfrangos/twinkle-tray/issues/1156
+      dp:
+        mechanism: vcp-input-source
+        value: 0x07
+        evidence:
+          grade: quoted
+          by: "Star-ZER0 (Twinkle Tray issue 1156)"
+          tool: "Twinkle Tray custom VCP on Windows"
+          url: https://github.com/xanderfrangos/twinkle-tray/issues/1156
+      usb-c:
+        mechanism: vcp-input-source
+        value: 0x08
+        evidence:
+          grade: quoted
+          by: "Star-ZER0 (Twinkle Tray issue 1156)"
+          tool: "Twinkle Tray custom VCP on Windows"
+          url: https://github.com/xanderfrangos/twinkle-tray/issues/1156
+    notes:
+      - "The report says 5, 6, 7 and 8 select HDMI-1, HDMI-2, DisplayPort and Type-C, and that the 15 to 18 in the capabilities string do nothing."
+    sources:
+      - https://github.com/xanderfrangos/twinkle-tray/issues/1156
+
+  # --------------------------------------------------------------------------
+  # HP
+  # --------------------------------------------------------------------------
+  - name: Z27n G2
+    vendor: HP
+    identities: []
+    write_enabled: false
+    inputs:
+      dp2:
+        mechanism: vcp-input-source
+        value: 0x13
+        evidence:
+          grade: quoted
+          by: "a contributor on the ddcutil HP wiki page"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/HP
+    notes:
+      - "The wiki entry says the second DisplayPort input is 0x13 instead of the standard 0x10, that the capabilities string reports it accurately, and that after a switch VCP 0x60 keeps reading the old input until the new source carries a signal. The first DisplayPort, HDMI and USB-C are not given."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/HP
+
+  # --------------------------------------------------------------------------
+  # LG
+  # --------------------------------------------------------------------------
+  - name: 27BN88Q-B
     vendor: LG
-    # No identities: no EDID fingerprint for this model has been collected, so
-    # it can never match and monmux can never write to it. The mapping is
-    # recorded because it is useful to a contributor who owns the monitor.
     identities: []
     write_enabled: false
     inputs:
       dp:
         mechanism: lg-alt-input
         value: 0xD0
-        evidence: >-
-          Reported by a tester on the ddcutil LG wiki page; not verified here:
-          https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
-      usb-c:
-        mechanism: lg-alt-input
-        value: 0xD1
-        evidence: >-
-          Reported by a tester on the ddcutil LG wiki page; not verified here:
-          https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+        evidence:
+          grade: reported
+          by: "bansheerubber"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1646752889
       hdmi1:
         mechanism: lg-alt-input
         value: 0x90
-        evidence: >-
-          Reported by a tester on the ddcutil LG wiki page; not verified here:
-          https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+        evidence:
+          grade: reported
+          by: "bansheerubber"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1646752889
+    notes:
+      - 'Listed on the ddcutil LG wiki page by bansheerubber, who also wrote the values out in ddcutil issue #100: "successfully switching between HDMI 1 (0x90) and display port 1 (0xD0)". Only those two inputs are recorded; no report covers the others.'
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1646752889
+  - name: 27GL83A-B
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: reported
+          by: "lauhayden and nichcuta (display-switch issue 86)"
+          tool: "display-switch on Windows and macOS, and ddcutil setvcp 60, sent from the DisplayPort side"
+          url: https://github.com/haimgel/display-switch/issues/86
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "lauhayden and nichcuta (display-switch issue 86)"
+          tool: "display-switch on Windows and macOS, and ddcutil setvcp 60, sent from the HDMI 1 side"
+          url: https://github.com/haimgel/display-switch/issues/86
+          note: 'the switch happens, then the monitor shows an "Out of Range" overlay until the input is reselected in the OSD'
+    notes:
+      - 'Driven by the standard Input Source feature. Three quirks: the monitor answers DDC only on the input currently displayed; switching from HDMI 1 to DisplayPort brings up an "Out of Range" overlay on the new input, whether or not FreeSync is on; and the OSD keeps showing the old input after a DDC switch. ddccontrol-db issue 134 reports the same stale OSD from ddccontrol and from ControlMyMonitor on Windows, and closed it as monitor firmware behaviour.'
+      - "The numbers come from nichcuta, who runs the same model with 17 and 15 from a Windows PC on DisplayPort and a Mac on HDMI and reports it working once the OSD input is left on DisplayPort. lauhayden used display-switch's `Hdmi1` and `Displayport1` names, which the tool maps to 0x11 and 0x0F, and `ddcutil setvcp 60` without quoting the value."
+    sources:
+      - https://github.com/haimgel/display-switch/issues/86
+      - https://github.com/ddccontrol/ddccontrol-db/issues/134
+  - name: 27GP850-B
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "kaleb422"
+          tool: "Windows, NVAPI"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2106185595
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "kaleb422"
+          tool: "Windows, NVAPI"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2106185595
       hdmi2:
         mechanism: lg-alt-input
         value: 0x91
-        evidence: >-
-          Reported by a tester on the ddcutil LG wiki page; not verified here:
-          https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+        evidence:
+          grade: reported
+          by: "kaleb422"
+          tool: "Windows, NVAPI"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2106185595
+    notes:
+      - "Same contested family as the 32GP850-B. kaleb422 reports the three values working over NVAPI on Windows and ships them in the NVapi-write-value-to-monitor README, while other owners of GP850 units — including a 27GP850P-B and a unit on firmware 3.06 — see only a flicker, and an LG firmware list names GP850 as unsupported. Recorded, disabled, with the disagreement written down."
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2106185595
+      - https://github.com/kaleb422/NVapi-write-value-to-monitor
+      - https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/2
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1695120912
+  - name: 27UK500-B
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "francis36012"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "francis36012"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "francis36012"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+    notes:
+      - "Test result contributed by francis36012 to the ddcutil LG wiki page. No EDID fingerprint was published with it."
     sources:
       - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+  - name: 27UL550-W
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "titou10titou10"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "titou10titou10"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "titou10titou10"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+    notes:
+      - "Test result contributed by titou10titou10 to the ddcutil LG wiki page."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+  - name: 27UN850-W
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "the tester who added it to the ddcutil LG wiki page"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1627345011
+          note: "the report switched from the USB-C input; the wiki row records the model as confirmed without values, which that tester quotes in the linked comment"
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "the tester who added it to the ddcutil LG wiki page"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1627345011
+          note: "the report switched from the USB-C input; the wiki row records the model as confirmed without values, which that tester quotes in the linked comment"
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "the tester who added it to the ddcutil LG wiki page"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1627345011
+          note: "the report switched from the USB-C input; the wiki row records the model as confirmed without values, which that tester quotes in the linked comment"
+    notes:
+      - 'The wiki row says "confirmed" and gives no values. The values come from the same tester''s comment on ddcutil issue #100, which reports switching from the USB-C input to the HDMI1, HDMI2 and DP1 inputs with x0090, x0091 and x00d0. USB-C is not recorded: the report switches away from it, never to it.'
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1627345011
+  - name: 27UN850-WY
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "ccrxf"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "ccrxf"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "ccrxf"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xD1
+        evidence:
+          grade: reported
+          by: "ccrxf"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+    notes:
+      - "Test result contributed by ccrxf to the ddcutil LG wiki page. The name is kept exactly as the source writes it and is not merged with the separate 27UN850-W entry below, which comes from a different report."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+  - name: 27UP850-W
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "Prototyped"
+          tool: "ddcutil 2.0, --i2c-source-addr=x50"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1694629234
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "Prototyped"
+          tool: "ddcutil 2.0, --i2c-source-addr=x50"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1694629234
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "Prototyped"
+          tool: "ddcutil 2.0, --i2c-source-addr=x50"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1694629234
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xD1
+        evidence:
+          grade: reported
+          by: "Prototyped"
+          tool: "ddcutil 2.0, --i2c-source-addr=x50"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1694629234
+    notes:
+      - "Listed on the ddcutil LG wiki page by Prototyped, who published the full table in ddcutil issue #100, taken with ddcutil 2.0 and `--i2c-source-addr=x50`."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1694629234
+  - name: 27UP85NP-W
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "edror12"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xD1
+        evidence:
+          grade: reported
+          by: "edror12"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+    notes:
+      - "Test result contributed by edror12 to the ddcutil LG wiki page. Only DisplayPort and USB-C were reported."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+  - name: 27US500-W
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "Fidelxyz"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "Fidelxyz"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "Fidelxyz"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+    notes:
+      - "Test result contributed by Fidelxyz to the ddcutil LG wiki page."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+  - name: 28MQ780-B
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "amildahl"
+          tool: "Windows, ADL"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2524850195
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "amildahl"
+          tool: "Windows, ADL"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2524850195
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "amildahl"
+          tool: "Windows, ADL"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2524850195
+    notes:
+      - "USB-C is deliberately not recorded. amildahl tested 0xD1, while shinyquagsire23's lg_display_manager — which keys off the model string `28MQ780` — another commenter on that gist with a 28MQ780-B, and a blog write-up all use 0xD2. Two values for one input, on the same model, is exactly the case the catalog refuses to guess at, so the input is left out until somebody tests both."
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2524850195
+      - https://gist.github.com/shinyquagsire23/f6b2adef253c6c3ab557a4852bf3abad
+  - name: 29U531A
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "tinkererkzy"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "tinkererkzy"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xD1
+        evidence:
+          grade: reported
+          by: "tinkererkzy"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+    notes:
+      - "Test result contributed by tinkererkzy to the ddcutil LG wiki page. A single HDMI port is reported, so the input is written bare."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+  - name: 29UM69G
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xC0
+        evidence:
+          grade: reported
+          by: "jonpas"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1695779788
+      hdmi:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "jonpas"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1695779788
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xE0
+        evidence:
+          grade: reported
+          by: "jonpas"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1695779788
+    notes:
+      - "One of the two entries whose values are not the usual 0x90/0x91/0xD0/0xD1 set: DisplayPort is 0xC0 and USB-C is 0xE0. The evidence for all three is jonpas' report, on the wiki and in ddcutil issue #100. The same author's `i3/monitor.sh` is listed as corroboration and no more: it defines the USB-C value but only ever invokes the HDMI and DisplayPort ones, so it does not show 0xE0 being sent. That file is not pinned to a commit, because no revision of it has been quoted anywhere this entry could cite."
+      - "A single HDMI port is reported, so the input is written bare. A 2016 unit badged 29UM69G-B (EDID `GSM/0x76FA`) did not switch at all, which is recorded here as a warning rather than as a separate entry: there is no schema slot for a negative result. The last source below is that report."
+      - "The standard Input Source feature is a known dead end on this model: the ddcutil LG wiki page lists the 29UM69G among displays where `setvcp 60` flashes the screen, sometimes opens the OSD and never sets the value, and `getvcp 60` always reads 0x00."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1695779788
+      - "https://github.com/jonpas/dotfiles/blob/master/i3/monitor.sh - the same three values; the script defines the USB-C value but only ever invokes the HDMI and DisplayPort ones. Not pinned to a commit: no revision of it has been quoted anywhere this entry could cite"
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2259286211
+      - https://github.com/rockowitz/ddcutil/wiki/LG
+  - name: 29WN600
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "iamSlightlyWind"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "iamSlightlyWind"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "iamSlightlyWind"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+    notes:
+      - "Test result contributed by iamSlightlyWind to the ddcutil LG wiki page."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+  - name: 32BL95U-W
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: documented
+          by: "LG"
+          url: https://research.encompass.com/ZEN/sm/32BL95UW.pdf
+          note: "the service manual's Screen adjust command table, row 13, maps Input Select, command F4, to this value"
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: documented
+          by: "LG"
+          url: https://research.encompass.com/ZEN/sm/32BL95UW.pdf
+          note: "the service manual's Screen adjust command table, row 13, maps Input Select, command F4, to this value"
+      thunderbolt:
+        mechanism: lg-alt-input
+        value: 0xD2
+        evidence:
+          grade: documented
+          by: "LG"
+          url: https://research.encompass.com/ZEN/sm/32BL95UW.pdf
+          note: "the service manual's Screen adjust command table, row 13, maps Input Select, command F4, to this value"
+    notes:
+      - "The one entry documented by the manufacturer rather than by a user. The service manual's cover says `MODEL : 32BL95U`; the marketed name with its suffix is established by cross-reference, from the manual's file name `32BL95UW.pdf` and LG's own product page, which lists `32BL95U-W.AUB` as the only 32BL95U variant. Thunderbolt is the first use of that connector kind in the catalog."
+      - "The EDID product IDs the manual assigns — 0x7706 for HDMI, 0x7707 for DisplayPort, 0x7722 for Thunderbolt, model name `LG HDR 4K` — are not recorded as identities, because a model that is not write-enabled must record none; they would also collide with other LG models, which is discussed at the end of this page."
+      - "The spec table's `User Model Name 32UL950` gets no entry of its own and no merge: an alias in a manual is not a report that a 32UL950 switches inputs."
+    sources:
+      - https://research.encompass.com/ZEN/sm/32BL95UW.pdf
+      - https://www.lg.com/us/support/product/lg-32BL95U-W
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1435477786
+  - name: 32GP750-B
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "chris-pcguy"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "chris-pcguy"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "chris-pcguy"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+    notes:
+      - "Test result contributed by chris-pcguy to the ddcutil LG wiki page."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+  - name: 32GP83B
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "Gilgame24"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/discussions/331#discussioncomment-16088333
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "Gilgame24"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/discussions/331#discussioncomment-16088333
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "Gilgame24"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/discussions/331#discussioncomment-16088333
+    notes:
+      - "Reported by Gilgame24 in ddcutil discussion 331."
+    sources:
+      - https://github.com/rockowitz/ddcutil/discussions/331#discussioncomment-16088333
+  - name: 32GP850-B
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "erenard"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925342145
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "erenard"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925342145
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "erenard"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925342145
+    notes:
+      - 'Reported working by erenard, on the wiki and in ddcutil issue #100, on a unit manufactured in week 12 of 2023. This one is contested: a later report on the NVapi-write-value-to-monitor tracker describes a 32GP850-B that only flickers and does not change input, and an LG firmware list quoted in ddcutil issue #100 names "GP850" as explicitly unsupported. The row stays disabled and without an identity, so nothing is written to either kind of unit; whoever enables it will have to say which firmware they tested.'
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925342145
+      - https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/1#issuecomment-2110539219
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1444483801
+  - name: 32GR93U-B
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "gzougianos"
+          tool: "Windows, NVAPI"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2244679727
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "gzougianos"
+          tool: "Windows, NVAPI"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2244679727
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "gzougianos"
+          tool: "Windows, NVAPI"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2244679727
+    notes:
+      - 'gzougianos reports the "exact same numbers" as the NVapi-write-value-to-monitor README working over NVAPI. An m1ddc issue separately reports 208 and 144 working through BetterDisplay''s LG alternate input on this model, which is the same two values in decimal.'
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2244679727
+      - https://github.com/waydabber/m1ddc/issues/48
+  - name: 32QN650-B
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "agspoon"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1626872046
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "agspoon"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1626872046
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "agspoon"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1626872046
+    notes:
+      - "The wiki row (agspoon) gives no values; the two linked comments on ddcutil issue #100 quote x0090, x0091 and x00d0 for this model."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1626872046
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1634924423
+  - name: 32U990A
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: quoted
+          by: "pyang2045"
+          tool: "m1ddc input-alt on macOS"
+          url: https://github.com/pyang2045/streamdeck-display-knob
+      hdmi:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: quoted
+          by: "pyang2045"
+          tool: "m1ddc input-alt on macOS"
+          url: https://github.com/pyang2045/streamdeck-display-knob
+      thunderbolt:
+        mechanism: lg-alt-input
+        value: 0xD2
+        evidence:
+          grade: quoted
+          by: "pyang2045"
+          tool: "m1ddc input-alt on macOS"
+          url: https://github.com/pyang2045/streamdeck-display-knob
+    notes:
+      - 'The weakest entry here. `lg.sh` in pyang2045/streamdeck-display-knob is described as "Manual control of the LG UltraFine 32U990A" and sends m1ddc `input-alt` 144, 208 and 210, but the script does not say whether it was run successfully. A single HDMI port is reported, so the input is written bare.'
+    sources:
+      - https://github.com/pyang2045/streamdeck-display-knob
+  - name: 32UD99-W
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xE0
+        evidence:
+          grade: reported
+          by: "andrewgodman"
+          tool: "Lunar on macOS"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1636997772
+          note: "found by looping over candidate values"
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "andrewgodman"
+          tool: "Lunar on macOS"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1636761366
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "andrewgodman"
+          tool: "Lunar on macOS"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1636761366
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xC0
+        evidence:
+          grade: reported
+          by: "andrewgodman"
+          tool: "Lunar on macOS"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1636997772
+          note: "found by looping over candidate values"
+    notes:
+      - "The second entry with unusual values: DisplayPort is 0xE0 and USB-C is 0xC0, the reverse pairing of the 29UM69G. The two comments carry different halves of the result and the rows are cited accordingly: the first one confirms only the HDMI values, and DisplayPort and USB-C appear in the follow-up, where they were found by looping over candidate values with Lunar on macOS. Worth extra care when someone verifies this model on hardware."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1636761366
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1636997772
+  - name: 32UN880-B
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "two reporters"
+          tool: "Windows, NVAPI"
+          url: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2835626567
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "two reporters"
+          tool: "Windows, NVAPI"
+          url: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2835626567
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "two reporters"
+          tool: "Windows, NVAPI"
+          url: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2835626567
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xD1
+        evidence:
+          grade: reported
+          by: "two reporters"
+          tool: "Windows, NVAPI"
+          url: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2835626567
+    notes:
+      - "Reported independently on the NVapi-write-value-to-monitor tracker (switching from DisplayPort to USB-C, HDMI1, HDMI2 and DP), in ddcutil issue #100, and by way of the amdddc-windows tool in ddcutil issue #612, which uses 0x90."
+      - "One quirk is worth repeating to anyone who verifies it: after switching to USB-C, the monitor stopped accepting commands sent from the DisplayPort and HDMI sides."
+    sources:
+      - https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2835626567
+      - https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/8
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2142184960
+      - https://github.com/rockowitz/ddcutil/issues/612
+  - name: 32UP83AK-W
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "5uck1ess"
+          tool: "Windows, NVAPI"
+          url: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/2#issuecomment-3221830027
+    notes:
+      - 'The reporter says 0xD0 "works without any issues" and that they switch to HDMI and DisplayPort, but never writes the HDMI value down, so only DisplayPort is recorded.'
+    sources:
+      - https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/2#issuecomment-3221830027
+      - https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/3#issuecomment-3224103812
+  - name: 34GS95QE
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "Vib0"
+          tool: "Windows, NVAPI"
+          url: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2812426302
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "Vib0"
+          tool: "Windows, NVAPI"
+          url: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2812426302
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "Vib0"
+          tool: "Windows, NVAPI"
+          url: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2812426302
+    notes:
+      - 'Vib0 reports the three values as "Tested". A BetterDisplay discussion separately shows a 34GS95QE-B working through the LG alternate input, but the values there appear only in a screenshot, so that report corroborates the mechanism rather than the numbers.'
+    sources:
+      - https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2812426302
+      - https://github.com/waydabber/BetterDisplay/discussions/4246
+  - name: 34U650A-B
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "mikecarlton"
+          tool: "BetterDisplay on macOS"
+          url: https://github.com/waydabber/BetterDisplay/issues/4853
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "mikecarlton"
+          tool: "BetterDisplay on macOS"
+          url: https://github.com/waydabber/BetterDisplay/issues/4853
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "mikecarlton"
+          tool: "BetterDisplay on macOS"
+          url: https://github.com/waydabber/BetterDisplay/issues/4853
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0x1D1
+        evidence:
+          grade: reported
+          by: "mikecarlton"
+          tool: "BetterDisplay ddcAlt, macOS"
+          url: https://github.com/waydabber/BetterDisplay/issues/4853
+          note: "found by looping over values; the listed 0xD2 got no response; 0x1D1 is 465 decimal"
+    notes:
+      - 'The report gives the values in decimal — ddcAlt 144, 145 and 208 "work correctly". The USB-C value is the one entry in the catalog that does not fit in a byte: 210 got no response, and 465 did.'
+    sources:
+      - https://github.com/waydabber/BetterDisplay/issues/4853
+      - https://github.com/waydabber/BetterDisplay/discussions/4883
+  - name: 34UC98-W
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      thunderbolt:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "nathang21 (ddcctl issue 67)"
+          tool: "ddcctl on macOS"
+          url: https://github.com/kfix/ddcctl/issues/67
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: quoted
+          by: "nathang21 (ddcctl issue 67)"
+          tool: "ddcctl on macOS"
+          url: https://github.com/kfix/ddcctl/issues/67
+      hdmi2:
+        mechanism: vcp-input-source
+        value: 0x12
+        evidence:
+          grade: quoted
+          by: "nathang21 (ddcctl issue 67)"
+          tool: "ddcctl on macOS"
+          url: https://github.com/kfix/ddcctl/issues/67
+    notes:
+      - "Driven by the standard Input Source feature; ddcctl writes VCP 0x60. The Thunderbolt input answers to 15, the value the specification gives DisplayPort-1; the DisplayPort connector itself could not be selected with any of the many values between 0 and 18 the reporter tried. The second Thunderbolt port is an output for daisy-chaining."
+    sources:
+      - https://github.com/kfix/ddcctl/issues/67
+  - name: 34UM88C-P
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      hdmi2:
+        mechanism: vcp-input-source
+        value: 0x10
+        evidence:
+          grade: reported
+          by: "inkhey (ddcutil discussion 331)"
+          tool: "ddcutil 1.2.2 on Pop!_OS 22.04, in PBP and standard mode"
+          url: https://github.com/rockowitz/ddcutil/discussions/331#discussioncomment-7152259
+          note: "the command shown is `ddcutil setvcp 60 0x10`"
+      dp:
+        mechanism: vcp-input-source
+        value: 0x00
+        evidence:
+          grade: quoted
+          by: "inkhey (ddcutil discussion 331)"
+          tool: "ddcutil 1.2.2 on Pop!_OS 22.04, in PBP and standard mode"
+          url: https://github.com/rockowitz/ddcutil/discussions/331#discussioncomment-7152259
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x01
+        evidence:
+          grade: quoted
+          by: "inkhey (ddcutil discussion 331)"
+          tool: "ddcutil 1.2.2 on Pop!_OS 22.04, in PBP and standard mode"
+          url: https://github.com/rockowitz/ddcutil/discussions/331#discussioncomment-7152259
+    notes:
+      - "The one LG entry driven by the standard Input Source feature rather than the side channel; nobody has reported this model on VCP 0xF4. The capabilities string declares 0x11, 0x12, 0x0F and 0x10, VCP 0x60 read 0x00 (which ddcutil labels an invalid value) while DisplayPort was displayed, and the reporter says the read is wrong but the switch works."
+      - "EDID, as text only: manufacturer `GSM`, model string `LG ULTRAWIDE`, product code 23266 (0x5AE2). Not an identity."
+    sources:
+      - https://github.com/rockowitz/ddcutil/discussions/331#discussioncomment-7152259
+  - name: 34WN650-W
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: quoted
+          by: "wigust"
+          tool: "ddcutil 2.1.2"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925579750
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: quoted
+          by: "wigust"
+          tool: "ddcutil 2.1.2"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925579750
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: quoted
+          by: "wigust"
+          tool: "ddcutil 2.1.2"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925579750
+    notes:
+      - 'Weaker evidence: the report quotes erenard''s three values, says "Works" with ddcutil 2.1.2, and does not break the result down per input.'
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925579750
+  - name: 34WN750-B
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "permezel"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "permezel"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "permezel"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+    notes:
+      - "Test result contributed by permezel to the ddcutil LG wiki page."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+  - name: 34WN780
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: quoted
+          by: "piaverous"
+          tool: "Windows, NVAPI"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2453464317
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: quoted
+          by: "piaverous"
+          tool: "Windows, NVAPI"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2453464317
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: quoted
+          by: "piaverous"
+          tool: "Windows, NVAPI"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2453464317
+    notes:
+      - 'Weaker evidence: the report quotes the three NVAPI values for this model and says "Worked well", without saying which it tried.'
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2453464317
+  - name: 34WN80C-B
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: quoted
+          by: "nicklan"
+          tool: "a Python USB-HID script, not ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1542859752
+          note: "the wiki entry says only that the script works perfectly and does not quote the values, which come from the linked comment"
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: quoted
+          by: "nicklan"
+          tool: "a Python USB-HID script, not ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1542859752
+          note: "the wiki entry says only that the script works perfectly and does not quote the values, which come from the linked comment"
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: quoted
+          by: "nicklan"
+          tool: "a Python USB-HID script, not ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1542859752
+          note: "the wiki entry says only that the script works perfectly and does not quote the values, which come from the linked comment"
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xD1
+        evidence:
+          grade: reported
+          by: "nicklan"
+          tool: "a Python USB-HID script, not ddcutil"
+          url: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1542859752
+          note: 'the commenter states that "0xd1 is actually the usb-c input" on this monitor'
+    notes:
+      - "Two evidence strengths in one entry. USB-C is explicit: the linked comment names the input and the value. The other three come from the value table in the referenced gist, which the wiki contributor reports as working without quoting the numbers."
+      - "Neither report went through ddcutil. The monitor was driven by the Python USB-HID script in that gist, which is why the evidence strings say so: the mechanism is the same LG side channel, but nothing here says the values survive a `ddcutil setvcp`. The gist is cited unpinned, because no revision of it is quoted in the report."
+      - "The standard Input Source feature is a known dead end on this model: the ddcutil LG wiki page lists the 34WN80C-B among displays where `setvcp 60` flashes the screen, sometimes opens the OSD and never sets the value, and `getvcp 60` always reads 0x00."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      - https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1542859752
+      - https://gist.github.com/shinyquagsire23/f6b2adef253c6c3ab557a4852bf3abad
+      - https://github.com/rockowitz/ddcutil/wiki/LG
+  - name: 38BR85QC
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "a tester on the ddcutil LG wiki page"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xD1
+        evidence:
+          grade: reported
+          by: "a tester on the ddcutil LG wiki page"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "a tester on the ddcutil LG wiki page"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "a tester on the ddcutil LG wiki page"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+    notes:
+      - "Recorded, disabled, and unable to match anything: no EDID fingerprint for it has been collected. The values come from the ddcutil wiki and nobody involved in this project has a unit to test them on. They are written down because they are useful to a contributor who does — see the contributor guide for what turns a row like this into an enabled one."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+  - name: 40U990A-W
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "titou10titou10"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "titou10titou10"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "titou10titou10"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+    notes:
+      - "Test result contributed by titou10titou10 to the ddcutil LG wiki page."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+  - name: 40WP95C-W
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "fblaese"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "fblaese"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "fblaese"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xD1
+        evidence:
+          grade: reported
+          by: "fblaese"
+          tool: "ddcutil"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+    notes:
+      - "Test result contributed by fblaese to the ddcutil LG wiki page."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+  - name: 40WP95X
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xD1
+        evidence:
+          grade: reported
+          by: "stepahin"
+          tool: "Windows, NVAPI"
+          url: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5
+    notes:
+      - 'Only USB-C is reported: "This is how switching to USB-C input works".'
+    sources:
+      - https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5
+  - name: 45GX950A-B
+    vendor: LG
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: reported
+          by: "tyvsmith"
+          tool: "ddcutil on Linux"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi1:
+        mechanism: lg-alt-input
+        value: 0x90
+        evidence:
+          grade: reported
+          by: "tyvsmith"
+          tool: "ddcutil on Linux"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      hdmi2:
+        mechanism: lg-alt-input
+        value: 0x91
+        evidence:
+          grade: reported
+          by: "tyvsmith"
+          tool: "ddcutil on Linux"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xD1
+        evidence:
+          grade: reported
+          by: "tyvsmith"
+          tool: "ddcutil on Linux"
+          url: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+    notes:
+      - 'The best-corroborated of the new entries: the wiki result, a Stream Deck plugin whose `ddcutil.py` drives these values on Linux, a Windows NVAPI script that copies them from the wiki, and a Windows ADL application whose author says it is "only tested on 45GX950A-B".'
+      - "Two things do not agree. A MonitorControl issue lists read-back values of 15 for USB-C and 209 for DP2, but those are reads through `m1ddc get input-alt`, not writes, so they are not evidence about what a write does. And a BetterDisplay discussion reports a 45GX950A manufactured in week 9 of 2025 that would not leave HDMI 1 by any DDC path on macOS."
+    sources:
+      - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+      - https://github.com/tyvsmith/streamcontroller-lg-monitor-control
+      - https://github.com/meer-cha/lg-input-switch
+      - https://github.com/phillip9933/LGInputSwitch
+      - https://github.com/MonitorControl/MonitorControl/issues/1872
+      - https://github.com/waydabber/BetterDisplay/discussions/5353
+
+  # --------------------------------------------------------------------------
+  # Monoprice
+  # --------------------------------------------------------------------------
+  - name: Dark Matter 40776
+    vendor: Monoprice
+    identities: []
+    write_enabled: false
+    inputs:
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x05
+        evidence:
+          grade: quoted
+          by: "ethack (ddcutil issue 157)"
+          tool: "ddcutil 0.9.9 on Pop!_OS 20.04"
+          url: https://github.com/rockowitz/ddcutil/issues/157
+      hdmi2:
+        mechanism: vcp-input-source
+        value: 0x06
+        evidence:
+          grade: reported
+          by: "ethack (ddcutil issue 157)"
+          tool: "ddcutil 0.9.9 on Pop!_OS 20.04"
+          url: https://github.com/rockowitz/ddcutil/issues/157
+      dp1:
+        mechanism: vcp-input-source
+        value: 0x07
+        evidence:
+          grade: reported
+          by: "ethack (ddcutil issue 157)"
+          tool: "ddcutil 0.9.9 on Pop!_OS 20.04"
+          url: https://github.com/rockowitz/ddcutil/issues/157
+      dp2:
+        mechanism: vcp-input-source
+        value: 0x08
+        evidence:
+          grade: quoted
+          by: "ethack (ddcutil issue 157)"
+          tool: "ddcutil 0.9.9 on Pop!_OS 20.04"
+          url: https://github.com/rockowitz/ddcutil/issues/157
+    notes:
+      - "40776 is the Monoprice product number. The reporter switched between HDMI 2 and DisplayPort 1, the two inputs with a computer attached; HDMI 1 and DisplayPort 2 are listed as working values without being shown switched, hence the two grades. The read-back equals the value written. The capabilities string declares 0x11, 0x12, 0x0F and 0x10, none of which work."
+      - "The monitor accepts `setvcp` and answers `getvcp` only on the input currently displayed. Recorded on the ddcutil Monoprice wiki page from this report."
+      - "EDID, as text only: manufacturer `LHC`, model string `34CHR`, product code 52."
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/157
+      - https://github.com/rockowitz/ddcutil/wiki/Monoprice
+
+  # --------------------------------------------------------------------------
+  # MSI
+  # --------------------------------------------------------------------------
+  - name: MPG 321URX QD-OLED
+    vendor: MSI
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "Alex Plescan (alexplescan.com, KVM post)"
+          tool: "m1ddc set input 15 on Apple Silicon, sent from the USB-C side"
+          url: https://github.com/alexpls/alexplescan.com/blob/master/content/posts/2025/kvm/index.md
+      usb-c:
+        mechanism: vcp-input-source
+        value: 0x10
+        evidence:
+          grade: reported
+          by: "Alex Plescan (alexplescan.com, KVM post)"
+          tool: "ddcutil setvcp 0x60 0x10 on Linux (KDE), sent from the DisplayPort side"
+          url: https://github.com/alexpls/alexplescan.com/blob/master/content/posts/2025/kvm/index.md
+          note: "the monitor lists this value as DisplayPort-2"
+    notes:
+      - "The post writes the model as MSI MPG 321URX; both commands are bound to hotkeys and used daily. The built-in KVM follows the video input. The two HDMI inputs were not reported."
+    sources:
+      - https://github.com/alexpls/alexplescan.com/blob/master/content/posts/2025/kvm/index.md
+
+  # --------------------------------------------------------------------------
+  # Philips
+  # --------------------------------------------------------------------------
+  - name: 328P6VUBREB/11
+    vendor: Philips
+    identities: []
+    write_enabled: false
+    inputs:
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: reported
+          by: "sattoke (ddcutil issue 162)"
+          tool: "ddcutil 1.0.0-dev (commit 943f8e7) on a Raspberry Pi 4"
+          url: https://github.com/rockowitz/ddcutil/issues/162
+      hdmi2:
+        mechanism: vcp-input-source
+        value: 0x12
+        evidence:
+          grade: reported
+          by: "sattoke (ddcutil issue 162)"
+          tool: "ddcutil 1.0.0-dev (commit 943f8e7) on a Raspberry Pi 4"
+          url: https://github.com/rockowitz/ddcutil/issues/162
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "sattoke (ddcutil issue 162)"
+          tool: "ddcutil 1.0.0-dev (commit 943f8e7) on a Raspberry Pi 4"
+          url: https://github.com/rockowitz/ddcutil/issues/162
+      usb-c:
+        mechanism: vcp-input-source
+        value: 0x13
+        evidence:
+          grade: reported
+          by: "sattoke (ddcutil issue 162)"
+          tool: "ddcutil 1.0.0-dev (commit 943f8e7) on a Raspberry Pi 4"
+          url: https://github.com/rockowitz/ddcutil/issues/162
+          note: "reads back 0x00 while USB-C is displayed"
+    notes:
+      - 'Each write was followed by a read that showed the new input. Quirk that matters to monmux: the monitor answers VCP version 3.0 on feature 0xDF while its capabilities string says 2.2, and ddcutil then treats 0x60 as a table feature and rejects `setvcp 0x60 0x12` with "Invalid hex value" until `--mccs 2.2` or a user-defined feature file forces 2.2. monmux passes neither, so on a ddcutil that still behaves this way the command fails before anything is written. The ddcutil Philips wiki page carries the same workaround.'
+      - "EDID, as text only: manufacturer `PHL`, model string `PHL 328P6VU`, product code 2343 (0x0927)."
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/162
+      - https://github.com/rockowitz/ddcutil/wiki/Phillips
+  - name: 49M2C8900L
+    vendor: Philips
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "marclloydjolly (evnia-mac README)"
+          tool: "m1ddc set input on an M1 Pro over DisplayPort"
+          url: https://github.com/marclloydjolly/evnia-mac
+      usb-c:
+        mechanism: vcp-input-source
+        value: 0x15
+        evidence:
+          grade: reported
+          by: "marclloydjolly (evnia-mac README)"
+          tool: "m1ddc set input on an M1 Pro over DisplayPort"
+          url: https://github.com/marclloydjolly/evnia-mac
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: reported
+          by: "marclloydjolly (evnia-mac README)"
+          tool: "m1ddc set input on an M1 Pro over DisplayPort"
+          url: https://github.com/marclloydjolly/evnia-mac
+    notes:
+      - "An Evnia model. The README says switching to USB-C (21) and HDMI 1 (17) and back was live-tested, and that the monitor keeps answering DDC on an input that is not displayed. USB-C is 0x15, not the 0x1B that Dell-derived guides assume."
+      - "The README is the only report and reads as generated text; treat it as one uncorroborated claim."
+    sources:
+      - https://github.com/marclloydjolly/evnia-mac
+
+  # --------------------------------------------------------------------------
+  # Samsung
+  # --------------------------------------------------------------------------
+  - name: C49RG94SSU
+    vendor: Samsung
+    identities: []
+    write_enabled: false
+    inputs:
+      dp1:
+        mechanism: vcp-input-source
+        value: 0x09
+        evidence:
+          grade: reported
+          by: "philipp1992 (ddcutil issue 226)"
+          tool: "ddcutil on Linux"
+          url: https://github.com/rockowitz/ddcutil/issues/226
+    notes:
+      - "A CRG9; the report gives no regional suffix. DP-2 cannot be selected from any input: philipp1992 tried every value from 0 to 30 and pwhelan, on a C49RG9 in the same thread, brute-forced every 16-bit value. Switching to HDMI works but the value is not stated. 0x09 is Tuner-1 in the MCCS specification."
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/226
+  - name: G95NC
+    vendor: Samsung
+    identities: []
+    write_enabled: false
+    inputs:
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x05
+        evidence:
+          grade: reported
+          by: "ema987 (ddcutil issue 397)"
+          tool: "ddcutil on Linux, firmware M-C9557GGPA-1007.0"
+          url: https://github.com/rockowitz/ddcutil/issues/397
+      hdmi2:
+        mechanism: vcp-input-source
+        value: 0x06
+        evidence:
+          grade: reported
+          by: "ema987 (ddcutil issue 397)"
+          tool: "ddcutil on Linux, firmware M-C9557GGPA-1007.0"
+          url: https://github.com/rockowitz/ddcutil/issues/397
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "ema987 (ddcutil issue 397)"
+          tool: "ddcutil on Linux, firmware M-C9557GGPA-1007.0"
+          url: https://github.com/rockowitz/ddcutil/issues/397
+    notes:
+      - "The Odyssey Neo G9 57 inch; the thread names model codes LS57CG952NUXEN and LS57CG952NNXZA. jimmy-tr33 in the same thread confirms HDMI-1 and HDMI-2 switch with 0x05 and 0x06."
+      - "Conflict, recorded and not resolved: mwd102, on firmware 1009.2 and working from the Samsung Windows application, lists HDMI-1 as 0x11 and HDMI-2 as 0x12. HDMI-3 reads back 0x01 but writing 0x01 does not switch, and the ddc-mqtt project configures 7 for it; HDMI-3 is left out. PBP and PIP use vendor codes 0xE2 and 0xE3, which ema987 found absent on firmware 1007.0 and present on 1009.2; out of scope either way."
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/397
+      - https://github.com/mwd102/g95nc-ddc
+      - https://github.com/moimart/ddc-mqtt
+  - name: LC49G95T
+    vendor: Samsung
+    identities: []
+    write_enabled: false
+    inputs:
+      dp1:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "DimpiM/monitor-switch (hardware-findings.md)"
+          tool: "ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input"
+          url: https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md
+          note: "reading VCP 0x60 back afterwards gives 0x03, which is not the value that selects the input"
+      dp2:
+        mechanism: vcp-input-source
+        value: 0x10
+        evidence:
+          grade: reported
+          by: "DimpiM/monitor-switch (hardware-findings.md)"
+          tool: "ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input"
+          url: https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md
+          note: "reading VCP 0x60 back afterwards gives 0x04, which is not the value that selects the input"
+      hdmi:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: reported
+          by: "DimpiM/monitor-switch (hardware-findings.md)"
+          tool: "ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input"
+          url: https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md
+          note: "reading VCP 0x60 back afterwards gives 0x01, which is not the value that selects the input"
+    notes:
+      - "The first record of the `vcp-input-source` mechanism, and the first entry that is not an LG. It is disabled and carries no identity like every other unverified entry, so that backend path has never reached a monitor: enabling this model would be the first hardware run of the mechanism, and belongs in the [testing.md](testing.md) checklist rather than in a routine catalog flip."
+      - "The values the monitor reports back are not the values that select an input. After a switch, reading VCP 0x60 gives 0x03 for DP1, 0x04 for DP2 and 0x01 for HDMI, and writing those back does not switch. That is one reason monmux never confirms a switch by reading a monitor."
+      - "DDC/CI answers only on the HDMI input; the DisplayPort inputs do not expose slave address 0x37 at all, so the switch has to be sent from HDMI."
+      - "Switching to an input with no signal wedges the monitor's DDC engine until a link reset or a trip through the OSD. Never switch blind: whoever verifies this model needs the target input already connected."
+      - "The capabilities string declares Input Source values the monitor does not have, so it is not a source of values for this model."
+      - "EDID, as text only: manufacturer `SAM`, model name `LC49G95T`. No product code has been published, which is the other reason the entry records no identity."
+      - "Corroboration from macOS: in display-switch issue 43 kcorey switches an LC49G95TSSUXEN between `Hdmi1` (0x11) and `DisplayPort1` (0x0F) from a Mac connected through an HDMI adapter, and in BetterDisplay issue 2476 an Odyssey G9 on an M2 Air over DisplayPort does nothing, which is the DisplayPort silence above."
+    sources:
+      - https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md
+      - https://github.com/DimpiM/monitor-switch/blob/main/service/profiles/samsung-lc49g95t.yaml
+      - https://github.com/haimgel/display-switch/issues/43
+      - https://github.com/waydabber/BetterDisplay/issues/2476
+  - name: LS27A800U
+    vendor: Samsung
+    identities: []
+    write_enabled: false
+    inputs:
+      hdmi:
+        mechanism: vcp-input-source
+        value: 0x05
+        evidence:
+          grade: reported
+          by: "unai-ndz (ddcutil issue 395)"
+          tool: "ddcutil on Linux"
+          url: https://github.com/rockowitz/ddcutil/issues/395
+          note: "0x11 blanks the screen for a second and returns to the previous input"
+    notes:
+      - "The name is the EDID model string; the report gives no regional suffix. VCP 0x60 reads 0x06 while HDMI is displayed. USB-C cannot be selected by any value, per hostmit in BetterDisplay issue 4221, who also reports DisplayPort switching in BetterDisplay without stating the value."
+      - "EDID, as text only: manufacturer `SAM`, model string `LS27A800U`, product code 29092 (0x71A4) from the report and 0x71A1 from the BetterDisplay export; two units, two codes."
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/395
+      - https://github.com/waydabber/BetterDisplay/issues/4221
+  - name: LS32A70
+    vendor: Samsung
+    identities: []
+    write_enabled: false
+    inputs:
+      hdmi:
+        mechanism: vcp-input-source
+        value: 0x05
+        evidence:
+          grade: reported
+          by: "ehdoyle (ddcutil issue 343)"
+          tool: "ddcutil 0.9.8 on Ubuntu 20.04"
+          url: https://github.com/rockowitz/ddcutil/issues/343
+          note: "reads back 0x05"
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "ehdoyle (ddcutil issue 343)"
+          tool: "ddcutil 0.9.8 on Ubuntu 20.04"
+          url: https://github.com/rockowitz/ddcutil/issues/343
+          note: "reads back 0x06, not 0x0F"
+    notes:
+      - "The name is the EDID model string; the report gives no regional suffix. The capabilities string declares VGA (0x01) and DVI (0x03), which the monitor does not have."
+      - "Conflict, recorded and not resolved: the ddcutil Samsung wiki page, written from this report, says DisplayPort needs 0x06 to set and reads back 0x0F, which is the reverse of what the report itself shows. The value here follows the report, which quotes the commands."
+      - "EDID, as text only: manufacturer `SAM`, model string `LS32A70`."
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/343
+      - https://github.com/rockowitz/ddcutil/wiki/Samsung
+  - name: LU28R55
+    vendor: Samsung
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "Lewiscowles1986 (ddcctl issue 127)"
+          tool: "ddcctl on macOS"
+          url: https://github.com/kfix/ddcctl/issues/127
+    notes:
+      - "The name is as the report writes it; the full model code (LU28R550UQ with a regional suffix) is not given. The two HDMI inputs cannot be selected: every value from 0 to 36 and 99 flickers the screen and returns to the source."
+    sources:
+      - https://github.com/kfix/ddcctl/issues/127
+  - name: U28H750UQNXZA
+    vendor: Samsung
+    identities: []
+    write_enabled: false
+    inputs:
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x05
+        evidence:
+          grade: quoted
+          by: "pfps (ddcutil issue 185)"
+          tool: "ddcutil on Linux, sent from HDMI-1"
+          url: https://github.com/rockowitz/ddcutil/issues/185
+      hdmi2:
+        mechanism: vcp-input-source
+        value: 0x06
+        evidence:
+          grade: quoted
+          by: "pfps (ddcutil issue 185)"
+          tool: "ddcutil on Linux, sent from HDMI-1"
+          url: https://github.com/rockowitz/ddcutil/issues/185
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: quoted
+          by: "pfps (ddcutil issue 185)"
+          tool: "ddcutil on Linux, sent from HDMI-1"
+          url: https://github.com/rockowitz/ddcutil/issues/185
+    notes:
+      - "The report says input switching with ddcutil works from a laptop on HDMI-1 and that the real values are 5, 6 and 15 where the capabilities string claims 0x11, 0x12 and 0x0F; it does not say which inputs were switched to. On HDMI-2 the monitor answered no DDC at all in that setup. The larger U32H750 shows the same three values on the ddcutil Samsung wiki page, as reads."
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/185
+      - https://github.com/rockowitz/ddcutil/wiki/Samsung

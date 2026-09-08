@@ -40,7 +40,7 @@ const (
 // requiredOptions are the options monmux's plan depends on. Their presence in
 // --help is a read-only capability probe: it costs nothing and it fails early
 // rather than in the middle of a write.
-var requiredOptions = []string{"--edid", "--i2c-source-addr", "--noverify"}
+var requiredOptions = []string{"--edid", "--i2c-source-addr", noVerifyOption}
 
 // versionPattern finds the version in ddcutil's --version output.
 var versionPattern = regexp.MustCompile(`(\d+)\.(\d+)(?:\.(\d+))?`)

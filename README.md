@@ -11,18 +11,15 @@ It wraps `ddcutil` on Linux and `m1ddc` on macOS; there is no native I²C or IOK
 
 ## Supported monitors
 
-| Model         | EDID identity                 | Inputs                      | Status                                                                       |
-| ------------- | ----------------------------- | --------------------------- | ---------------------------------------------------------------------------- |
-| LG 38WR85QC-W | `GSM 0x77D3`, `GSM 0x77D4`    | `dp` (0xD0), `usb-c` (0xD1) | Verified on hardware, 2026-09-07, Linux and macOS                            |
-| LG 38BR85QC   | no EDID fingerprint collected | none enabled                | Recorded from the ddcutil wiki, unverified — never matches, never written to |
+One model is verified on hardware: the LG 38WR85QC-W, on `dp` and `usb-c`. Another 70 models from twelve vendors are recorded
+from public reports, every one of them disabled and without an EDID fingerprint, so monmux can neither match them nor write to
+them. They are written down for the contributor who owns one — enabling a row means testing it on a real unit and recording the
+evidence, see [docs/adding-a-monitor.md](docs/adding-a-monitor.md). The full list, with the evidence and the conflicts behind
+every value, is in [docs/compatibility.md](docs/compatibility.md).
 
-The 38BR85QC row is in the catalog for a contributor who owns one: the values are written down, disabled, with a note saying
-where they came from. Because no EDID fingerprint for it has been collected, it cannot match a display at all.
-
-`hdmi1` and `hdmi2` are recorded for the 38BR85QC only, and enabled for no model: nobody has tested those values on a real
-unit yet, so monmux refuses them. Enabling one means testing it on a real unit and recording the evidence in the catalog — see
-[docs/adding-a-monitor.md](docs/adding-a-monitor.md). The full catalog, with the evidence for every value, is in
-[docs/compatibility.md](docs/compatibility.md).
+Two mechanisms are implemented: `lg-alt-input`, the LG side channel, and `vcp-input-source`, the standard `VCP 0x60` Input
+Source feature. Only the first has ever reached a monitor; the second has one recorded model, disabled, and enabling it would
+be the first hardware run of that path.
 
 ## Install
 
@@ -70,8 +67,9 @@ A successful switch reports exactly what happened:
 Input-switch command sent (USB-C, 0xD1) to LG 38WR85QC-W via ddcutil. Switch not independently confirmed.
 ```
 
-The second sentence is not hedging. The LG side channel monmux uses has no reliable read-back, so "the command was sent" is the
-strongest true statement available; monmux never claims a monitor switched.
+The second sentence is not hedging. monmux never reads a monitor back to confirm a switch — the LG side channel has no reliable
+read-back, and a read of `VCP 0x60` is no better — so "the command was sent" is the strongest true statement available; monmux
+never claims a monitor switched.
 
 ## Exit codes
 

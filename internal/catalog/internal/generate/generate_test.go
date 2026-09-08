@@ -19,6 +19,7 @@ package generate_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"go/format"
 	"strings"
 	"testing"
@@ -39,12 +40,62 @@ const entry = `  - name: TEST-1
       dp:
         mechanism: lg-alt-input
         value: 0xD0
-        evidence: switched on the unit
+        evidence:
+          grade: verified
+          date: "2026-09-07"
+          tool: ddcutil
+          note: switched from HDMI 1 to DisplayPort
+    notes:
+      - a note about this entry
     sources:
       - a named source
 `
 
 const valid = "models:\n" + entry
+
+// renamed returns entry under another model name, with a product code of its own
+// so that the two entries do not also collide on their identity.
+func renamed(name string, productCode uint16) string {
+	body := strings.Replace(entry, "name: TEST-1", "name: "+name, 1)
+
+	return strings.Replace(
+		body,
+		"product_code: 0x0001",
+		fmt.Sprintf("product_code: 0x%04X", productCode),
+		1,
+	)
+}
+
+// disabledEntry returns entry as a model monmux will not write to: the flag
+// cleared and, as the catalog requires of such a model, no identity at all.
+func disabledEntry(name string) string {
+	body := strings.Replace(entry, "name: TEST-1", "name: "+name, 1)
+
+	body = strings.Replace(body, "write_enabled: true", "write_enabled: false", 1)
+
+	return strings.Replace(
+		body,
+		"    identities:\n      - manufacturer: ACM\n        product_code: 0x0001\n",
+		"    identities: []\n",
+		1,
+	)
+}
+
+// The order the catalog file is written in is a rule the generator enforces:
+// the write-enabled models first, then by vendor, then by model name. A file
+// that keeps it is accepted whatever the names happen to look like.
+func TestModelsInCatalogOrderAreAccepted(t *testing.T) {
+	t.Parallel()
+
+	source := "models:\n" + entry +
+		disabledEntry("TEST-0") +
+		strings.Replace(disabledEntry("ZULU"), "vendor: ACME", "vendor: ZENITH", 1)
+
+	_, err := generate.Generate([]byte(source))
+	if err != nil {
+		t.Errorf("a catalog in order was rejected: %v", err)
+	}
+}
 
 func TestTheSmallestValidCatalogRenders(t *testing.T) {
 	t.Parallel()
@@ -64,7 +115,11 @@ func TestTheSmallestValidCatalogRenders(t *testing.T) {
 		`"dp": {`,
 		"mechanism: MechanismLGAltInput,",
 		"value:     0xD0,",
-		`evidence:  "switched on the unit",`,
+		"grade:     GradeVerified,",
+		`evidence:  "Direct test on the unit, 2026-09-07, ddcutil: ` +
+			`switched from HDMI 1 to DisplayPort",`,
+		"Notes: []string{",
+		`"a note about this entry",`,
 	} {
 		if !strings.Contains(string(rendered), want) {
 			t.Errorf("the rendered catalog does not contain %q", want)
@@ -90,8 +145,8 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 			),
 			want: generate.ErrMalformed,
 		},
-		"a value wider than a byte": {
-			document: strings.Replace(valid, "value: 0xD0", "value: 0x100", 1),
+		"a value wider than the SH/SL pair": {
+			document: strings.Replace(valid, "value: 0xD0", "value: 0x10000", 1),
 			want:     generate.ErrMalformed,
 		},
 		"a product code wider than two bytes": {
@@ -122,14 +177,6 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 			document: strings.Replace(valid, "vendor: ACME", `vendor: "  "`, 1),
 			want:     generate.ErrBlank,
 		},
-		"an empty evidence": {
-			document: strings.Replace(valid, "evidence: switched on the unit", `evidence: ""`, 1),
-			want:     generate.ErrBlank,
-		},
-		"a whitespace-only evidence": {
-			document: strings.Replace(valid, "evidence: switched on the unit", `evidence: "  "`, 1),
-			want:     generate.ErrBlank,
-		},
 		"an empty source": {
 			document: strings.Replace(valid, "- a named source", `- ""`, 1),
 			want:     generate.ErrBlank,
@@ -151,7 +198,9 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 		"no inputs": {
 			document: strings.Replace(valid,
 				"    inputs:\n      dp:\n        mechanism: lg-alt-input\n"+
-					"        value: 0xD0\n        evidence: switched on the unit",
+					"        value: 0xD0\n        evidence:\n          grade: verified\n"+
+					"          date: \"2026-09-07\"\n          tool: ddcutil\n"+
+					"          note: switched from HDMI 1 to DisplayPort",
 				"    inputs: {}", 1),
 			want: generate.ErrNoInputs,
 		},
@@ -181,7 +230,9 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 				valid,
 				"      dp:\n",
 				"      usb-c:\n        mechanism: lg-alt-input\n        value: 0xD1\n"+
-					"        evidence: switched on the unit\n      usb-c2:\n",
+					"        evidence:\n          grade: verified\n          date: \"2026-09-07\"\n"+
+					"          tool: ddcutil\n          note: switched from DisplayPort to USB-C\n"+
+					"      usb-c2:\n",
 				1,
 			),
 			want: generate.ErrMixedNumbering,
@@ -206,6 +257,25 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 				1,
 			),
 			want: generate.ErrDuplicateModel,
+		},
+		"two models of one vendor written out of name order": {
+			document: valid + renamed("TEST-0", 0x0002),
+			want:     generate.ErrOutOfOrder,
+		},
+		"two vendors written out of order": {
+			document: valid + strings.Replace(
+				renamed("TEST-2", 0x0002),
+				"vendor: ACME",
+				"vendor: ABCO",
+				1,
+			),
+			want: generate.ErrOutOfOrder,
+		},
+		"a write-enabled model written after one that is not": {
+			// TEST-0 sorts before TEST-1 by name, so the only rule this pair
+			// breaks is that the write-enabled models come first.
+			document: "models:\n" + disabledEntry("TEST-0") + entry,
+			want:     generate.ErrOutOfOrder,
 		},
 		"a product code that was never written": {
 			document: strings.Replace(valid, "        product_code: 0x0001\n", "", 1),
@@ -239,6 +309,8 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 			document: valid + strings.Replace(entry, "name: TEST-1", "name: TEST-2", 1),
 			want:     generate.ErrDuplicateIdentity,
 		},
+		// A bare identity matches every display with that code, the pinned
+		// entry's included, so it would make that display ambiguous.
 	}
 
 	for name, testCase := range cases {
@@ -254,6 +326,227 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 				t.Errorf("%s gave %v, want %v", name, err, testCase.want)
 			}
 		})
+	}
+}
+
+// A SetVCP carries a 16-bit value, and one recorded entry needs the high byte.
+// Rendering it as two bytes rather than truncating it to one is the difference
+// between switching an input and writing something else entirely.
+func TestAValueWiderThanAByteRendersInFull(t *testing.T) {
+	t.Parallel()
+
+	rendered, err := generate.Generate(
+		[]byte(strings.Replace(valid, "value: 0xD0", "value: 0x1D1", 1)),
+	)
+	if err != nil {
+		t.Fatalf("a 16-bit value was rejected: %v", err)
+	}
+
+	if !strings.Contains(string(rendered), "value:     0x1D1,") {
+		t.Errorf("a 16-bit value was not rendered in full:\n%s", rendered)
+	}
+}
+
+// The evidence rules, and the file that breaks each one. They are their own
+// table because they are their own idea: the first table is about a catalog
+// entry being well formed, this one is about what the entry claims and whether
+// the claim is strong enough to be written to a monitor.
+func TestInvalidEvidenceIsRejected(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		document string
+		want     error
+	}{
+		"an evidence with no grade": {
+			document: strings.Replace(valid, "          grade: verified\n", "", 1),
+			want:     generate.ErrUnknownGrade,
+		},
+		"an evidence with a grade nobody defined": {
+			document: strings.Replace(valid, "grade: verified", "grade: hearsay", 1),
+			want:     generate.ErrUnknownGrade,
+		},
+		"a verified row with no date": {
+			document: strings.Replace(valid, "          date: \"2026-09-07\"\n", "", 1),
+			want:     generate.ErrBlank,
+		},
+		"a verified row with a blank tool": {
+			document: strings.Replace(valid, "tool: ddcutil", `tool: "  "`, 1),
+			want:     generate.ErrBlank,
+		},
+		"a verified row with no note": {
+			document: strings.Replace(
+				valid,
+				"          note: switched from HDMI 1 to DisplayPort\n",
+				"",
+				1,
+			),
+			want: generate.ErrBlank,
+		},
+		"a write-enabled model on reported evidence": {
+			document: strings.Replace(
+				valid,
+				"          grade: verified\n          date: \"2026-09-07\"\n"+
+					"          tool: ddcutil\n          note: switched from HDMI 1 to DisplayPort\n",
+				"          grade: reported\n          by: a tester\n          tool: ddcutil\n"+
+					"          url: https://example.com/report\n",
+				1,
+			),
+			want: generate.ErrUnverifiedEnabled,
+		},
+		"a reported row with no reporter": {
+			document: strings.Replace(
+				valid,
+				"          grade: verified\n          date: \"2026-09-07\"\n"+
+					"          tool: ddcutil\n          note: switched from HDMI 1 to DisplayPort\n",
+				"          grade: reported\n          tool: ddcutil\n"+
+					"          url: https://example.com/report\n",
+				1,
+			),
+			want: generate.ErrBlank,
+		},
+		"a reference that is not https": {
+			document: strings.Replace(
+				valid,
+				"          grade: verified\n          date: \"2026-09-07\"\n"+
+					"          tool: ddcutil\n          note: switched from HDMI 1 to DisplayPort\n",
+				"          grade: reported\n          by: a tester\n          tool: ddcutil\n"+
+					"          url: http://example.com/report\n",
+				1,
+			),
+			want: generate.ErrBadURL,
+		},
+		"an evidence field holding a table separator": {
+			document: strings.Replace(valid, "tool: ddcutil", `tool: "ddcutil | 2.2.0"`, 1),
+			want:     generate.ErrBadText,
+		},
+		"an evidence field holding a line break": {
+			document: strings.Replace(valid, "tool: ddcutil", `tool: "ddcutil\n2.2.0"`, 1),
+			want:     generate.ErrBadText,
+		},
+		"a blank note": {
+			document: strings.Replace(valid, "- a note about this entry", `- "  "`, 1),
+			want:     generate.ErrBadNote,
+		},
+		"a note holding a table separator": {
+			document: strings.Replace(
+				valid,
+				"- a note about this entry",
+				`- "a note | with a cell separator"`,
+				1,
+			),
+			want: generate.ErrBadText,
+		},
+		"a source holding a table separator": {
+			document: strings.Replace(valid, "- a named source", `- "a | source"`, 1),
+			want:     generate.ErrBadText,
+		},
+		"a model name holding a table separator": {
+			document: strings.Replace(valid, "name: TEST-1", `name: "TEST | 1"`, 1),
+			want:     generate.ErrBadText,
+		},
+		"a vendor holding a table separator": {
+			document: strings.Replace(valid, "vendor: ACME", `vendor: "AC | ME"`, 1),
+			want:     generate.ErrBadText,
+		},
+		"a vendor holding a line break": {
+			document: strings.Replace(valid, "vendor: ACME", `vendor: "AC\nME"`, 1),
+			want:     generate.ErrBadText,
+		},
+		"a bare identity beside a pinned one": {
+			document: valid + strings.Replace(
+				strings.Replace(entry, "name: TEST-1", "name: TEST-2", 1),
+				"        product_code: 0x0001",
+				"        product_code: 0x0001\n        model_name: ACME 4K",
+				1,
+			),
+			want: generate.ErrDuplicateIdentity,
+		},
+		"two identities pinning the same name": {
+			document: "models:\n" + pinned("TEST-1", "ACME 4K") + pinned("TEST-2", "ACME 4K"),
+			want:     generate.ErrDuplicateIdentity,
+		},
+		"a pinned name longer than an EDID descriptor": {
+			document: "models:\n" + pinned("TEST-1", "ACME 4K ULTRAWIDE"),
+			want:     generate.ErrModelName,
+		},
+		"a pinned name with untrimmed whitespace": {
+			document: "models:\n" + pinned("TEST-1", " ACME 4K"),
+			want:     generate.ErrModelName,
+		},
+		"a pinned name holding a table separator": {
+			document: "models:\n" + pinned("TEST-1", "ACME | 4K"),
+			want:     generate.ErrBadText,
+		},
+		"a pinned name outside printable ASCII": {
+			document: "models:\n" + pinned("TEST-1", "ACME\\t4K"),
+			want:     generate.ErrModelName,
+		},
+	}
+
+	for name, testCase := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := generate.Generate([]byte(testCase.document))
+			if err == nil {
+				t.Fatalf("%s was accepted", name)
+			}
+
+			if !errors.Is(err, testCase.want) {
+				t.Errorf("%s gave %v, want %v", name, err, testCase.want)
+			}
+		})
+	}
+}
+
+// pinned returns a one-model catalog file whose identity pins a model name.
+func pinned(name, modelName string) string {
+	body := strings.Replace(entry, "name: TEST-1", "name: "+name, 1)
+
+	return strings.Replace(
+		body,
+		"        product_code: 0x0001",
+		"        product_code: 0x0001\n        model_name: \""+modelName+"\"",
+		1,
+	)
+}
+
+// LG assigns one EDID product code to several products, so two entries sharing
+// a code is the case pinning exists for. Distinct pinned names are the only
+// shape of that the generator accepts.
+func TestPinnedModelNamesMayShareAProductCode(t *testing.T) {
+	t.Parallel()
+
+	document := "models:\n" + pinned("TEST-1", "ACME 4K") + pinned("TEST-2", "ACME 5K")
+
+	rendered, err := generate.Generate([]byte(document))
+	if err != nil {
+		t.Fatalf("two pinned names sharing a product code were rejected: %v", err)
+	}
+
+	for _, want := range []string{
+		`{Manufacturer: "ACM", ProductCode: 0x0001, ModelName: "ACME 4K"},`,
+		`{Manufacturer: "ACM", ProductCode: 0x0001, ModelName: "ACME 5K"},`,
+	} {
+		if !strings.Contains(string(rendered), want) {
+			t.Errorf("the rendered catalog does not contain %q:\n%s", want, rendered)
+		}
+	}
+}
+
+// An identity that pins nothing renders no ModelName field at all, so "this
+// matches on the code alone" is what the generated Go says.
+func TestAnUnpinnedIdentityRendersNoModelName(t *testing.T) {
+	t.Parallel()
+
+	rendered, err := generate.Generate([]byte(valid))
+	if err != nil {
+		t.Fatalf("rendering: %v", err)
+	}
+
+	if strings.Contains(string(rendered), "ModelName") {
+		t.Errorf("an unpinned identity rendered a ModelName:\n%s", rendered)
 	}
 }
 
@@ -294,8 +587,18 @@ func TestRenderRefusesADocumentItCannotTrust(t *testing.T) {
 				Identities:   []generate.Identity{{Manufacturer: "ACM", ProductCode: nil}},
 				WriteEnabled: true,
 				Inputs: map[string]generate.Input{
-					"dp": {Mechanism: "lg-alt-input", Value: nil, Evidence: "tested"},
+					"dp": {
+						Mechanism: "lg-alt-input",
+						Value:     nil,
+						Evidence: generate.Evidence{
+							Grade: "verified",
+							Date:  "2026-09-07",
+							Tool:  "ddcutil",
+							Note:  "switched from HDMI 1 to DisplayPort",
+						},
+					},
 				},
+				Notes:   []string{"a note about this entry"},
 				Sources: []string{"a named source"},
 			},
 		},
@@ -329,23 +632,43 @@ models:
       hdmi2:
         mechanism: lg-alt-input
         value: 0x91
-        evidence: tested
+        evidence:
+          grade: verified
+          date: "2026-09-07"
+          tool: ddcutil
+          note: switched to this input
       dp:
         mechanism: lg-alt-input
         value: 0xD0
-        evidence: tested
+        evidence:
+          grade: verified
+          date: "2026-09-07"
+          tool: ddcutil
+          note: switched to this input
       hdmi1:
         mechanism: lg-alt-input
         value: 0x90
-        evidence: tested
+        evidence:
+          grade: verified
+          date: "2026-09-07"
+          tool: ddcutil
+          note: switched to this input
       hdmi10:
         mechanism: lg-alt-input
         value: 0x99
-        evidence: tested
+        evidence:
+          grade: verified
+          date: "2026-09-07"
+          tool: ddcutil
+          note: switched to this input
       usb-c:
         mechanism: lg-alt-input
         value: 0xD1
-        evidence: tested
+        evidence:
+          grade: verified
+          date: "2026-09-07"
+          tool: ddcutil
+          note: switched to this input
     sources:
       - a named source
 `
@@ -388,7 +711,11 @@ models:
       dp:
         mechanism: lg-alt-input
         value: 0xD0
-        evidence: reported elsewhere, not verified here
+        evidence:
+          grade: reported
+          by: a tester
+          tool: ddcutil
+          url: https://example.com/report
     sources:
       - a named source
 `

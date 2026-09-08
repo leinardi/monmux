@@ -24,8 +24,11 @@
 // literal bytes with recorded evidence next to them, in both files at once. No
 // flag, config key or environment variable can introduce a value here.
 //
-// Edit models.yaml, run `make go-generate`, and commit both files.
-// TestGeneratedCatalogMatchesTheYAML fails the build if the two ever disagree.
+// Edit models.yaml, run `make go-generate`, and commit every file it rewrites:
+// this one's generated half, and the generated sections of
+// docs/compatibility.md. TestGeneratedCatalogMatchesTheYAML and
+// TestCompatibilityDocumentMatchesTheGenerator fail the build if any of them
+// ever disagree with the catalog file.
 //
 // The types enforce the fail-closed rule structurally. An [Operation] can only be
 // built by this package from a catalog entry; its zero value is invalid and every
@@ -33,7 +36,7 @@
 // never carries a byte of its own.
 package catalog
 
-//go:generate go run ./internal/generate/cmd -in models.yaml -out models_gen.go
+//go:generate go run ./internal/generate/cmd -in models.yaml -out models_gen.go -doc ../../docs/compatibility.md
 
 import (
 	"errors"
@@ -143,26 +146,36 @@ func KnownInputs() []Input {
 	return known
 }
 
-// Mechanism is how a model's input is switched. It is a closed enum with one
-// value today, and it is the extension point for other vendors: a second
-// mechanism (the standard VCP 0x60 Input Source feature, say) is added only
-// together with the first evidenced model that needs it, never speculatively.
+// Mechanism is how a model's input is switched. It is a closed enum with two
+// values, and it is the extension point for other vendors: a mechanism is added
+// only together with the first evidenced model that needs it, never
+// speculatively, and a model that only records it - without being write-enabled
+// - counts as that model.
 //
 // The mechanism is a per-model property. It is never a fallback: if a backend
 // does not implement a model's mechanism it refuses with invalid-operation
 // rather than trying another one (req. 9.7).
 type Mechanism string
 
-// MechanismLGAltInput is the LG side channel documented by ddcutil: a SetVCP of
-// the manufacturer-specific VCP code 0xF4 sent with DDC/CI source address 0x50,
-// with no read-back verification. The value written is model-specific, which is
-// exactly why it lives in a per-model catalog entry.
-const MechanismLGAltInput Mechanism = "lg-alt-input"
+const (
+	// MechanismLGAltInput is the LG side channel documented by ddcutil: a SetVCP
+	// of the manufacturer-specific VCP code 0xF4 sent with DDC/CI source address
+	// 0x50, with no read-back verification. The value written is model-specific,
+	// which is exactly why it lives in a per-model catalog entry.
+	MechanismLGAltInput Mechanism = "lg-alt-input"
+
+	// MechanismInputSource is the standard Input Source feature, VCP 0x60, sent
+	// to the ordinary DDC/CI source address with no read-back verification. It
+	// is standard in name only: the values a model accepts, and whether it
+	// accepts the write at all, are still per-model facts with per-input
+	// evidence, and monmux never writes 0x60 merely because a monitor reads it.
+	MechanismInputSource Mechanism = "vcp-input-source"
+)
 
 // mechanisms is every mechanism monmux implements. A value outside this set can
 // never become a valid [Operation], so a catalog entry that names an unknown
 // mechanism is inert rather than dangerous.
-var mechanisms = []Mechanism{MechanismLGAltInput}
+var mechanisms = []Mechanism{MechanismLGAltInput, MechanismInputSource}
 
 // Mechanisms returns every implemented mechanism.
 func Mechanisms() []Mechanism {
@@ -183,6 +196,9 @@ const (
 	// LGAltInputVCP is the manufacturer-specific VCP code for the LG side
 	// channel's input-switch command.
 	LGAltInputVCP = 0xF4
+
+	// InputSourceVCP is the standard VCP code for Input Source.
+	InputSourceVCP = 0x60
 )
 
 // String returns the mechanism name as it appears in output and documentation.
@@ -190,20 +206,63 @@ func (m Mechanism) String() string {
 	return string(m)
 }
 
+// Grade is how strong the evidence for one input is. It is a closed enum, and
+// it is what the rule "monmux only writes what somebody ran on that unit" is
+// written in: a write-enabled model carries [GradeVerified] on every input, and
+// the generator refuses the catalog file otherwise.
+type Grade string
+
+const (
+	// GradeVerified is a direct test on the unit itself, by this project.
+	GradeVerified Grade = "verified"
+	// GradeDocumented is the manufacturer's own documentation, with no field
+	// report behind it.
+	GradeDocumented Grade = "documented"
+	// GradeReported is somebody reporting that switching that named input with
+	// that value worked.
+	GradeReported Grade = "reported"
+	// GradeQuoted is the weakest: a report that quotes the values and says they
+	// work, without saying which inputs were tried individually.
+	GradeQuoted Grade = "quoted"
+)
+
+// grades is every grade, strongest first. It is the order the documentation
+// lists them in, and the generator mirrors it.
+var grades = []Grade{GradeVerified, GradeDocumented, GradeReported, GradeQuoted}
+
+// Grades returns every evidence grade, strongest first.
+func Grades() []Grade {
+	return slices.Clone(grades)
+}
+
+// Known reports whether this grade is one the catalog defines.
+func (g Grade) Known() bool {
+	return slices.Contains(grades, g)
+}
+
+// String returns the grade as it appears in output and documentation.
+func (g Grade) String() string {
+	return string(g)
+}
+
 // Operation is a single, fully decided write: which mechanism, and which value.
 // It is deliberately opaque. The fields are unexported and the constructor is
 // package-private, so the only way to obtain a valid Operation is to look one up
 // in this catalog. The zero value is invalid, and every backend rejects it.
+//
+// The value is 16 bits because DDC/CI carries one: a SetVCP writes an SH/SL
+// pair, and both backends already send both halves. Most recorded values fit in
+// a byte, and one does not.
 type Operation struct {
 	mechanism Mechanism
-	value     uint8
+	value     uint16
 	valid     bool
 }
 
 // newOperation builds a valid operation. It is package-private on purpose: no
 // caller outside the catalog may invent one. An unknown mechanism yields the
 // invalid zero value rather than something a backend might try to run.
-func newOperation(mechanism Mechanism, value uint8) Operation {
+func newOperation(mechanism Mechanism, value uint16) Operation {
 	if !mechanism.Known() {
 		return Operation{}
 	}
@@ -216,8 +275,9 @@ func (o Operation) Mechanism() Mechanism {
 	return o.mechanism
 }
 
-// Value returns the model-specific value to write.
-func (o Operation) Value() uint8 {
+// Value returns the model-specific value to write, as the 16-bit SH/SL pair a
+// SetVCP carries.
+func (o Operation) Value() uint16 {
 	return o.value
 }
 
@@ -244,11 +304,24 @@ type Identity struct {
 	Manufacturer string
 	// ProductCode is the EDID product code, e.g. 0x77D3.
 	ProductCode uint16
+	// ModelName optionally pins the EDID descriptor 0xFC text, e.g. "LG HDR 4K".
+	// It is empty on almost every entry, because a manufacturer and a product
+	// code are normally enough. It is set only where a vendor reuses one product
+	// code across products, which LG does: pinning is what lets two models share
+	// a code without every match becoming ambiguous. The generator refuses a
+	// bare identity next to a pinned one with the same code, so a pinned entry
+	// can never be shadowed by one that matches on the code alone.
+	ModelName string
 }
 
 // String renders the fingerprint the way monmux documentation writes it.
 func (i Identity) String() string {
-	return fmt.Sprintf("%s/0x%04X", i.Manufacturer, i.ProductCode)
+	rendered := fmt.Sprintf("%s/0x%04X", i.Manufacturer, i.ProductCode)
+	if i.ModelName == "" {
+		return rendered
+	}
+
+	return fmt.Sprintf("%s %q", rendered, i.ModelName)
 }
 
 // inputOp is what the catalog records for one input of one model: how to switch,
@@ -257,7 +330,8 @@ func (i Identity) String() string {
 // merely reported elsewhere.
 type inputOp struct {
 	mechanism Mechanism
-	value     uint8
+	value     uint16
+	grade     Grade
 	evidence  string
 }
 
@@ -275,6 +349,10 @@ type Model struct {
 	WriteEnabled bool
 	// Inputs are the inputs recorded for this model, with their evidence.
 	Inputs map[Input]inputOp
+	// Notes are per-model prose: negative reports, conflicts, aliases and
+	// quirks. They are documentation and never an [Operation], so nothing
+	// written here can reach a monitor.
+	Notes []string
 	// Sources are model-level references backing the entry.
 	Sources []string
 }
@@ -329,7 +407,7 @@ func (m Model) EnabledInputs() []Input {
 // is write-enabled. Documentation checks use it; nothing that writes does.
 //
 //nolint:gocritic // hugeParam: a value receiver keeps Model usable where it is not addressable
-func (m Model) InputValue(input Input) (uint8, bool) {
+func (m Model) InputValue(input Input) (uint16, bool) {
 	op, ok := m.Inputs[input]
 	if !ok {
 		return 0, false
@@ -350,6 +428,18 @@ func (m Model) InputEvidence(input Input) (string, bool) {
 	return op.evidence, true
 }
 
+// InputGrade returns the grade of the evidence recorded for an input.
+//
+//nolint:gocritic // hugeParam: a value receiver keeps Model usable where it is not addressable
+func (m Model) InputGrade(input Input) (Grade, bool) {
+	op, ok := m.Inputs[input]
+	if !ok {
+		return "", false
+	}
+
+	return op.grade, true
+}
+
 // InputMechanism returns the mechanism recorded for an input.
 //
 //nolint:gocritic // hugeParam: a value receiver keeps Model usable where it is not addressable
@@ -364,13 +454,25 @@ func (m Model) InputMechanism(input Input) (Mechanism, bool) {
 
 // Matches reports whether an EDID identity is one of this model's fingerprints.
 //
+// The serial fields are never consulted: they identify a unit, not a model. The
+// model name is consulted only where the entry pins one, which is how two models
+// that share a reused product code are told apart. A display whose model name is
+// empty - a macOS listing with neither field, say - therefore matches no pinned
+// identity at all, which is the fail-closed answer rather than a guess.
+//
 //nolint:gocritic // hugeParam: a value receiver keeps Model usable where it is not addressable
 func (m Model) Matches(identity edid.Identity) bool {
 	for _, known := range m.Identities {
-		if known.Manufacturer == identity.Manufacturer &&
-			known.ProductCode == identity.ProductCode {
-			return true
+		if known.Manufacturer != identity.Manufacturer ||
+			known.ProductCode != identity.ProductCode {
+			continue
 		}
+
+		if known.ModelName != "" && known.ModelName != identity.ModelName {
+			continue
+		}
+
+		return true
 	}
 
 	return false
@@ -447,6 +549,7 @@ func matchIn(identity edid.Identity, entries []Model) (Model, MatchResult) {
 //nolint:gocritic // hugeParam: cloning is exactly what this does; a pointer would defeat it
 func cloneModel(model Model) Model {
 	model.Identities = slices.Clone(model.Identities)
+	model.Notes = slices.Clone(model.Notes)
 	model.Sources = slices.Clone(model.Sources)
 	model.Inputs = maps.Clone(model.Inputs)
 

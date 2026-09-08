@@ -57,12 +57,12 @@ command reached the monitor is unknown."
 
 ### 1. An operation can only come from the catalog
 
-`catalog.Operation` carries the mechanism and the byte to write, and its fields are unexported. Its constructor is
-package-private, so the only operations that exist are the ones compiled in from the catalog. The catalog is written in
-`internal/catalog/models.yaml` and rendered into the committed `models_gen.go` by `make go-generate`; the rendering happens at
-development time, so the binary contains no catalog parser and reads no catalog file at run time, and a test fails the build if
-the two files disagree. The zero value is invalid,
-and every backend rejects it with `invalid-operation`. There is no code path that turns a number a user typed into an
+`catalog.Operation` carries the mechanism and the 16-bit value to write — a SetVCP sends an SH/SL pair — and its fields are
+unexported. Its constructor is package-private, so the only operations that exist are the ones compiled in from the catalog.
+The catalog is written in `internal/catalog/models.yaml` and rendered into the committed `models_gen.go` by `make go-generate`;
+the rendering happens at development time, so the binary contains no catalog parser and reads no catalog file at run time, and a
+test fails the build if the two files disagree. The zero value is invalid, and every backend rejects it with
+`invalid-operation`. There is no code path that turns a number a user typed into an
 operation — the CLI takes symbolic inputs, a connector kind such as `dp` or `hdmi` optionally numbered such as `hdmi2`, and
 nothing else.
 
@@ -83,11 +83,15 @@ is sent. On Linux the write itself then selects the display by its full 256-char
 
 ### 4. A mechanism is a per-model property, never a fallback
 
-`catalog.Mechanism` is a closed enum with exactly one value today: `lg-alt-input`, the LG side channel — source address `0x50`,
-VCP `0xF4`, no verification. It is the extension point for other vendors, and a second mechanism (the standard Input Source
-feature `VCP 0x60`, say) is added only together with the first evidenced model that needs it. A backend that does not implement
-a model's mechanism refuses with `invalid-operation` rather than trying another one, and monmux never writes `0x60` as a
-fallback because a monitor happens to read it (requirement 9.7).
+`catalog.Mechanism` is a closed enum with two values: `lg-alt-input`, the LG side channel — source address `0x50`, VCP `0xF4`,
+no verification — and `vcp-input-source`, the standard Input Source feature — the ordinary source address, VCP `0x60`, no
+verification. It is the extension point for other vendors, and a mechanism is added only together with the first evidenced model
+that needs it, never speculatively; a model that merely records it, disabled, counts as that model, and the backend path stays
+untested on hardware until the first model using it is enabled.
+
+A backend that does not implement a model's mechanism refuses with `invalid-operation` rather than trying another one. Adding
+`vcp-input-source` did not make `0x60` a fallback for anything: monmux writes it only for a model whose catalog entry names it,
+never because a monitor happens to read it (requirement 9.7).
 
 ### 5. Sent is not confirmed
 
@@ -106,10 +110,19 @@ Both backends produce the same `edid.Identity`, which is what lets one catalog s
 | Product code  | EDID bytes 10–11                          | `CGDisplayModelNumber`                                          |
 | Serial number | EDID bytes 12–15                          | `CGDisplaySerialNumber`                                         |
 | Serial string | EDID descriptor `0xFF`                    | IORegistry `AlphanumericSerialNumber`                           |
+| Model name    | EDID descriptor `0xFC`                    | IORegistry `Product name`, or the display list's header name    |
 | Handle        | the DRM connector name, e.g. `card1-DP-1` | the display's system UUID — private data, masked in output      |
 
 A display monmux cannot address is still reported, with a status saying why: `no-ddc-channel`, `edid-unreadable`, `no-uuid`.
 `info` lists it; policy can never select it.
+
+A catalog entry matches on the manufacturer and the product code. The serials never take part: they identify a unit, not a
+model. The model name normally does not either — it is context in `info` and nothing more — but an identity **may** pin it,
+because a vendor reuses one product code across products. LG does: `GSM/0x7707` is claimed by the 32UD99, the 27UN880-B and the
+32BL95U service manual. Pinning is what lets two such models live in one catalog without every match becoming ambiguous, so it
+is used only there, and the generator refuses a bare identity beside a pinned one with the same code — otherwise the bare entry
+would shadow the pinned one. A display whose model name is empty matches no pinned identity at all, which is the fail-closed
+answer rather than a guess.
 
 ## What each backend actually runs
 

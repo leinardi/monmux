@@ -88,6 +88,115 @@ func TestMatchInStillResolvesAUniqueIdentity(t *testing.T) {
 	}
 }
 
+// LG assigns one EDID product code to several products, so the catalog has to be
+// able to hold two models behind one code. The pinned model name is what tells
+// them apart, and a display that reports no model name matches neither: the
+// fail-closed answer, not a coin flip.
+//
+// This is the internal test because it builds entries by hand; the real catalog
+// pins no name today, and the generator refuses a bare identity next to a pinned
+// one so that a bare entry can never shadow a pinned one.
+func TestSharedProductCodeIsDisambiguatedByModelName(t *testing.T) {
+	t.Parallel()
+
+	entries := []Model{
+		{
+			Name:   "first",
+			Vendor: "LG",
+			Identities: []Identity{
+				{Manufacturer: "GSM", ProductCode: 0x7707, ModelName: "LG HDR 4K"},
+			},
+			WriteEnabled: true,
+			Inputs: map[Input]inputOp{
+				"dp": {mechanism: MechanismLGAltInput, value: 0xD0, evidence: "test"},
+			},
+		},
+		{
+			Name:   "second",
+			Vendor: "LG",
+			Identities: []Identity{
+				{Manufacturer: "GSM", ProductCode: 0x7707, ModelName: "LG ULTRAFINE"},
+			},
+			WriteEnabled: true,
+			Inputs: map[Input]inputOp{
+				"dp": {mechanism: MechanismLGAltInput, value: 0xD1, evidence: "test"},
+			},
+		},
+	}
+
+	for name, want := range map[string]string{"LG HDR 4K": "first", "LG ULTRAFINE": "second"} {
+		model, result := matchIn(
+			edid.Identity{Manufacturer: "GSM", ProductCode: 0x7707, ModelName: name},
+			entries,
+		)
+
+		if result != MatchExact || model.Name != want {
+			t.Errorf("%q gave %s for %q, want exact for %q", name, result, model.Name, want)
+		}
+	}
+
+	for _, name := range []string{"", "LG SOMETHING ELSE"} {
+		model, result := matchIn(
+			edid.Identity{Manufacturer: "GSM", ProductCode: 0x7707, ModelName: name},
+			entries,
+		)
+
+		if result != MatchNone {
+			t.Errorf("model name %q gave %s for %s, want none", name, result, model.FullName())
+		}
+	}
+}
+
+// The pinned name is compared against whatever the backend put in the identity,
+// and the two backends fill that field from different places: EDID descriptor
+// 0xFC on Linux, m1ddc's "Product name" on macOS. They must agree, or an entry
+// would match on one operating system and not on the other. The parsers are
+// tested where they live; this is the catalog end of the same rule.
+func TestAPinnedNameMatchesTheSameStringFromEitherBackend(t *testing.T) {
+	t.Parallel()
+
+	entries := []Model{
+		{
+			Name:   "pinned",
+			Vendor: "LG",
+			Identities: []Identity{
+				{Manufacturer: "GSM", ProductCode: 0x77D3, ModelName: "LG ULTRAWIDE"},
+			},
+			WriteEnabled: true,
+			Inputs: map[Input]inputOp{
+				"dp": {mechanism: MechanismLGAltInput, value: 0xD0, evidence: "test"},
+			},
+		},
+	}
+
+	// What internal/edid produces from descriptor 0xFC, and what
+	// internal/backend/m1ddc produces from `display list detailed`: the same
+	// string, with the serial fields the two backends fill differently.
+	fromLinux := edid.Identity{
+		Manufacturer: "GSM",
+		ProductCode:  0x77D3,
+		SerialNumber: 0x01020304,
+		SerialString: "TESTSERIAL01",
+		ModelName:    "LG ULTRAWIDE",
+	}
+	fromMacOS := edid.Identity{
+		Manufacturer: "GSM",
+		ProductCode:  0x77D3,
+		SerialNumber: 0x01020304,
+		ModelName:    "LG ULTRAWIDE",
+	}
+
+	for name, identity := range map[string]edid.Identity{
+		"linux": fromLinux,
+		"macos": fromMacOS,
+	} {
+		model, result := matchIn(identity, entries)
+		if result != MatchExact || model.Name != "pinned" {
+			t.Errorf("%s gave %s for %s, want exact", name, result, model.FullName())
+		}
+	}
+}
+
 // An entry naming a mechanism no backend implements must not produce something
 // a backend could be asked to run.
 func TestUnknownMechanismYieldsNoOperation(t *testing.T) {

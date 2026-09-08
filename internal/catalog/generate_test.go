@@ -62,6 +62,40 @@ func TestGeneratedCatalogMatchesTheYAML(t *testing.T) {
 	)
 }
 
+// The generated sections of the compatibility document are rendered from
+// models.yaml by the same command that renders models_gen.go. A hand edit inside
+// the markers, or a catalog change committed without a regeneration, fails here.
+//
+// This is the gate; the pre-commit hook that regenerates the file is the
+// convenience that fixes it for you.
+func TestCompatibilityDocumentMatchesTheGenerator(t *testing.T) {
+	t.Parallel()
+
+	root := moduleRoot(t)
+
+	source, err := os.ReadFile(filepath.Join(root, "internal", "catalog", "models.yaml"))
+	if err != nil {
+		t.Fatalf("reading models.yaml: %v", err)
+	}
+
+	committed := []byte(contents(t))
+
+	rendered, err := generate.GenerateDocument(source, committed)
+	if err != nil {
+		t.Fatalf("%s does not render: %v", document, err)
+	}
+
+	if bytes.Equal(rendered, committed) {
+		return
+	}
+
+	t.Errorf(
+		"%s is stale: run `make go-generate` and commit the result.\n%s",
+		document,
+		firstDifference(string(committed), string(rendered)),
+	)
+}
+
 // firstDifference reports the first line where the committed file and a fresh
 // rendering diverge, which is enough to see what was edited by hand.
 func firstDifference(committed, rendered string) string {
@@ -96,10 +130,27 @@ func lineAt(lines []string, index int) string {
 
 // The generator does not import this package, so that a deleted or corrupt
 // models_gen.go can still be regenerated. That decoupling costs it the mechanism
-// enum, which it mirrors instead. This is where the two copies are compared:
-// adding a mechanism on one side without the other fails here. Input names are
-// not mirrored - both sides import the one grammar - so there is nothing to
-// compare for them.
+// and grade enums, which it mirrors instead. These two tests are where the
+// copies are compared: adding a value on one side without the other fails here.
+// Input names are not mirrored - both sides import the one grammar - so there is
+// nothing to compare for them.
+func TestGeneratorKnowsEveryGrade(t *testing.T) {
+	t.Parallel()
+
+	graded := make([]string, 0, len(catalog.Grades()))
+	for _, grade := range catalog.Grades() {
+		graded = append(graded, grade.String())
+	}
+
+	if !slices.Equal(graded, generate.Grades()) {
+		t.Errorf(
+			"the generator accepts grades %v, the enum has %v",
+			generate.Grades(),
+			graded,
+		)
+	}
+}
+
 func TestGeneratorKnowsEveryMechanism(t *testing.T) {
 	t.Parallel()
 

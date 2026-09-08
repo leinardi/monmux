@@ -231,4 +231,27 @@ func TestValidateOperationRejectsAnUnimplementedMechanism(t *testing.T) {
 	if err != nil {
 		t.Errorf("a catalog operation with an implemented mechanism was rejected: %v", err)
 	}
+
+	// A backend that implements several mechanisms lists them all, and the one
+	// the operation actually carries has to be found among them rather than
+	// only in first position.
+	err = backend.ValidateOperation(
+		operation,
+		catalog.MechanismInputSource,
+		catalog.MechanismLGAltInput,
+	)
+	if err != nil {
+		t.Errorf("an operation was rejected by a backend that implements its mechanism: %v", err)
+	}
+
+	// Implementing a second mechanism must not make the first a fallback for
+	// an operation that names neither.
+	err = backend.ValidateOperation(
+		operation,
+		catalog.Mechanism("something-else"),
+		catalog.MechanismInputSource,
+	)
+	if !refusal.Is(err, refusal.InvalidOperation) {
+		t.Errorf("error = %v, want invalid-operation", err)
+	}
 }

@@ -31,7 +31,7 @@ Hardware validation is a checklist the human runs; agents prepare the commands a
 `monmux` is a cross-platform Go CLI that switches **supported monitors** between video inputs, with a fail-closed policy: a write happens
 only when the attached monitor is positively identified as a model in the built-in supported-monitor catalog *and* the requested input is
 explicitly enabled for that model. One model is verified so far (LG 38WR85QC-W); nothing in the code, CLI, or docs is vendor-specific
-except the catalog entry and the mechanism it uses.
+except the catalog entries and the mechanisms they use.
 
 It wraps `ddcutil` on Linux and `m1ddc` on macOS, permanently. There is no native I²C/IOKit backend and there never will be one.
 
@@ -44,7 +44,7 @@ Documentation, and what each page is for:
 | [`README.md`](README.md)                               | What monmux is, how to install it, how to run it.                        |
 | [`docs/architecture.md`](docs/architecture.md)         | How a switch is decided, and the five things that make it safe.          |
 | [`docs/backends.md`](docs/backends.md)                 | ddcutil and m1ddc specifics: version floor, probes, permissions, quirks. |
-| [`docs/compatibility.md`](docs/compatibility.md)       | The catalog, in prose. Checked against the code by a test.               |
+| [`docs/compatibility.md`](docs/compatibility.md)       | The catalog, in prose. Its table and notes are generated from the YAML.  |
 | [`docs/adding-a-monitor.md`](docs/adding-a-monitor.md) | The procedure for enabling a model or an input.                          |
 | [`docs/configuration.md`](docs/configuration.md)       | The configuration file, the flags, and which wins.                       |
 | [`docs/security.md`](docs/security.md)                 | Threat model, mitigations, trust boundaries, what monmux never does.     |
@@ -53,9 +53,10 @@ Documentation, and what each page is for:
 | [`docs/release.md`](docs/release.md)                   | The release pipeline, as a design. Not implemented.                      |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md)                   | Prerequisites, workflow, and the catalog evidence rule.                  |
 
-A change to the catalog must update [`docs/compatibility.md`](docs/compatibility.md) and re-render `models_gen.go` in the same
-commit: one test compares the document against the catalog and another compares the catalog against its YAML, and both fail the build
-if they disagree.
+A change to the catalog is a change to `internal/catalog/models.yaml` followed by `make go-generate`, which re-renders both
+`models_gen.go` and the marked region of [`docs/compatibility.md`](docs/compatibility.md) — the table and the per-model notes.
+Commit all three. Three tests fail the build if they disagree: one compares each rendered file against a fresh rendering of the
+YAML, and one reads the document back and compares it against the compiled catalog. Do not hand-edit inside the markers.
 
 ## Common commands
 
@@ -86,9 +87,10 @@ Repo-local make targets live in `.mk/cross.mk`.
 - `cmd/monmux` — cobra commands: `info`, `switch`, `doctor`, `version`, `completion`. Owns flags, config loading, output formatting, and exit codes.
 - `internal/refusal` — the one typed refusal error used by every layer, with the reason enum and the rendered message.
 - `internal/edid` — EDID block-0 parser producing an `Identity`. Carries no raw EDID bytes.
-- `internal/catalog` — the supported-monitor catalog, the `Input` name (a connector kind plus an optional port number), the `Kind`
-  and `Mechanism` enums, and the opaque `Operation`. The catalog is written in `models.yaml` and rendered into the committed
-  `models_gen.go` by `make go-generate`; a test fails the build if the two disagree. `internal/catalog/internal/generate` is that
+- `internal/catalog` — the supported-monitor catalog, the `Input` name (a connector kind plus an optional port number), the `Kind`,
+  `Mechanism` and `Grade` enums, and the opaque `Operation` (a mechanism plus a 16-bit value). The catalog is written in
+  `models.yaml` and rendered into the committed `models_gen.go` by `make go-generate`; a test fails the build if the two
+  disagree. `internal/catalog/internal/generate` is that
   renderer, and it deliberately does not import `internal/catalog`, so a deleted or corrupt `models_gen.go` can still be
   regenerated.
 - `internal/catalog/internal/input` — the grammar of an input name: the closed list of connector kinds, the parser, the labels
@@ -110,8 +112,9 @@ Repo-local make targets live in `.mk/cross.mk`.
 
 Do not weaken any of these. They are the reason the tool exists.
 
-1. **Identify before writing.** A write requires an exact catalog match on the parsed EDID identity. Unknown, ambiguous, or multiple
-   candidate monitors are refused — never guessed at, never defaulted.
+1. **Identify before writing.** A write requires an exact catalog match on the parsed EDID identity — manufacturer and product code,
+   plus the EDID model name where an identity pins one, which is how two models sharing a reused product code are told apart.
+   Unknown, ambiguous, or multiple candidate monitors are refused — never guessed at, never defaulted.
 2. **Enabled inputs only.** An input is writable only if the matched model explicitly enables it, with recorded evidence. A model with no
    identities is never matched and therefore never written to.
 3. **Re-verify at the last moment.** `Execute` re-reads the identity (sysfs EDID and bus on Linux, `display list detailed` on macOS) and
@@ -127,12 +130,18 @@ Do not weaken any of these. They are the reason the tool exists.
 
 **Never add a raw VCP command.** No code path may take a VCP code or value from a flag, a config file, an environment variable, or any
 other input. The only bytes that reach a monitor come from a `catalog.Operation` built by the catalog's package-private constructor from
-a compiled-in table entry with recorded evidence. Adding an input or a model means editing `internal/catalog/models.yaml`, supplying
+a compiled-in table entry with graded evidence. Adding an input or a model means editing `internal/catalog/models.yaml`, supplying
 the evidence, and running `make go-generate` to re-render `models_gen.go` — commit both — see
 [`docs/adding-a-monitor.md`](docs/adding-a-monitor.md). A new connector *kind* is the one exception: the kinds are a closed list
 in `internal/catalog/internal/input`, so a monitor with an input nobody has named yet is a Go change there, added with the first
 model that needs it. A new *port* of a kind that already exists (`hdmi3`, `usb-c2`) is only a YAML edit. The YAML is a build input read at development time only: the binary contains no
 catalog parser and reads no catalog file at run time.
+
+A `Mechanism` is added the same way, together with the first model that needs it, and a **disabled** record counts as that model:
+the point is that the mechanism arrives with evidence attached, not that the first entry using it is trusted. Until a model using
+a mechanism is write-enabled, that backend path has never reached a monitor — `vcp-input-source` is in that state today. Enabling
+that first model is a first hardware run of the mechanism, done with the [`docs/testing.md`](docs/testing.md) checklist, not a
+routine catalog flip.
 
 **Backends only execute a `Command` produced by `Plan`.** `Command` is returned by `Plan` for display only and is never accepted as
 input by any method. `Execute` takes the `catalog.Operation`, not a `Command`, and rebuilds the invocation through the same private

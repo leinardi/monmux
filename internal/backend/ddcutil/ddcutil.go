@@ -109,6 +109,18 @@ func New(opts Options) *Backend {
 	}
 }
 
+// noVerifyOption stops ddcutil reading the feature back after writing it.
+// monmux never confirms a switch by reading a monitor, so it is on every write.
+const noVerifyOption = "--noverify"
+
+// implemented is every mechanism this backend can perform. A model whose
+// mechanism is not here is refused with invalid-operation; there is no fallback
+// to another mechanism, another VCP code or another value.
+var implemented = []catalog.Mechanism{
+	catalog.MechanismLGAltInput,
+	catalog.MechanismInputSource,
+}
+
 // Name returns the backend's name.
 func (*Backend) Name() string {
 	return Name
@@ -121,7 +133,7 @@ func (b *Backend) Plan(
 	display backend.Display,
 	operation catalog.Operation,
 ) (backend.Command, error) {
-	err := backend.ValidateOperation(operation, catalog.MechanismLGAltInput)
+	err := backend.ValidateOperation(operation, implemented...)
 	if err != nil {
 		//nolint:wrapcheck // a refusal is passed through unchanged; wrapping would corrupt its message
 		return backend.Command{}, err
@@ -144,7 +156,7 @@ func (b *Backend) Execute(
 	display backend.Display,
 	operation catalog.Operation,
 ) error {
-	err := backend.ValidateOperation(operation, catalog.MechanismLGAltInput)
+	err := backend.ValidateOperation(operation, implemented...)
 	if err != nil {
 		//nolint:wrapcheck // a refusal is passed through unchanged; wrapping would corrupt its message
 		return err
@@ -189,16 +201,48 @@ func (b *Backend) Execute(
 func plan(path string, known connector, operation catalog.Operation) backend.Command {
 	return backend.Command{
 		Path: path,
-		Args: []string{
-			"--edid", hex.EncodeToString(known.edid),
-			"setvcp",
-			fmt.Sprintf("0x%02X", catalog.LGAltInputVCP),
-			fmt.Sprintf("0x%02X", operation.Value()),
-			fmt.Sprintf("--i2c-source-addr=0x%02X", catalog.LGAltInputSourceAddr),
-			"--noverify",
-		},
+		Args: append(
+			[]string{"--edid", hex.EncodeToString(known.edid)},
+			arguments(operation.Mechanism(), operation.Value())...,
+		),
 		// The EDID hex identifies the physical unit, serial included.
 		Redact: []int{1},
+	}
+}
+
+// arguments builds the setvcp invocation for one mechanism and one value. It is
+// split out of [plan] so that a test can pin the exact argv for a value without
+// an exported way to build an [catalog.Operation]: rendering argv is not the
+// same power as making a backend run it, and only the catalog has the latter.
+//
+// A mechanism this backend does not implement yields nil rather than a guess.
+// [plan] is reached only after backend.ValidateOperation has accepted the
+// mechanism, so nil is unreachable there; it is the shape of "never fall back"
+// rather than a branch that runs.
+func arguments(mechanism catalog.Mechanism, value uint16) []string {
+	switch mechanism {
+	case catalog.MechanismLGAltInput:
+		return []string{
+			"setvcp",
+			fmt.Sprintf("0x%02X", catalog.LGAltInputVCP),
+			fmt.Sprintf("0x%02X", value),
+			fmt.Sprintf("--i2c-source-addr=0x%02X", catalog.LGAltInputSourceAddr),
+			noVerifyOption,
+		}
+	case catalog.MechanismInputSource:
+		// The standard feature goes to the ordinary DDC/CI source address, so
+		// there is no --i2c-source-addr here. --noverify stays: monmux never
+		// confirms a switch by reading the monitor back, and a read of 0x60 is
+		// unreliable in particular - many monitors report the value they were
+		// last written, or the input they booted on, rather than the live one.
+		return []string{
+			"setvcp",
+			fmt.Sprintf("0x%02X", catalog.InputSourceVCP),
+			fmt.Sprintf("0x%02X", value),
+			noVerifyOption,
+		}
+	default:
+		return nil
 	}
 }
 

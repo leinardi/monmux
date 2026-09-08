@@ -95,10 +95,10 @@ normally a blocker.
   no identities must never be matched.
 - **Enabled inputs only.** An input is writable only if the matched model
   explicitly enables it, with recorded evidence. Check that a new or edited
-  entry in `internal/catalog/models.yaml` carries evidence, that
-  `internal/catalog/models_gen.go` was regenerated from it (never hand-edited),
-  and that `docs/compatibility.md` was updated in the same commit — a test
-  compares each pair.
+  entry in `internal/catalog/models.yaml` carries evidence, and that both
+  rendered files — `internal/catalog/models_gen.go` and the marked region of
+  `docs/compatibility.md` — were regenerated from it in the same commit and
+  never hand-edited. A test compares each against a fresh rendering.
 - **Re-verify at the last moment.** `Execute` must re-read the identity (sysfs
   EDID and bus on Linux, `display list detailed` on macOS) and refuse with
   `identity-changed` if anything moved since enumeration. Removing, caching, or

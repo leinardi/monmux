@@ -62,12 +62,38 @@ var trustedPrefixes = []string{"/opt/homebrew/", "/usr/local/"}
 func plan(path, uuid string, operation catalog.Operation) backend.Command {
 	return backend.Command{
 		Path: path,
-		Args: []string{
-			displaySubcommand, uuid,
-			"set", "input-alt", strconv.FormatUint(uint64(operation.Value()), 10),
-		},
+		Args: append(
+			[]string{displaySubcommand, uuid},
+			arguments(operation.Mechanism(), operation.Value())...,
+		),
 		// The UUID identifies the physical unit.
 		Redact: []int{1},
+	}
+}
+
+// arguments builds the set invocation for one mechanism and one value. It is
+// split out of [plan] so that a test can pin the exact argv for a value without
+// an exported way to build an [catalog.Operation]: rendering argv is not the
+// same power as making a backend run it, and only the catalog has the latter.
+//
+// m1ddc takes the value in decimal and sends both halves of the SH/SL pair, so
+// a value wider than a byte needs no special handling here.
+//
+// A mechanism this backend does not implement yields nil rather than a guess.
+// [plan] is reached only after [validate] has accepted the mechanism, so nil is
+// unreachable there; it is the shape of "never fall back" rather than a branch
+// that runs.
+func arguments(mechanism catalog.Mechanism, value uint16) []string {
+	switch mechanism {
+	case catalog.MechanismLGAltInput:
+		return []string{"set", "input-alt", strconv.FormatUint(uint64(value), 10)}
+	case catalog.MechanismInputSource:
+		// m1ddc's `set input` is the standard Input Source feature, VCP 0x60.
+		// It does not read the monitor back, which is what monmux wants: a read
+		// of 0x60 is unreliable, and monmux never confirms a switch anyway.
+		return []string{"set", "input", strconv.FormatUint(uint64(value), 10)}
+	default:
+		return nil
 	}
 }
 
@@ -77,7 +103,15 @@ func plan(path, uuid string, operation catalog.Operation) backend.Command {
 // backend gives for the same inputs.
 func validate(operation catalog.Operation) error {
 	//nolint:wrapcheck // a refusal is passed through unchanged; wrapping would corrupt its message
-	return backend.ValidateOperation(operation, catalog.MechanismLGAltInput)
+	return backend.ValidateOperation(operation, implemented...)
+}
+
+// implemented is every mechanism this backend can perform. A model whose
+// mechanism is not here is refused with invalid-operation; there is no fallback
+// to another mechanism, another VCP code or another value.
+var implemented = []catalog.Mechanism{
+	catalog.MechanismLGAltInput,
+	catalog.MechanismInputSource,
 }
 
 // planFor builds the invocation for a display the backend enumerated. It is the

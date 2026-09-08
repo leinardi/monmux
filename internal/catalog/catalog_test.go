@@ -38,19 +38,43 @@ func TestWriteEnabledModelsHaveAtLeastOneIdentity(t *testing.T) {
 	}
 }
 
+// Two identities collide when the manufacturer and the product code are equal
+// and either pins no model name, or both pin the same one. A map keyed on the
+// whole struct would let a bare identity and a pinned one with the same code
+// coexist, and the bare one would then shadow the pinned one - so this is the
+// same pairwise rule the generator enforces, checked against what compiled.
 func TestIdentitiesAreUniqueAcrossModels(t *testing.T) {
 	t.Parallel()
 
-	owner := map[catalog.Identity]string{}
+	type claim struct {
+		identity catalog.Identity
+		owner    string
+	}
+
+	var claimed []claim
 
 	for _, model := range catalog.Models() {
 		for _, identity := range model.Identities {
-			previous, taken := owner[identity]
-			if taken {
-				t.Errorf("%s is claimed by both %s and %s", identity, previous, model.FullName())
+			for _, previous := range claimed {
+				same := previous.identity.Manufacturer == identity.Manufacturer &&
+					previous.identity.ProductCode == identity.ProductCode
+
+				distinct := previous.identity.ModelName != "" &&
+					identity.ModelName != "" &&
+					previous.identity.ModelName != identity.ModelName
+
+				if same && !distinct {
+					t.Errorf(
+						"%s and %s could both match one display, for %s and %s",
+						previous.identity,
+						identity,
+						previous.owner,
+						model.FullName(),
+					)
+				}
 			}
 
-			owner[identity] = model.FullName()
+			claimed = append(claimed, claim{identity: identity, owner: model.FullName()})
 		}
 	}
 }
@@ -67,6 +91,74 @@ func TestEveryInputOfAWriteEnabledModelHasEvidence(t *testing.T) {
 			evidence, ok := model.InputEvidence(input)
 			if !ok || strings.TrimSpace(evidence) == "" {
 				t.Errorf("%s enables %s with no evidence", model.FullName(), input)
+			}
+		}
+	}
+}
+
+// Evidence that exists is not enough: monmux writes only what somebody ran on
+// that unit. The generator refuses a catalog file that breaks this; here it is
+// checked against what actually compiled.
+func TestEveryInputOfAWriteEnabledModelIsVerified(t *testing.T) {
+	t.Parallel()
+
+	enabled := 0
+
+	for _, model := range catalog.Models() {
+		if !model.WriteEnabled {
+			continue
+		}
+
+		enabled++
+
+		for _, input := range model.RecordedInputs() {
+			grade, ok := model.InputGrade(input)
+			if !ok || grade != catalog.GradeVerified {
+				t.Errorf(
+					"%s enables %s on %q evidence, want %q",
+					model.FullName(),
+					input,
+					grade,
+					catalog.GradeVerified,
+				)
+			}
+		}
+	}
+
+	if enabled == 0 {
+		t.Fatal("no model is write-enabled, so this comparison proves nothing")
+	}
+}
+
+// A grade outside the enum would leave a row unclassifiable, and the rule above
+// would then pass a model whose evidence nobody can read.
+func TestEveryRecordedInputCarriesAKnownGrade(t *testing.T) {
+	t.Parallel()
+
+	for _, model := range catalog.Models() {
+		for _, input := range model.RecordedInputs() {
+			grade, ok := model.InputGrade(input)
+			if !ok || !grade.Known() {
+				t.Errorf("%s records %s with grade %q", model.FullName(), input, grade)
+			}
+		}
+	}
+}
+
+// Notes are documentation, but they are the only place a negative report, a
+// conflict or an alias is written down, so an entry that carries none is a
+// blank the reader cannot tell from "nothing to say".
+func TestEveryModelCarriesANote(t *testing.T) {
+	t.Parallel()
+
+	for _, model := range catalog.Models() {
+		if len(model.Notes) == 0 {
+			t.Errorf("%s records no note", model.FullName())
+		}
+
+		for _, note := range model.Notes {
+			if strings.TrimSpace(note) == "" {
+				t.Errorf("%s records a blank note", model.FullName())
 			}
 		}
 	}
@@ -298,6 +390,7 @@ func TestReturnedModelsCannotMutateTheCatalog(t *testing.T) {
 	enabled.Inputs[catalog.Input("hdmi1")] = disabled.Inputs[catalog.Input("hdmi1")]
 	delete(enabled.Inputs, catalog.Input("dp"))
 	enabled.Sources[0] = "invented"
+	enabled.Notes[0] = "invented"
 
 	after, result := catalog.Match(tested)
 	if result != catalog.MatchExact {
@@ -325,6 +418,10 @@ func TestReturnedModelsCannotMutateTheCatalog(t *testing.T) {
 	if after.Sources[0] != before.Sources[0] {
 		t.Errorf("a source was rewritten: %q", after.Sources[0])
 	}
+
+	if after.Notes[0] != before.Notes[0] {
+		t.Errorf("a note was rewritten: %q", after.Notes[0])
+	}
 }
 
 // --- the tested unit: the values here are what actually reaches the monitor ---
@@ -341,7 +438,7 @@ func TestTestedModelIsWriteEnabledForItsTwoVerifiedInputs(t *testing.T) {
 		t.Fatalf("matched %s, want LG 38WR85QC-W", model.FullName())
 	}
 
-	want := map[catalog.Input]uint8{catalog.Input("dp"): 0xD0, catalog.Input("usb-c"): 0xD1}
+	want := map[catalog.Input]uint16{catalog.Input("dp"): 0xD0, catalog.Input("usb-c"): 0xD1}
 
 	for input, value := range want {
 		op, ok := model.Operation(input)
@@ -430,7 +527,7 @@ func TestMatchReportsUnknownMonitors(t *testing.T) {
 	}
 }
 
-func TestMatchIgnoresSerialsAndModelName(t *testing.T) {
+func TestMatchIgnoresSerials(t *testing.T) {
 	t.Parallel()
 
 	identity := edid.Identity{
@@ -447,6 +544,26 @@ func TestMatchIgnoresSerialsAndModelName(t *testing.T) {
 
 	if withSerials != redacted || withSerials != catalog.MatchExact {
 		t.Errorf("match depends on the serial fields: %s vs %s", withSerials, redacted)
+	}
+}
+
+// A model name is consulted only where the entry pins one. No entry in the
+// catalog does today, so the model string a display reports must not change any
+// match: the same unit reporting a different string, or none, still matches.
+func TestMatchIgnoresTheModelNameWhereNoIdentityPinsOne(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"LG ULTRAWIDE", "LG HDR 4K", ""} {
+		identity := edid.Identity{
+			Manufacturer: "GSM",
+			ProductCode:  0x77D3,
+			ModelName:    name,
+		}
+
+		model, result := catalog.Match(identity)
+		if result != catalog.MatchExact || model.Name != "38WR85QC-W" {
+			t.Errorf("model name %q gave %s for %s", name, result, model.FullName())
+		}
 	}
 }
 

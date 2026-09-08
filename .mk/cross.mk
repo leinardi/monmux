@@ -56,9 +56,11 @@ go-lint-cross: ## Lint both OS backends; see the note above if it fails inside G
 	GOOS=darwin $(GOLANGCI_LINT) run $(GO_PKG)
 
 # The supported-monitor catalog is written in internal/catalog/models.yaml and
-# rendered into internal/catalog/models_gen.go, which is committed. Run this
-# after editing the YAML and commit both files; a test fails the build if they
-# disagree. Scoped to the catalog because that is the only generator here.
+# rendered into two committed files: internal/catalog/models_gen.go, and the
+# region between the markers in docs/compatibility.md. Run this after editing the
+# YAML and commit everything it rewrites; a test per rendered file fails the
+# build if any of them disagree. Scoped to the catalog because that is the only
+# generator here.
 .PHONY: go-generate
-go-generate: ## Regenerate internal/catalog/models_gen.go from models.yaml
+go-generate: ## Regenerate models_gen.go and the compatibility document from models.yaml
 	$(GO) generate ./internal/catalog/...

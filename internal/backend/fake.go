@@ -101,13 +101,17 @@ func (f *Fake) Ready(_ context.Context, _ Display) error {
 
 // Plan records the call and returns the scripted command. It validates the
 // operation exactly as a real backend does, so a caller that hands it something
-// the catalog did not produce is refused here too.
+// the catalog did not produce is refused here too. The fake stands in for a
+// backend that implements everything, so it validates against the whole enum
+// rather than a list of its own: a test driving any catalog entry through it
+// still gets the forged-operation refusal, and adding a mechanism needs no edit
+// here.
 //
 //nolint:gocritic // hugeParam: the Backend interface passes a Display by value
 func (f *Fake) Plan(display Display, operation catalog.Operation) (Command, error) {
 	f.record(CallPlan)
 
-	err := ValidateOperation(operation, catalog.MechanismLGAltInput)
+	err := ValidateOperation(operation, catalog.Mechanisms()...)
 	if err != nil {
 		return Command{}, err
 	}
@@ -124,7 +128,7 @@ func (f *Fake) Plan(display Display, operation catalog.Operation) (Command, erro
 //
 //nolint:gocritic // hugeParam: the Backend interface passes a Display by value
 func (f *Fake) Execute(_ context.Context, display Display, operation catalog.Operation) error {
-	err := ValidateOperation(operation, catalog.MechanismLGAltInput)
+	err := ValidateOperation(operation, catalog.Mechanisms()...)
 	if err != nil {
 		f.record(CallExecute)
 

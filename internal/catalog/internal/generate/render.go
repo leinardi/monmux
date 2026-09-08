@@ -48,7 +48,7 @@ const licenseHeader = `/*
  */`
 
 // linesPerInput is how many lines renderInputs emits for one recorded input.
-const linesPerInput = 5
+const linesPerInput = 6
 
 // generatedMarker is the line that tells go and the linters this file is not
 // written by hand.
@@ -109,7 +109,7 @@ func preamble() []string {
 
 // renderModel renders one entry of the models slice.
 func renderModel(model *Model) ([]string, error) {
-	inputs, err := renderInputs(model.Inputs)
+	inputs, err := renderInputs(model)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,8 @@ func renderModel(model *Model) ([]string, error) {
 		renderIdentities(model.Identities),
 		[]string{fmt.Sprintf("WriteEnabled: %t,", model.WriteEnabled)},
 		inputs,
-		renderSources(model.Sources),
+		renderStrings("Notes", model.Notes),
+		renderStrings("Sources", model.Sources),
 		[]string{"},"},
 	), nil
 }
@@ -139,27 +140,72 @@ func renderIdentities(identities []Identity) []string {
 	lines = append(lines, "Identities: []Identity{")
 
 	for _, identity := range identities {
-		lines = append(lines, fmt.Sprintf(
-			"{Manufacturer: %q, ProductCode: 0x%04X},",
+		rendered := fmt.Sprintf(
+			"{Manufacturer: %q, ProductCode: 0x%04X",
 			identity.Manufacturer,
 			*identity.ProductCode,
-		))
+		)
+
+		// An unpinned name renders as nothing rather than as an empty string, so
+		// that "this identity matches on the code alone" is what the Go says.
+		if identity.ModelName != "" {
+			rendered += fmt.Sprintf(", ModelName: %q", identity.ModelName)
+		}
+
+		lines = append(lines, rendered+"},")
 	}
 
 	return append(lines, "},")
 }
 
-// renderInputs renders the input map in catalog order - connector kind, then
-// port number - so the generated file does not depend on the order the keys
-// happen to have in the catalog file.
+// renderInputs renders the input map in the order [sortedInputNames] decides,
+// so the generated file does not depend on the order the keys happen to have in
+// the catalog file.
+func renderInputs(model *Model) ([]string, error) {
+	entries := model.Inputs
+
+	names, err := sortedInputNames(model)
+	if err != nil {
+		return nil, err
+	}
+
+	lines := make([]string, 0, len(entries)*linesPerInput+2)
+	lines = append(lines, "Inputs: map[Input]inputOp{")
+
+	for _, name := range names {
+		entry := entries[name.String()]
+
+		evidence, evidenceErr := renderEvidence(model.Name, name, &entry)
+		if evidenceErr != nil {
+			return nil, evidenceErr
+		}
+
+		lines = append(lines,
+			fmt.Sprintf("%q: {", name.String()),
+			fmt.Sprintf("mechanism: %s,", mechanismNames[entry.Mechanism]),
+			fmt.Sprintf("value: 0x%02X,", *entry.Value),
+			fmt.Sprintf("grade: %s,", gradeNames[entry.Evidence.Grade]),
+			fmt.Sprintf("evidence: %q,", evidence),
+			"},",
+		)
+	}
+
+	return append(lines, "},"), nil
+}
+
+// sortedInputNames parses a model's input keys and puts them in catalog order -
+// connector kind, then port number - so neither the generated Go nor the
+// generated documentation depends on the order the keys happen to have in the
+// catalog file. Both renderers sort through this one function, which is what
+// makes a row of the table line up with an entry of the map.
 //
 // A key that does not parse is an error rather than a name sorted at one end:
 // [Document.Validate] has already rejected such a document, so reaching here
 // means this package has a bug, and a fallback order would not be transitive.
-func renderInputs(entries map[string]Input) ([]string, error) {
-	names := make([]input.Name, 0, len(entries))
+func sortedInputNames(model *Model) ([]input.Name, error) {
+	names := make([]input.Name, 0, len(model.Inputs))
 
-	for name := range entries {
+	for name := range model.Inputs {
 		parsed, err := input.Parse(name)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %q: %w", ErrRender, name, err)
@@ -170,35 +216,83 @@ func renderInputs(entries map[string]Input) ([]string, error) {
 
 	slices.SortFunc(names, input.Compare)
 
-	lines := make([]string, 0, len(entries)*linesPerInput+2)
-	lines = append(lines, "Inputs: map[Input]inputOp{")
-
-	for _, name := range names {
-		entry := entries[name.String()]
-
-		lines = append(lines,
-			fmt.Sprintf("%q: {", name.String()),
-			fmt.Sprintf("mechanism: %s,", mechanismNames[entry.Mechanism]),
-			fmt.Sprintf("value: 0x%02X,", *entry.Value),
-			fmt.Sprintf("evidence: %q,", entry.Evidence),
-			"},",
-		)
-	}
-
-	return append(lines, "},"), nil
+	return names, nil
 }
 
-// renderSources renders the model-level references.
-func renderSources(sources []string) []string {
-	if len(sources) == 0 {
-		return []string{"Sources: nil,"}
+// renderEvidence composes the sentence the catalog and the documentation both
+// carry, from the fields the catalog file records. One grade always reads the
+// same way, so the strength of a claim is legible at a glance and cannot be
+// talked up in prose: what a row says is decided by its grade, not by whoever
+// wrote it.
+//
+// [Document.Validate] has already checked the grade and the fields it needs, so
+// an error here means this package has a bug rather than the file having one.
+func renderEvidence(model string, name input.Name, entry *Input) (string, error) {
+	evidence := &entry.Evidence
+
+	phrase, known := mechanismPhrases[entry.Mechanism]
+	if !known {
+		return "", fmt.Errorf("%w: no phrase for mechanism %q", ErrRender, entry.Mechanism)
 	}
 
-	lines := make([]string, 0, len(sources)+2)
-	lines = append(lines, "Sources: []string{")
+	var (
+		label = name.Label()
+		value = fmt.Sprintf("0x%02X", *entry.Value)
+		body  string
+	)
 
-	for _, source := range sources {
-		lines = append(lines, fmt.Sprintf("%q,", source))
+	switch evidence.Grade {
+	case gradeVerified:
+		// A verified row is the only one that describes an act rather than a
+		// claim, so it names what was switched and needs no "not verified here".
+		return fmt.Sprintf(
+			"Direct test on the unit, %s, %s: %s", evidence.Date, evidence.Tool, evidence.Note,
+		), nil
+	case gradeDocumented:
+		body = fmt.Sprintf(
+			"Documented by %s for the exact %s: %s is %s over %s; no field report",
+			evidence.By, model, label, value, phrase,
+		)
+	case gradeReported:
+		body = fmt.Sprintf(
+			"Reported working on the exact %s by %s (%s): switching to %s with %s over %s succeeded",
+			model,
+			evidence.By,
+			evidence.Tool,
+			label,
+			value,
+			phrase,
+		)
+	case gradeQuoted:
+		body = fmt.Sprintf(
+			"Weaker report on the exact %s by %s (%s): the report quotes %s for %s and says it "+
+				"works, without saying which inputs were tried individually",
+			model, evidence.By, evidence.Tool, value, label,
+		)
+	default:
+		return "", fmt.Errorf("%w: unknown grade %q", ErrRender, evidence.Grade)
+	}
+
+	if evidence.Note != "" {
+		body += "; " + evidence.Note
+	}
+
+	return body + "; not verified here: " + evidence.URL, nil
+}
+
+// renderStrings renders a model's string slice - its notes or its sources. An
+// empty one renders as nil rather than as an empty slice, which is what "this
+// entry records none" looks like in Go.
+func renderStrings(field string, values []string) []string {
+	if len(values) == 0 {
+		return []string{field + ": nil,"}
+	}
+
+	lines := make([]string, 0, len(values)+2)
+	lines = append(lines, field+": []string{")
+
+	for _, value := range values {
+		lines = append(lines, fmt.Sprintf("%q,", value))
 	}
 
 	return append(lines, "},")
