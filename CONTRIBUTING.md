@@ -9,8 +9,9 @@ absolute — read [The rule](#the-rule) first.
 - [`pre-commit`](https://pre-commit.com/) — install the hooks once with `make pre-commit-install`
 - For running monmux against real hardware: `ddcutil` 2.2+ on Linux, or `m1ddc` on macOS. Neither is needed to build or test.
 
-Development works from either operating system. The macOS backend is cross-compiled and vetted from Linux, and everything that
-is not a backend is tag-free and tested on both.
+Development works from either operating system. `make go-build-cross` and `make go-vet-cross` compile-check and vet both OS
+backends whichever host you are on, and everything that is not a backend is tag-free and tested on both. Note that the linter
+only ever sees your host's backend — see [docs/testing.md](docs/testing.md).
 
 ## The rule
 
@@ -34,8 +35,8 @@ becomes evidence in the catalog.
 make go-build          # ./dist/monmux for the host OS
 make go-test           # go test -race ./...
 make go-vet
-make go-build-darwin   # cross-compile the macOS backend from Linux
-make go-vet-darwin
+make go-build-cross    # compile-check both OS backends, whatever the host
+make go-vet-cross      # and vet both, their build-tagged tests included
 make check             # the full pre-commit suite
 make check-stage       # the same, on staged files only
 ```

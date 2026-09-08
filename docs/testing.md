@@ -68,9 +68,19 @@ which would let a commit that edits only the catalog file skip that test; `.pre-
 **Structural tests.** A reflection test walks the `Backend` interface and fails if any method could be handed a `Command`,
 however deeply wrapped — that is what makes a command unforgeable.
 
-**Cross-compilation.** The macOS backend is built and vetted from the Linux development host with `make go-build-darwin` and
-`make go-vet-darwin`, which type-check its darwin-tagged tests too. Its parser and decisions carry no build tag, so they run in
+**Cross-compilation.** Only one of the two backends is visible to the host toolchain at a time, so `make go-build-cross` and
+`make go-vet-cross` run it over `GOOS=linux` and then `GOOS=darwin`, type-checking each backend's build-tagged tests too. Both
+are named outright rather than derived as "the OS the host is not": `go env GOOS` reports the target rather than the host, and
+`go-build`/`go-vet` set no `GOOS` of their own, so any value derived from one of them has a case where both aim at the same OS
+and a backend is left checked by nothing at all. A backend's parser and decisions carry no build tag, so they run in
 `make go-test` like everything else.
+
+There is deliberately no cross-lint target, and cross-vet is not a substitute for one. `golangci-lint` with `GOOS` set to the
+other OS aborts inside the standard library's own typecheck — the `go/types` it was built with is older than the toolchain's —
+and then reports nothing at all about this repository: a violation planted in a build-tagged file goes unreported. Excluding
+that typecheck error by path, the obvious next move, turns the run into a green result that checked nothing. So the linter only
+ever sees the host's backend, and **lint findings in the other backend surface only when somebody runs `make check` on that
+OS.** Closing that for real needs a runner of each OS — [release.md](release.md).
 
 ## Fixtures
 
@@ -97,9 +107,9 @@ produced.
 
 ```sh
 make go-test          # go test -race ./...
-make go-build-darwin  # cross-compile check
-make go-vet-darwin    # cross-vet, including darwin-tagged tests
-make check            # everything pre-commit runs
+make go-build-cross   # compile-check both OS backends, whatever the host
+make go-vet-cross     # cross-vet both, including their build-tagged tests
+make check            # everything pre-commit runs, for the host OS only
 ```
 
 ## Hardware validation — for a human, by hand

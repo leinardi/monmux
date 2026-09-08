@@ -43,14 +43,22 @@ has no Dockerfile, no image and no `hadolint` or `dclint` hooks.
 
 | Job           | What it does                                                                                                                                   |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pre-commit`  | Runs the whole hook suite on every pull request, the same one `make check` runs.                                                               |
-| `test`        | `go test -race ./...` on Linux.                                                                                                                |
-| `cross`       | `GOOS=darwin go build ./...` and `GOOS=darwin go vet ./...`, so the macOS backend and its build-tagged tests are type-checked on every change. |
+| `pre-commit`  | Runs the whole hook suite on every pull request, the same one `make check` runs — on a Linux **and** a macOS runner, see below.                |
+| `test`        | `go test -race ./...`, on both runners: a backend's build-tagged tests only ever execute on their own OS.                                      |
+| `cross`       | `make go-build-cross` and `make go-vet-cross`, which type-check both OS backends and their build-tagged tests on either runner.                |
 | `govulncheck` | Vulnerability scan of the module.                                                                                                              |
 | `release`     | `goreleaser release` on a tag, publishing the artifacts and updating the tap.                                                                  |
 
-Two things are worth doing deliberately:
+Three things are worth doing deliberately:
 
+- **Run `pre-commit` and `test` on both a Linux and a macOS runner.** This is not redundancy, and `cross` does not cover it.
+  Each backend sits behind a build tag, so a linter running on one OS does not analyse the other's files at all — and
+  `golangci-lint` cannot be pointed across to compensate: with `GOOS` set to the other OS it aborts inside the standard
+  library's own typecheck and then reports nothing whatsoever about this repository, so a violation planted in a build-tagged
+  file goes unreported. `make go-vet-cross` catches compile-level breakage from either host, but every style and correctness
+  linter in `.golangci.yaml` only ever sees the host's backend. Three real findings in `internal/backend/m1ddc` sat unreported
+  until the first `make check` was run on a Mac. The macOS runner is also the only place the darwin-tagged unit tests execute.
+  It needs no `m1ddc` installed, because the suite executes no external binary — [testing.md](testing.md).
 - **Warm the pre-commit cache.** The hook suite installs golangci-lint, markdownlint and the rest on first run; caching
   `~/.cache/pre-commit` keyed on `.pre-commit-config.yaml` turns a slow job into a fast one.
 - **Do not add a job that runs monmux against hardware.** There is no monitor in CI, and the rule that no automation writes to a
@@ -65,7 +73,7 @@ that the new version is willing to write something the old one refused.
 
 ## Before the first release
 
-- [ ] A CI workflow, with the jobs above.
+- [ ] A CI workflow, with the jobs above, running `pre-commit` and `test` on both a Linux and a macOS runner.
 - [ ] A `goreleaser` configuration, verified with `goreleaser release --snapshot --clean`.
 - [ ] A tap repository for the Homebrew formula.
 - [ ] Hardware validation completed and recorded for every model the release enables.

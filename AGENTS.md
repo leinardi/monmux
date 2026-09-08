@@ -64,8 +64,8 @@ make go-build          # build ./dist/monmux for the host OS
 make go-test           # CGO_ENABLED=1 go test -race ./...
 make go-vet
 make go-generate       # re-render internal/catalog/models_gen.go from models.yaml
-make go-build-darwin   # GOOS=darwin go build ./...  (compile-check the macOS backend from Linux)
-make go-vet-darwin     # GOOS=darwin go vet ./...
+make go-build-cross    # compile-check both OS backends (GOOS=linux and GOOS=darwin), whatever the host
+make go-vet-cross      # go vet both, their build-tagged tests included
 make go-tidy           # go mod tidy + go mod verify
 make check             # pre-commit on all files
 make check-stage       # pre-commit on the staging area only

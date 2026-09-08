@@ -217,7 +217,7 @@ writes to a monitor.
 | Diff touched | Run |
 | --- | --- |
 | any Go source or test | `make go-test`, then `make go-vet` |
-| `internal/backend/m1ddc`, `select`, or any shared file | additionally `make go-build-darwin` and `make go-vet-darwin` |
+| `internal/backend/ddcutil`, `internal/backend/m1ddc`, `select`, or any shared file | additionally `make go-build-cross` and `make go-vet-cross` — the host lints only its own backend |
 | `go.mod`, `go.sum`, or dependencies | additionally `make go-tidy` |
 | `internal/catalog` or `docs/compatibility.md` | `make go-test` — the compatibility test is the gate |
 | build, Makefile, `.mk/`, or CI | `make go-build` and `make check` |
