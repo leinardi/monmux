@@ -72,6 +72,74 @@ func TestEveryInputOfAWriteEnabledModelHasEvidence(t *testing.T) {
 	}
 }
 
+// Evidence that exists is not enough: monmux writes only what somebody ran on
+// that unit. The generator refuses a catalog file that breaks this; here it is
+// checked against what actually compiled.
+func TestEveryInputOfAWriteEnabledModelIsVerified(t *testing.T) {
+	t.Parallel()
+
+	enabled := 0
+
+	for _, model := range catalog.Models() {
+		if !model.WriteEnabled {
+			continue
+		}
+
+		enabled++
+
+		for _, input := range model.RecordedInputs() {
+			grade, ok := model.InputGrade(input)
+			if !ok || grade != catalog.GradeVerified {
+				t.Errorf(
+					"%s enables %s on %q evidence, want %q",
+					model.FullName(),
+					input,
+					grade,
+					catalog.GradeVerified,
+				)
+			}
+		}
+	}
+
+	if enabled == 0 {
+		t.Fatal("no model is write-enabled, so this comparison proves nothing")
+	}
+}
+
+// A grade outside the enum would leave a row unclassifiable, and the rule above
+// would then pass a model whose evidence nobody can read.
+func TestEveryRecordedInputCarriesAKnownGrade(t *testing.T) {
+	t.Parallel()
+
+	for _, model := range catalog.Models() {
+		for _, input := range model.RecordedInputs() {
+			grade, ok := model.InputGrade(input)
+			if !ok || !grade.Known() {
+				t.Errorf("%s records %s with grade %q", model.FullName(), input, grade)
+			}
+		}
+	}
+}
+
+// Notes are documentation, but they are the only place a negative report, a
+// conflict or an alias is written down, so an entry that carries none is a
+// blank the reader cannot tell from "nothing to say".
+func TestEveryModelCarriesANote(t *testing.T) {
+	t.Parallel()
+
+	for _, model := range catalog.Models() {
+		if len(model.Notes) == 0 {
+			t.Errorf("%s records no note", model.FullName())
+		}
+
+		for _, note := range model.Notes {
+			if strings.TrimSpace(note) == "" {
+				t.Errorf("%s records a blank note", model.FullName())
+			}
+		}
+	}
+}
+
 func TestDisabledModelsNeverMatch(t *testing.T) {
 	t.Parallel()
 
@@ -298,6 +366,7 @@ func TestReturnedModelsCannotMutateTheCatalog(t *testing.T) {
 	enabled.Inputs[catalog.Input("hdmi1")] = disabled.Inputs[catalog.Input("hdmi1")]
 	delete(enabled.Inputs, catalog.Input("dp"))
 	enabled.Sources[0] = "invented"
+	enabled.Notes[0] = "invented"
 
 	after, result := catalog.Match(tested)
 	if result != catalog.MatchExact {
@@ -324,6 +393,10 @@ func TestReturnedModelsCannotMutateTheCatalog(t *testing.T) {
 
 	if after.Sources[0] != before.Sources[0] {
 		t.Errorf("a source was rewritten: %q", after.Sources[0])
+	}
+
+	if after.Notes[0] != before.Notes[0] {
+		t.Errorf("a note was rewritten: %q", after.Notes[0])
 	}
 }
 

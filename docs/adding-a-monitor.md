@@ -100,12 +100,31 @@ The catalog is `internal/catalog/models.yaml`. Add your entry to the `models:` l
       dp:
           mechanism: lg-alt-input
           value: 0xD0
-          evidence: >-
-              Direct test on the unit, 2026-01-01, Linux (ddcutil): switched from
-              USB-C to DisplayPort
+          evidence:
+              grade: verified
+              date: "2026-01-01"
+              tool: Linux (ddcutil)
+              note: switched from USB-C to DisplayPort
+  notes:
+      - "Anything a reader needs that the table has no column for: a negative report, a conflict, an alias, a quirk."
   sources:
       - "…"
 ```
+
+The evidence is a record, not a sentence. The generator composes the sentence that reaches `models_gen.go` and
+[compatibility.md](compatibility.md), so every row of one grade reads the same way and nobody can talk a weak report up in
+prose. The grades, and what each one needs:
+
+| Grade        | Means                                                                         | Required fields    |
+| ------------ | ----------------------------------------------------------------------------- | ------------------ |
+| `verified`   | You ran it on the unit. The only grade that may be enabled.                   | `date, tool, note` |
+| `documented` | The manufacturer documents it, and no field report was found.                 | `by, url`          |
+| `reported`   | Somebody reports switching that named input with that value.                  | `by, tool, url`    |
+| `quoted`     | A report quotes the values and says they work, without saying which it tried. | `by, tool, url`    |
+
+`note` is optional free text for every grade but `verified`, where it says what was switched. `notes` is per-model prose and is
+rendered under the model in [compatibility.md](compatibility.md); it is documentation and never an operation, so nothing written
+there can reach a monitor.
 
 Then re-render the Go the binary actually compiles, and commit both files:
 
@@ -124,12 +143,18 @@ Rules the generator refuses and the invariant tests re-check:
 - A model that is not write-enabled records no identity at all. Matching does not consult the flag, so an entry with a
   fingerprint would match a real display and then refuse late instead of never matching.
 - An identity belongs to exactly one model, across the whole catalog, and a manufacturer is three uppercase letters.
-- Every recorded input is a well-formed name and has non-empty evidence. A name is a connector kind — `dp`, `hdmi`, `usb-c`,
+- Every recorded input is a well-formed name. A name is a connector kind — `dp`, `hdmi`, `usb-c`,
   `dvi`, `vga`, `thunderbolt` — optionally followed by a port number: a positive decimal integer with no leading zero and no
   separator, so `hdmi2` and `usb-c2` are names and `hdmi0`, `hdmi01` and `hdmi-1` are not. Write a kind bare when the model has
   one port of it and numbered when it has several; one model may not do both, so `usb-c` next to `usb-c2` is rejected. The
   human-readable label derives from the name — `hdmi3` prints as "HDMI 3" — so there is nothing else to add for a new port.
 - Every recorded input uses a mechanism some backend implements.
+- Every recorded input carries an evidence record whose `grade` is one of the four above, with every field that grade needs.
+- A write-enabled model carries `grade: verified` on **every** one of its inputs. A value nobody ran on that unit never becomes
+  writable, and that is a build failure rather than a review note.
+- A `url` starts with `https://`.
+- No text the documentation renders — `by`, `tool`, `date`, `url`, `note`, a `notes` entry or a source — holds a `|` or a line
+  break, because the document test reads Markdown table cells and single-line bullets.
 - Every model names at least one source.
 - Every identity writes a `product_code`, and every input writes a `value`. Leaving one out is an error, not a zero: a byte
   nobody recorded must never reach a monitor.
@@ -146,12 +171,17 @@ Leave `WriteEnabled: false` — or leave an input out entirely — when:
 - You tested one input and not another. Record the tested one, leave the other out. Absent is safer than disabled-but-present,
   because it cannot be flipped on by a one-character edit.
 - The evidence is "it worked for someone with a similar model". That is not evidence for this model.
+- The grade is anything but `verified`. `documented`, `reported` and `quoted` all describe somebody else's claim, and the
+  generator refuses to enable a model on one. `quoted` is specifically for a report that quotes values and says they work
+  without naming which inputs were tried individually — the weakest thing the catalog will record at all.
 
 A disabled entry is not a lesser contribution. It is the thing that stops the next person guessing.
 
 ## 7. Update the documentation and the fixtures
 
-- [compatibility.md](compatibility.md) is checked against the catalog by a test, so add your rows there in the same commit.
+- [compatibility.md](compatibility.md) is checked against the catalog by two tests, so add your rows **and** your
+  `### Vendor Model` section — the notes as bullets, then a `Sources:` line, then the sources as bullets — in the same commit.
+  Both must be byte-identical to the catalog, once markdownlint's `<url>` brackets are undone.
 - If you add a fixture — a captured EDID, or captured tool output — **sanitize it first**. Replace every serial and UUID with the
   synthetic values in `internal/backend/testdata/README.md`, recompute the EDID checksum, and check that the allowlist test
   passes. It fails the build if any other identifier appears anywhere under a `testdata` directory. Never commit a real serial.
@@ -163,7 +193,7 @@ A disabled entry is not a lesser contribution. It is the thing that stops the ne
 - [ ] Every value you tested yourself; nothing enabled on somebody else's say-so.
 - [ ] Catalog entry added to `models.yaml`, with `sources` naming where the values came from.
 - [ ] `make go-generate` run, and `models_gen.go` committed alongside the YAML.
-- [ ] `compatibility.md` updated to match.
+- [ ] `compatibility.md` updated to match: the table rows, and the model's notes-and-sources section.
 - [ ] Any new fixture sanitized, and `make go-test` passing.
 - [ ] `make check` clean.
 - [ ] If you added a mechanism: the enum value, the generator's name table, both backends' handling of it, and a golden test for

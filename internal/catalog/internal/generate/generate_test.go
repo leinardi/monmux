@@ -39,7 +39,13 @@ const entry = `  - name: TEST-1
       dp:
         mechanism: lg-alt-input
         value: 0xD0
-        evidence: switched on the unit
+        evidence:
+          grade: verified
+          date: "2026-09-07"
+          tool: ddcutil
+          note: switched from HDMI 1 to DisplayPort
+    notes:
+      - a note about this entry
     sources:
       - a named source
 `
@@ -64,7 +70,11 @@ func TestTheSmallestValidCatalogRenders(t *testing.T) {
 		`"dp": {`,
 		"mechanism: MechanismLGAltInput,",
 		"value:     0xD0,",
-		`evidence:  "switched on the unit",`,
+		"grade:     GradeVerified,",
+		`evidence:  "Direct test on the unit, 2026-09-07, ddcutil: ` +
+			`switched from HDMI 1 to DisplayPort",`,
+		"Notes: []string{",
+		`"a note about this entry",`,
 	} {
 		if !strings.Contains(string(rendered), want) {
 			t.Errorf("the rendered catalog does not contain %q", want)
@@ -122,13 +132,88 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 			document: strings.Replace(valid, "vendor: ACME", `vendor: "  "`, 1),
 			want:     generate.ErrBlank,
 		},
-		"an empty evidence": {
-			document: strings.Replace(valid, "evidence: switched on the unit", `evidence: ""`, 1),
+		"an evidence with no grade": {
+			document: strings.Replace(valid, "          grade: verified\n", "", 1),
+			want:     generate.ErrUnknownGrade,
+		},
+		"an evidence with a grade nobody defined": {
+			document: strings.Replace(valid, "grade: verified", "grade: hearsay", 1),
+			want:     generate.ErrUnknownGrade,
+		},
+		"a verified row with no date": {
+			document: strings.Replace(valid, "          date: \"2026-09-07\"\n", "", 1),
 			want:     generate.ErrBlank,
 		},
-		"a whitespace-only evidence": {
-			document: strings.Replace(valid, "evidence: switched on the unit", `evidence: "  "`, 1),
+		"a verified row with a blank tool": {
+			document: strings.Replace(valid, "tool: ddcutil", `tool: "  "`, 1),
 			want:     generate.ErrBlank,
+		},
+		"a verified row with no note": {
+			document: strings.Replace(
+				valid,
+				"          note: switched from HDMI 1 to DisplayPort\n",
+				"",
+				1,
+			),
+			want: generate.ErrBlank,
+		},
+		"a write-enabled model on reported evidence": {
+			document: strings.Replace(
+				valid,
+				"          grade: verified\n          date: \"2026-09-07\"\n"+
+					"          tool: ddcutil\n          note: switched from HDMI 1 to DisplayPort\n",
+				"          grade: reported\n          by: a tester\n          tool: ddcutil\n"+
+					"          url: https://example.com/report\n",
+				1,
+			),
+			want: generate.ErrUnverifiedEnabled,
+		},
+		"a reported row with no reporter": {
+			document: strings.Replace(
+				valid,
+				"          grade: verified\n          date: \"2026-09-07\"\n"+
+					"          tool: ddcutil\n          note: switched from HDMI 1 to DisplayPort\n",
+				"          grade: reported\n          tool: ddcutil\n"+
+					"          url: https://example.com/report\n",
+				1,
+			),
+			want: generate.ErrBlank,
+		},
+		"a reference that is not https": {
+			document: strings.Replace(
+				valid,
+				"          grade: verified\n          date: \"2026-09-07\"\n"+
+					"          tool: ddcutil\n          note: switched from HDMI 1 to DisplayPort\n",
+				"          grade: reported\n          by: a tester\n          tool: ddcutil\n"+
+					"          url: http://example.com/report\n",
+				1,
+			),
+			want: generate.ErrBadURL,
+		},
+		"an evidence field holding a table separator": {
+			document: strings.Replace(valid, "tool: ddcutil", `tool: "ddcutil | 2.2.0"`, 1),
+			want:     generate.ErrBadText,
+		},
+		"an evidence field holding a line break": {
+			document: strings.Replace(valid, "tool: ddcutil", `tool: "ddcutil\n2.2.0"`, 1),
+			want:     generate.ErrBadText,
+		},
+		"a blank note": {
+			document: strings.Replace(valid, "- a note about this entry", `- "  "`, 1),
+			want:     generate.ErrBadNote,
+		},
+		"a note holding a table separator": {
+			document: strings.Replace(
+				valid,
+				"- a note about this entry",
+				`- "a note | with a cell separator"`,
+				1,
+			),
+			want: generate.ErrBadText,
+		},
+		"a source holding a table separator": {
+			document: strings.Replace(valid, "- a named source", `- "a | source"`, 1),
+			want:     generate.ErrBadText,
 		},
 		"an empty source": {
 			document: strings.Replace(valid, "- a named source", `- ""`, 1),
@@ -151,7 +236,9 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 		"no inputs": {
 			document: strings.Replace(valid,
 				"    inputs:\n      dp:\n        mechanism: lg-alt-input\n"+
-					"        value: 0xD0\n        evidence: switched on the unit",
+					"        value: 0xD0\n        evidence:\n          grade: verified\n"+
+					"          date: \"2026-09-07\"\n          tool: ddcutil\n"+
+					"          note: switched from HDMI 1 to DisplayPort",
 				"    inputs: {}", 1),
 			want: generate.ErrNoInputs,
 		},
@@ -181,7 +268,9 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 				valid,
 				"      dp:\n",
 				"      usb-c:\n        mechanism: lg-alt-input\n        value: 0xD1\n"+
-					"        evidence: switched on the unit\n      usb-c2:\n",
+					"        evidence:\n          grade: verified\n          date: \"2026-09-07\"\n"+
+					"          tool: ddcutil\n          note: switched from DisplayPort to USB-C\n"+
+					"      usb-c2:\n",
 				1,
 			),
 			want: generate.ErrMixedNumbering,
@@ -294,8 +383,18 @@ func TestRenderRefusesADocumentItCannotTrust(t *testing.T) {
 				Identities:   []generate.Identity{{Manufacturer: "ACM", ProductCode: nil}},
 				WriteEnabled: true,
 				Inputs: map[string]generate.Input{
-					"dp": {Mechanism: "lg-alt-input", Value: nil, Evidence: "tested"},
+					"dp": {
+						Mechanism: "lg-alt-input",
+						Value:     nil,
+						Evidence: generate.Evidence{
+							Grade: "verified",
+							Date:  "2026-09-07",
+							Tool:  "ddcutil",
+							Note:  "switched from HDMI 1 to DisplayPort",
+						},
+					},
 				},
+				Notes:   []string{"a note about this entry"},
 				Sources: []string{"a named source"},
 			},
 		},
@@ -329,23 +428,43 @@ models:
       hdmi2:
         mechanism: lg-alt-input
         value: 0x91
-        evidence: tested
+        evidence:
+          grade: verified
+          date: "2026-09-07"
+          tool: ddcutil
+          note: switched to this input
       dp:
         mechanism: lg-alt-input
         value: 0xD0
-        evidence: tested
+        evidence:
+          grade: verified
+          date: "2026-09-07"
+          tool: ddcutil
+          note: switched to this input
       hdmi1:
         mechanism: lg-alt-input
         value: 0x90
-        evidence: tested
+        evidence:
+          grade: verified
+          date: "2026-09-07"
+          tool: ddcutil
+          note: switched to this input
       hdmi10:
         mechanism: lg-alt-input
         value: 0x99
-        evidence: tested
+        evidence:
+          grade: verified
+          date: "2026-09-07"
+          tool: ddcutil
+          note: switched to this input
       usb-c:
         mechanism: lg-alt-input
         value: 0xD1
-        evidence: tested
+        evidence:
+          grade: verified
+          date: "2026-09-07"
+          tool: ddcutil
+          note: switched to this input
     sources:
       - a named source
 `
@@ -388,7 +507,11 @@ models:
       dp:
         mechanism: lg-alt-input
         value: 0xD0
-        evidence: reported elsewhere, not verified here
+        evidence:
+          grade: reported
+          by: a tester
+          tool: ddcutil
+          url: https://example.com/report
     sources:
       - a named source
 `

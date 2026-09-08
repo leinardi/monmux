@@ -190,6 +190,45 @@ func (m Mechanism) String() string {
 	return string(m)
 }
 
+// Grade is how strong the evidence for one input is. It is a closed enum, and
+// it is what the rule "monmux only writes what somebody ran on that unit" is
+// written in: a write-enabled model carries [GradeVerified] on every input, and
+// the generator refuses the catalog file otherwise.
+type Grade string
+
+const (
+	// GradeVerified is a direct test on the unit itself, by this project.
+	GradeVerified Grade = "verified"
+	// GradeDocumented is the manufacturer's own documentation, with no field
+	// report behind it.
+	GradeDocumented Grade = "documented"
+	// GradeReported is somebody reporting that switching that named input with
+	// that value worked.
+	GradeReported Grade = "reported"
+	// GradeQuoted is the weakest: a report that quotes the values and says they
+	// work, without saying which inputs were tried individually.
+	GradeQuoted Grade = "quoted"
+)
+
+// grades is every grade, strongest first. It is the order the documentation
+// lists them in, and the generator mirrors it.
+var grades = []Grade{GradeVerified, GradeDocumented, GradeReported, GradeQuoted}
+
+// Grades returns every evidence grade, strongest first.
+func Grades() []Grade {
+	return slices.Clone(grades)
+}
+
+// Known reports whether this grade is one the catalog defines.
+func (g Grade) Known() bool {
+	return slices.Contains(grades, g)
+}
+
+// String returns the grade as it appears in output and documentation.
+func (g Grade) String() string {
+	return string(g)
+}
+
 // Operation is a single, fully decided write: which mechanism, and which value.
 // It is deliberately opaque. The fields are unexported and the constructor is
 // package-private, so the only way to obtain a valid Operation is to look one up
@@ -258,6 +297,7 @@ func (i Identity) String() string {
 type inputOp struct {
 	mechanism Mechanism
 	value     uint8
+	grade     Grade
 	evidence  string
 }
 
@@ -275,6 +315,10 @@ type Model struct {
 	WriteEnabled bool
 	// Inputs are the inputs recorded for this model, with their evidence.
 	Inputs map[Input]inputOp
+	// Notes are per-model prose: negative reports, conflicts, aliases and
+	// quirks. They are documentation and never an [Operation], so nothing
+	// written here can reach a monitor.
+	Notes []string
 	// Sources are model-level references backing the entry.
 	Sources []string
 }
@@ -348,6 +392,18 @@ func (m Model) InputEvidence(input Input) (string, bool) {
 	}
 
 	return op.evidence, true
+}
+
+// InputGrade returns the grade of the evidence recorded for an input.
+//
+//nolint:gocritic // hugeParam: a value receiver keeps Model usable where it is not addressable
+func (m Model) InputGrade(input Input) (Grade, bool) {
+	op, ok := m.Inputs[input]
+	if !ok {
+		return "", false
+	}
+
+	return op.grade, true
 }
 
 // InputMechanism returns the mechanism recorded for an input.
@@ -447,6 +503,7 @@ func matchIn(identity edid.Identity, entries []Model) (Model, MatchResult) {
 //nolint:gocritic // hugeParam: cloning is exactly what this does; a pointer would defeat it
 func cloneModel(model Model) Model {
 	model.Identities = slices.Clone(model.Identities)
+	model.Notes = slices.Clone(model.Notes)
 	model.Sources = slices.Clone(model.Sources)
 	model.Inputs = maps.Clone(model.Inputs)
 
