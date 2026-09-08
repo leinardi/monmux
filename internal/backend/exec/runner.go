@@ -140,8 +140,7 @@ func Started(result Result, err error) bool {
 		return false
 	}
 
-	var startErr *osexec.Error
-	if errors.As(err, &startErr) {
+	if _, ok := errors.AsType[*osexec.Error](err); ok {
 		return false
 	}
 

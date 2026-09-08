@@ -273,8 +273,7 @@ func TestSwitchRefusesWithTheReasonOfTheLayerThatRefused(t *testing.T) {
 				t.Error("a refused switch reported itself sent")
 			}
 
-			var failed *app.ExecutionError
-			if errors.As(err, &failed) {
+			if _, ok := errors.AsType[*app.ExecutionError](err); ok {
 				t.Errorf("a refusal was reported as an execution failure: %v", err)
 			}
 		})
@@ -319,8 +318,7 @@ func TestAToolThatRanAndFailedIsNotARefusal(t *testing.T) {
 
 	outcome, err := app.Switch(t.Context(), driver, request(), app.Options{})
 
-	var failed *app.ExecutionError
-	if !errors.As(err, &failed) {
+	if _, ok := errors.AsType[*app.ExecutionError](err); !ok {
 		t.Fatalf("error = %v, want an ExecutionError", err)
 	}
 
@@ -328,8 +326,7 @@ func TestAToolThatRanAndFailedIsNotARefusal(t *testing.T) {
 		t.Error("a failed execution reported itself sent")
 	}
 
-	var declined *refusal.Refusal
-	if errors.As(err, &declined) {
+	if _, ok := errors.AsType[*refusal.Refusal](err); ok {
 		t.Errorf("a failed execution was reported as a refusal: %v", err)
 	}
 

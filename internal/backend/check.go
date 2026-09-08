@@ -50,9 +50,7 @@ func CheckResult(name string, err error, detail string) Check {
 // reason and the detail are what the user needs, so they are what doctor shows.
 // Identities are never printed here at all.
 func CheckFailed(name string, err error) Check {
-	var declined *refusal.Refusal
-
-	if errors.As(err, &declined) {
+	if declined, ok := errors.AsType[*refusal.Refusal](err); ok {
 		detail := declined.Reason.String()
 		if declined.Detail != "" {
 			detail += ": " + FirstLine(declined.Detail)

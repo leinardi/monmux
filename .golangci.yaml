@@ -9,6 +9,7 @@ linters:
   disable:
     - gomodguard # deprecated since v2.12.0; replaced by gomodguard_v2, enabled above
     - exhaustruct
+    - exhaustruct_v5 # the v2.13 rename of exhaustruct; `default: all` enables it under the new name
     - gochecknoglobals
     - nonamedreturns
     - wsl
