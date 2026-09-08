@@ -78,4 +78,901 @@ var models = []Model{
 			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
 		},
 	},
+	{
+		Name:         "27BN88Q-B",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 27BN88Q-B by bansheerubber (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1646752889",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 27BN88Q-B by bansheerubber (ddcutil): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1646752889",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1646752889",
+		},
+	},
+	{
+		Name:         "27UK500-B",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 27UK500-B by francis36012 (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 27UK500-B by francis36012 (ddcutil): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 27UK500-B by francis36012 (ddcutil): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+		},
+	},
+	{
+		Name:         "27UL550-W",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 27UL550-W by titou10titou10 (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 27UL550-W by titou10titou10 (ddcutil): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 27UL550-W by titou10titou10 (ddcutil): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+		},
+	},
+	{
+		Name:         "27UN850-WY",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 27UN850-WY by ccrxf (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 27UN850-WY by ccrxf (ddcutil): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 27UN850-WY by ccrxf (ddcutil): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"usb-c": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD1,
+				evidence:  "Reported working on the exact 27UN850-WY by ccrxf (ddcutil): switching to USB-C with 0xD1 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+		},
+	},
+	{
+		Name:         "27UN850-W",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 27UN850-W by the tester who added it to the ddcutil LG wiki page (ddcutil): switching from USB-C to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; the wiki row records the model as confirmed without values, which that tester quotes in the linked comment; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1627345011",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 27UN850-W by the tester who added it to the ddcutil LG wiki page (ddcutil): switching from USB-C to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; the wiki row records the model as confirmed without values, which that tester quotes in the linked comment; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1627345011",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 27UN850-W by the tester who added it to the ddcutil LG wiki page (ddcutil): switching from USB-C to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; the wiki row records the model as confirmed without values, which that tester quotes in the linked comment; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1627345011",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1627345011",
+		},
+	},
+	{
+		Name:         "27UP850-W",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 27UP850-W by Prototyped (ddcutil 2.0, --i2c-source-addr=x50): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1694629234",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 27UP850-W by Prototyped (ddcutil 2.0, --i2c-source-addr=x50): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1694629234",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 27UP850-W by Prototyped (ddcutil 2.0, --i2c-source-addr=x50): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1694629234",
+			},
+			"usb-c": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD1,
+				evidence:  "Reported working on the exact 27UP850-W by Prototyped (ddcutil 2.0, --i2c-source-addr=x50): switching to USB-C with 0xD1 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1694629234",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1694629234",
+		},
+	},
+	{
+		Name:         "27UP85NP-W",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 27UP85NP-W by edror12 (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"usb-c": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD1,
+				evidence:  "Reported working on the exact 27UP85NP-W by edror12 (ddcutil): switching to USB-C with 0xD1 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+		},
+	},
+	{
+		Name:         "27US500-W",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 27US500-W by Fidelxyz (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 27US500-W by Fidelxyz (ddcutil): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 27US500-W by Fidelxyz (ddcutil): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+		},
+	},
+	{
+		Name:         "29UM69G",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xC0,
+				evidence:  "Reported working on the exact 29UM69G by jonpas (ddcutil): switching to DisplayPort with 0xC0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1695779788",
+			},
+			"hdmi": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 29UM69G by jonpas (ddcutil): switching to HDMI with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1695779788",
+			},
+			"usb-c": {
+				mechanism: MechanismLGAltInput,
+				value:     0xE0,
+				evidence:  "Reported working on the exact 29UM69G by jonpas (ddcutil): switching to USB-C with 0xE0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1695779788",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1695779788",
+			"https://github.com/jonpas/dotfiles/blob/master/i3/monitor.sh - the same three values; the script defines the USB-C value but only ever invokes the HDMI and DisplayPort ones. Not pinned to a commit: no revision of it has been quoted anywhere this entry could cite",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2259286211",
+		},
+	},
+	{
+		Name:         "29WN600",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 29WN600 by iamSlightlyWind (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 29WN600 by iamSlightlyWind (ddcutil): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 29WN600 by iamSlightlyWind (ddcutil): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+		},
+	},
+	{
+		Name:         "29U531A",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 29U531A by tinkererkzy (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 29U531A by tinkererkzy (ddcutil): switching to HDMI with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"usb-c": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD1,
+				evidence:  "Reported working on the exact 29U531A by tinkererkzy (ddcutil): switching to USB-C with 0xD1 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+		},
+	},
+	{
+		Name:         "32GP750-B",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 32GP750-B by chris-pcguy (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 32GP750-B by chris-pcguy (ddcutil): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 32GP750-B by chris-pcguy (ddcutil): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+		},
+	},
+	{
+		Name:         "32GP850-B",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 32GP850-B by erenard (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925342145",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 32GP850-B by erenard (ddcutil): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925342145",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 32GP850-B by erenard (ddcutil): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925342145",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925342145",
+			"https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/1#issuecomment-2110539219",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1444483801",
+		},
+	},
+	{
+		Name:         "32QN650-B",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 32QN650-B by agspoon (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1626872046",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 32QN650-B by agspoon (ddcutil): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1626872046",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 32QN650-B by agspoon (ddcutil): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1626872046",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1626872046",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1634924423",
+		},
+	},
+	{
+		Name:         "32UD99-W",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xE0,
+				evidence:  "Reported working on the exact 32UD99-W by andrewgodman (Lunar on macOS): switching to DisplayPort with 0xE0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded, found by looping over candidate values; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1636997772",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 32UD99-W by andrewgodman (Lunar on macOS): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1636761366",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 32UD99-W by andrewgodman (Lunar on macOS): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1636761366",
+			},
+			"usb-c": {
+				mechanism: MechanismLGAltInput,
+				value:     0xC0,
+				evidence:  "Reported working on the exact 32UD99-W by andrewgodman (Lunar on macOS): switching to USB-C with 0xC0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded, found by looping over candidate values; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1636997772",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1636761366",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1636997772",
+		},
+	},
+	{
+		Name:         "34WN750-B",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 34WN750-B by permezel (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 34WN750-B by permezel (ddcutil): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 34WN750-B by permezel (ddcutil): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+		},
+	},
+	{
+		Name:         "34WN80C-B",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 34WN80C-B by nicklan (a Python USB-HID script, not ddcutil): DisplayPort is 0xD0 over the LG side channel (source address 0x50, VCP 0xF4); weaker than the USB-C row, because the wiki entry says only that the script works perfectly and does not quote the values, which come from the linked comment; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1542859752",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 34WN80C-B by nicklan (a Python USB-HID script, not ddcutil): HDMI 1 is 0x90 over the LG side channel (source address 0x50, VCP 0xF4); weaker than the USB-C row, because the wiki entry says only that the script works perfectly and does not quote the values, which come from the linked comment; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1542859752",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 34WN80C-B by nicklan (a Python USB-HID script, not ddcutil): HDMI 2 is 0x91 over the LG side channel (source address 0x50, VCP 0xF4); weaker than the USB-C row, because the wiki entry says only that the script works perfectly and does not quote the values, which come from the linked comment; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1542859752",
+			},
+			"usb-c": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD1,
+				evidence:  "Reported working on the exact 34WN80C-B (a Python USB-HID script, not ddcutil): switching to USB-C with 0xD1 over the LG side channel (source address 0x50, VCP 0xF4) succeeded, the commenter states that \"0xd1 is actually the usb-c input\" on this monitor; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1542859752",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1542859752",
+			"https://gist.github.com/shinyquagsire23/f6b2adef253c6c3ab557a4852bf3abad",
+		},
+	},
+	{
+		Name:         "40U990A-W",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 40U990A-W by titou10titou10 (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 40U990A-W by titou10titou10 (ddcutil): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 40U990A-W by titou10titou10 (ddcutil): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+		},
+	},
+	{
+		Name:         "40WP95C-W",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 40WP95C-W by fblaese (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 40WP95C-W by fblaese (ddcutil): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 40WP95C-W by fblaese (ddcutil): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"usb-c": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD1,
+				evidence:  "Reported working on the exact 40WP95C-W by fblaese (ddcutil): switching to USB-C with 0xD1 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+		},
+	},
+	{
+		Name:         "45GX950A-B",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 45GX950A-B by tyvsmith (ddcutil on Linux): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 45GX950A-B by tyvsmith (ddcutil on Linux): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 45GX950A-B by tyvsmith (ddcutil on Linux): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"usb-c": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD1,
+				evidence:  "Reported working on the exact 45GX950A-B by tyvsmith (ddcutil on Linux): switching to USB-C with 0xD1 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			"https://github.com/tyvsmith/streamcontroller-lg-monitor-control",
+			"https://github.com/meer-cha/lg-input-switch",
+			"https://github.com/phillip9933/LGInputSwitch",
+			"https://github.com/MonitorControl/MonitorControl/issues/1872",
+			"https://github.com/waydabber/BetterDisplay/discussions/5353",
+		},
+	},
+	{
+		Name:         "27GP850-B",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 27GP850-B by kaleb422 (Windows, NVAPI): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2106185595",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 27GP850-B by kaleb422 (Windows, NVAPI): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2106185595",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 27GP850-B by kaleb422 (Windows, NVAPI): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2106185595",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2106185595",
+			"https://github.com/kaleb422/NVapi-write-value-to-monitor",
+			"https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/2",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1695120912",
+		},
+	},
+	{
+		Name:         "32UN880-B",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 32UN880-B by two reporters (Windows, NVAPI): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2835626567",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 32UN880-B by two reporters (Windows, NVAPI): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2835626567",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 32UN880-B by two reporters (Windows, NVAPI): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2835626567",
+			},
+			"usb-c": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD1,
+				evidence:  "Reported working on the exact 32UN880-B by two reporters (Windows, NVAPI): switching to USB-C with 0xD1 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2835626567",
+			},
+		},
+		Sources: []string{
+			"https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2835626567",
+			"https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/8",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2142184960",
+			"https://github.com/rockowitz/ddcutil/issues/612",
+		},
+	},
+	{
+		Name:         "34WN780",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 34WN780 by piaverous (Windows, NVAPI): DisplayPort is 0xD0 over the LG side channel (source address 0x50, VCP 0xF4); the report quotes the three values and says they work, it does not say which were tried individually; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2453464317",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 34WN780 by piaverous (Windows, NVAPI): HDMI 1 is 0x90 over the LG side channel (source address 0x50, VCP 0xF4); the report quotes the three values and says they work, it does not say which were tried individually; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2453464317",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 34WN780 by piaverous (Windows, NVAPI): HDMI 2 is 0x91 over the LG side channel (source address 0x50, VCP 0xF4); the report quotes the three values and says they work, it does not say which were tried individually; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2453464317",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2453464317",
+		},
+	},
+	{
+		Name:         "34WN650-W",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 34WN650-W by wigust (ddcutil 2.1.2): DisplayPort is 0xD0 over the LG side channel (source address 0x50, VCP 0xF4); the report quotes the three values and says they work, it does not say which were tried individually; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925579750",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 34WN650-W by wigust (ddcutil 2.1.2): HDMI 1 is 0x90 over the LG side channel (source address 0x50, VCP 0xF4); the report quotes the three values and says they work, it does not say which were tried individually; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925579750",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 34WN650-W by wigust (ddcutil 2.1.2): HDMI 2 is 0x91 over the LG side channel (source address 0x50, VCP 0xF4); the report quotes the three values and says they work, it does not say which were tried individually; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925579750",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1925579750",
+		},
+	},
+	{
+		Name:         "28MQ780-B",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 28MQ780-B by amildahl (Windows, ADL): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2524850195",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 28MQ780-B by amildahl (Windows, ADL): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2524850195",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 28MQ780-B by amildahl (Windows, ADL): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2524850195",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2524850195",
+			"https://gist.github.com/shinyquagsire23/f6b2adef253c6c3ab557a4852bf3abad",
+		},
+	},
+	{
+		Name:         "32GR93U-B",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 32GR93U-B by gzougianos (Windows, NVAPI): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2244679727",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 32GR93U-B by gzougianos (Windows, NVAPI): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2244679727",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 32GR93U-B by gzougianos (Windows, NVAPI): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2244679727",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2244679727",
+			"https://github.com/waydabber/m1ddc/issues/48",
+		},
+	},
+	{
+		Name:         "32GP83B",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 32GP83B by Gilgame24 (ddcutil): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/discussions/331#discussioncomment-16088333",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 32GP83B by Gilgame24 (ddcutil): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/discussions/331#discussioncomment-16088333",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 32GP83B by Gilgame24 (ddcutil): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/rockowitz/ddcutil/discussions/331#discussioncomment-16088333",
+			},
+		},
+		Sources: []string{
+			"https://github.com/rockowitz/ddcutil/discussions/331#discussioncomment-16088333",
+		},
+	},
+	{
+		Name:         "34U650A-B",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 34U650A-B by mikecarlton (BetterDisplay on macOS): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/waydabber/BetterDisplay/issues/4853",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 34U650A-B by mikecarlton (BetterDisplay on macOS): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/waydabber/BetterDisplay/issues/4853",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 34U650A-B by mikecarlton (BetterDisplay on macOS): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/waydabber/BetterDisplay/issues/4853",
+			},
+		},
+		Sources: []string{
+			"https://github.com/waydabber/BetterDisplay/issues/4853",
+			"https://github.com/waydabber/BetterDisplay/discussions/4883",
+		},
+	},
+	{
+		Name:         "40WP95X",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"usb-c": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD1,
+				evidence:  "Reported working on the exact 40WP95X by stepahin (Windows, NVAPI): switching to USB-C with 0xD1 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5",
+			},
+		},
+		Sources: []string{
+			"https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5",
+		},
+	},
+	{
+		Name:         "34GS95QE",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 34GS95QE by Vib0 (Windows, NVAPI): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2812426302",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 34GS95QE by Vib0 (Windows, NVAPI): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2812426302",
+			},
+			"hdmi2": {
+				mechanism: MechanismLGAltInput,
+				value:     0x91,
+				evidence:  "Reported working on the exact 34GS95QE by Vib0 (Windows, NVAPI): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2812426302",
+			},
+		},
+		Sources: []string{
+			"https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2812426302",
+			"https://github.com/waydabber/BetterDisplay/discussions/4246",
+		},
+	},
+	{
+		Name:         "32UP83AK-W",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 32UP83AK-W by 5uck1ess (Windows, NVAPI): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/2#issuecomment-3221830027",
+			},
+		},
+		Sources: []string{
+			"https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/2#issuecomment-3221830027",
+			"https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/3#issuecomment-3224103812",
+		},
+	},
+	{
+		Name:         "32BL95U-W",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Documented by LG for the exact 32BL95U-W: the service manual's Screen adjust command table, row 13, maps Input Select, command F4, value 0xD0 to DisplayPort over the LG side channel (source address 0x50, VCP 0xF4); documented by LG, no field report found; not verified here: https://research.encompass.com/ZEN/sm/32BL95UW.pdf",
+			},
+			"hdmi1": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Documented by LG for the exact 32BL95U-W: the service manual's Screen adjust command table, row 13, maps Input Select, command F4, value 0x90 to HDMI 1 over the LG side channel (source address 0x50, VCP 0xF4); documented by LG, no field report found; not verified here: https://research.encompass.com/ZEN/sm/32BL95UW.pdf",
+			},
+			"thunderbolt": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD2,
+				evidence:  "Documented by LG for the exact 32BL95U-W: the service manual's Screen adjust command table, row 13, maps Input Select, command F4, value 0xD2 to Thunderbolt over the LG side channel (source address 0x50, VCP 0xF4); documented by LG, no field report found; not verified here: https://research.encompass.com/ZEN/sm/32BL95UW.pdf",
+			},
+		},
+		Sources: []string{
+			"https://research.encompass.com/ZEN/sm/32BL95UW.pdf",
+			"https://www.lg.com/us/support/product/lg-32BL95U-W",
+			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-1435477786",
+			"LG service manual, chassis LM80G, file 32BL95UW.pdf: EDID product IDs 0x7706 (HDMI), 0x7707 (DisplayPort), 0x7722 (Thunderbolt), model name LG HDR 4K, user model name 32UL950 - recorded as text only, since a model that is not write-enabled records no identity",
+		},
+	},
+	{
+		Name:         "32U990A",
+		Vendor:       "LG",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD0,
+				evidence:  "Reported working on the exact 32U990A by pyang2045 (m1ddc input-alt on macOS): DisplayPort is 0xD0 over the LG side channel (source address 0x50, VCP 0xF4); the report quotes the three values and says they work, it does not say which were tried individually; not verified here: https://github.com/pyang2045/streamdeck-display-knob",
+			},
+			"hdmi": {
+				mechanism: MechanismLGAltInput,
+				value:     0x90,
+				evidence:  "Reported working on the exact 32U990A by pyang2045 (m1ddc input-alt on macOS): HDMI is 0x90 over the LG side channel (source address 0x50, VCP 0xF4); the report quotes the three values and says they work, it does not say which were tried individually; not verified here: https://github.com/pyang2045/streamdeck-display-knob",
+			},
+			"thunderbolt": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD2,
+				evidence:  "Reported working on the exact 32U990A by pyang2045 (m1ddc input-alt on macOS): Thunderbolt is 0xD2 over the LG side channel (source address 0x50, VCP 0xF4); the report quotes the three values and says they work, it does not say which were tried individually; not verified here: https://github.com/pyang2045/streamdeck-display-knob",
+			},
+		},
+		Sources: []string{
+			"https://github.com/pyang2045/streamdeck-display-knob",
+		},
+	},
 }

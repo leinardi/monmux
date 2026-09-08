@@ -11,18 +11,11 @@ It wraps `ddcutil` on Linux and `m1ddc` on macOS; there is no native I²C or IOK
 
 ## Supported monitors
 
-| Model         | EDID identity                 | Inputs                      | Status                                                                       |
-| ------------- | ----------------------------- | --------------------------- | ---------------------------------------------------------------------------- |
-| LG 38WR85QC-W | `GSM 0x77D3`, `GSM 0x77D4`    | `dp` (0xD0), `usb-c` (0xD1) | Verified on hardware, 2026-09-07, Linux and macOS                            |
-| LG 38BR85QC   | no EDID fingerprint collected | none enabled                | Recorded from the ddcutil wiki, unverified — never matches, never written to |
-
-The 38BR85QC row is in the catalog for a contributor who owns one: the values are written down, disabled, with a note saying
-where they came from. Because no EDID fingerprint for it has been collected, it cannot match a display at all.
-
-`hdmi1` and `hdmi2` are recorded for the 38BR85QC only, and enabled for no model: nobody has tested those values on a real
-unit yet, so monmux refuses them. Enabling one means testing it on a real unit and recording the evidence in the catalog — see
-[docs/adding-a-monitor.md](docs/adding-a-monitor.md). The full catalog, with the evidence for every value, is in
-[docs/compatibility.md](docs/compatibility.md).
+One model is verified on hardware: the LG 38WR85QC-W, on `dp` and `usb-c`. Another 34 LG models are recorded from public
+reports, every one of them disabled and without an EDID fingerprint, so monmux can neither match them nor write to them. They
+are written down for the contributor who owns one — enabling a row means testing it on a real unit and recording the evidence,
+see [docs/adding-a-monitor.md](docs/adding-a-monitor.md). The full list, with the evidence and the conflicts behind every
+value, is in [docs/compatibility.md](docs/compatibility.md).
 
 ## Install
 
