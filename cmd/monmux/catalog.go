@@ -135,7 +135,7 @@ func listCatalog(out io.Writer, filter string, verbose, asJSON bool) error {
 // An unknown name is a mistake in the request rather than a refused write: it is
 // an ordinary error, so it exits 1 and says nothing about monitors.
 func showCatalog(out io.Writer, name string, asJSON bool) error {
-	entry, ok := findModel(name)
+	entry, ok := catalog.Find(name)
 	if !ok {
 		return fmt.Errorf(
 			"%w %q (run \"monmux catalog list\" to see every entry)",
@@ -176,25 +176,6 @@ func filterModels(entries []catalog.Model, filter string) []catalog.Model {
 	}
 
 	return found
-}
-
-// findModel looks an entry up by "Vendor/Name" or "Vendor Name",
-// case-insensitively. It is a display-independent lookup: nothing that decides
-// what to write to a monitor uses it.
-func findModel(name string) (catalog.Model, bool) {
-	wanted := strings.ToLower(strings.TrimSpace(name))
-
-	entries := catalog.Models()
-	for index := range entries {
-		entry := &entries[index]
-
-		if strings.EqualFold(entry.Vendor+"/"+entry.Name, wanted) ||
-			strings.ToLower(entry.FullName()) == wanted {
-			return *entry, true
-		}
-	}
-
-	return catalog.Model{}, false
 }
 
 // renderCatalogList prints the table and the summary underneath it.

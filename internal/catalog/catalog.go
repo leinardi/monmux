@@ -383,6 +383,31 @@ func (m Model) Operation(input Input) (Operation, bool) {
 	return operation, true
 }
 
+// UnsafeOperation returns the recorded operation for an input, ignoring
+// WriteEnabled. It is the one deliberate hole in the "enabled inputs only"
+// rule, reached only from --unsafe-model, and named so it cannot be called by
+// accident. Everything else must use [Model.Operation].
+//
+// What it does not weaken: the value still comes from this compiled-in catalog
+// and still goes through [newOperation], so an entry naming a mechanism monmux
+// does not implement yields the invalid zero value here too, and no caller can
+// introduce a byte of its own.
+//
+//nolint:gocritic // hugeParam: matches Operation
+func (m Model) UnsafeOperation(input Input) (Operation, bool) {
+	op, ok := m.Inputs[input]
+	if !ok {
+		return Operation{}, false
+	}
+
+	operation := newOperation(op.mechanism, op.value)
+	if !operation.Valid() {
+		return Operation{}, false
+	}
+
+	return operation, true
+}
+
 // RecordedInputs returns every input this entry documents, in listing order,
 // whether or not the model is write-enabled.
 //
@@ -554,6 +579,30 @@ func cloneModel(model Model) Model {
 	model.Inputs = maps.Clone(model.Inputs)
 
 	return model
+}
+
+// Find looks a model up by "Vendor/Name" or "Vendor Name", case-insensitively.
+// It is the only name-based lookup, and it exists for --unsafe-model: nothing
+// that identifies a display uses it, because a name a user typed is an
+// assertion, not evidence. On no match the returned model is the zero value and
+// must not be used.
+//
+// The returned entry is a copy, exactly as [Match] returns one, so a caller
+// cannot repoint the compiled-in catalog at another monitor.
+func Find(name string) (Model, bool) {
+	wanted := strings.TrimSpace(name)
+	if wanted == "" {
+		return Model{}, false
+	}
+
+	for _, model := range models {
+		if strings.EqualFold(model.Vendor+"/"+model.Name, wanted) ||
+			strings.EqualFold(model.FullName(), wanted) {
+			return cloneModel(model), true
+		}
+	}
+
+	return Model{}, false
 }
 
 // Models returns every catalog entry, in catalog order. Both the slice and the
