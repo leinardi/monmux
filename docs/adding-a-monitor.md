@@ -187,7 +187,7 @@ must hold exactly one YAML document, so entries cannot hide after a `---` where 
 Leave `WriteEnabled: false` — or leave an input out entirely — when:
 
 - You have values but no unit to test them on. Record them with a source; the entry documents what is known and monmux still
-  refuses. The catalog has one entry like this today.
+  refuses. Every disabled entry in the catalog is one of these.
 - You tested one input and not another. Record the tested one, leave the other out. Absent is safer than disabled-but-present,
   because it cannot be flipped on by a one-character edit.
 - The evidence is "it worked for someone with a similar model". That is not evidence for this model.

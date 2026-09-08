@@ -11,7 +11,7 @@ It wraps `ddcutil` on Linux and `m1ddc` on macOS; there is no native I²C or IOK
 
 ## Supported monitors
 
-One model is verified on hardware: the LG 38WR85QC-W, on `dp` and `usb-c`. Another 34 LG models and one Samsung are recorded
+One model is verified on hardware: the LG 38WR85QC-W, on `dp` and `usb-c`. Another 70 models from twelve vendors are recorded
 from public reports, every one of them disabled and without an EDID fingerprint, so monmux can neither match them nor write to
 them. They are written down for the contributor who owns one — enabling a row means testing it on a real unit and recording the
 evidence, see [docs/adding-a-monitor.md](docs/adding-a-monitor.md). The full list, with the evidence and the conflicts behind
