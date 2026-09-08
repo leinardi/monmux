@@ -30,8 +30,12 @@ import (
 	"github.com/leinardi/monmux/internal/refusal"
 )
 
-// errTool stands in for whatever a backend reports when its tool ran and failed.
-var errTool = errors.New("exit status 1")
+// errTool stands in for whatever a backend reports when its tool ran and failed,
+// and errWarn for a stderr that cannot be written to.
+var (
+	errTool = errors.New("exit status 1")
+	errWarn = errors.New("write /dev/stderr: no space left on device")
+)
 
 // supported is the tested LG, identified and writable.
 func supported() backend.Display {
@@ -397,5 +401,138 @@ func TestASerialPinSelectsTheUnitItNames(t *testing.T) {
 
 	if targets[0].Identity.SerialString != "TESTSERIAL02" {
 		t.Errorf("wrote to the unit with serial %q", targets[0].Identity.SerialString)
+	}
+}
+
+// --- the --unsafe-model path ---
+
+// assumed is what --unsafe-model sets: the catalog entry to treat the display
+// as, instead of identifying it.
+func assumed() policy.Request {
+	return policy.Request{Input: catalog.Input("hdmi"), AssumeModel: "AOC/Q27P1B"}
+}
+
+func TestSwitchWarnsBeforeItWritesWithoutIdentification(t *testing.T) {
+	t.Parallel()
+
+	driver := fake(unsupported())
+
+	var warned []string
+
+	outcome, err := app.Switch(t.Context(), driver, assumed(), app.Options{
+		OnAssumed: func(
+			display *backend.Display,
+			model *catalog.Model,
+			input catalog.Input,
+		) error {
+			warned = append(warned, display.Label+" "+model.FullName()+" "+input.String())
+
+			// Nothing may have been planned or sent by the time the user is
+			// warned: the warning is what precedes the write, not what follows.
+			if len(driver.Calls()) != 2 {
+				t.Errorf("the warning came after %v", driver.Calls())
+			}
+
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Switch() refused an assumed model: %v", err)
+	}
+
+	if !outcome.Assumed {
+		t.Error("the outcome does not say identification was bypassed")
+	}
+
+	if len(warned) != 1 || warned[0] != "card1-HDMI-A-1 AOC Q27P1B hdmi" {
+		t.Errorf("the callback was given %v", warned)
+	}
+}
+
+// The banner is the only guard this path has, so a switch whose warning could
+// not be printed must not happen.
+func TestSwitchStopsWhenTheWarningCannotBePrinted(t *testing.T) {
+	t.Parallel()
+
+	driver := fake(unsupported())
+
+	_, err := app.Switch(t.Context(), driver, assumed(), app.Options{
+		OnAssumed: func(*backend.Display, *catalog.Model, catalog.Input) error {
+			return errWarn
+		},
+	})
+	if !errors.Is(err, errWarn) {
+		t.Fatalf("Switch() returned %v, want the warning's error", err)
+	}
+
+	if len(driver.Executed()) > 0 {
+		t.Error("a switch whose warning failed still wrote to a monitor")
+	}
+
+	for _, call := range driver.Calls() {
+		if call == backend.CallPlan || call == backend.CallReady {
+			t.Errorf("the switch carried on after the warning failed: %v", driver.Calls())
+
+			break
+		}
+	}
+}
+
+// An identified switch never calls the hook: there is nothing to warn about.
+func TestSwitchDoesNotWarnWhenTheDisplayWasIdentified(t *testing.T) {
+	t.Parallel()
+
+	driver := fake(supported())
+	called := false
+
+	_, err := app.Switch(t.Context(), driver, request(), app.Options{
+		OnAssumed: func(*backend.Display, *catalog.Model, catalog.Input) error {
+			called = true
+
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Switch() refused a supported display: %v", err)
+	}
+
+	if called {
+		t.Error("an identified switch printed the bypass warning")
+	}
+}
+
+// The callback is shown a copy: what it is handed is not what the backend is
+// then asked to write to, so a warning renderer cannot redirect a write.
+func TestTheWarningCallbackCannotRedirectTheWrite(t *testing.T) {
+	t.Parallel()
+
+	driver := fake(unsupported())
+
+	_, err := app.Switch(t.Context(), driver, assumed(), app.Options{
+		OnAssumed: func(display *backend.Display, model *catalog.Model, _ catalog.Input) error {
+			display.Handle = "card1-DP-9"
+			display.Identity.Manufacturer = "GSM"
+			model.Name = "38WR85QC-W"
+
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Switch() refused an assumed model: %v", err)
+	}
+
+	targets := driver.Targets()
+	if len(targets) == 0 {
+		t.Fatal("nothing was written to")
+	}
+
+	for _, target := range targets {
+		if target.Handle != "card1-HDMI-A-1" || target.Identity.Manufacturer != "XXX" {
+			t.Errorf(
+				"the callback redirected the write to %s (%s)",
+				target.Handle,
+				target.Identity.Manufacturer,
+			)
+		}
 	}
 }

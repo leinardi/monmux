@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -927,5 +928,182 @@ func TestCatalogShowOfAnUnknownNameIsAnError(t *testing.T) {
 
 	if strings.Contains(stderr, "No DDC write was performed") {
 		t.Errorf("a read-only command talked about writes: %q", stderr)
+	}
+}
+
+// --- switch --unsafe-model ---
+
+// strange is a writable display no catalog entry claims: the case the override
+// exists for.
+func strange() backend.Display {
+	return backend.Display{
+		Identity: edid.Identity{Manufacturer: "XXX", ProductCode: 0x2701},
+		Handle:   "card1-HDMI-A-1",
+		Label:    "card1-HDMI-A-1",
+		Writable: true,
+		Status:   backend.StatusOK,
+	}
+}
+
+// The same setup without the flag is the control: identification is what the
+// override bypasses, and it refuses on its own.
+func TestSwitchRefusesAnUnidentifiedDisplayWithoutTheOverride(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(strange())
+
+	_, stderr, code := world.run("switch", "hdmi", "--dry-run")
+	if code != exitRefused {
+		t.Fatalf("exit = %d, want %d", code, exitRefused)
+	}
+
+	if !strings.Contains(stderr, "No supported-model catalog entry matches this identity.") {
+		t.Errorf("the refusal is not unknown-monitor: %q", stderr)
+	}
+
+	if !strings.Contains(stderr, "No DDC write was performed.") {
+		t.Errorf("the refusal does not promise nothing was written: %q", stderr)
+	}
+
+	if world.wrote() {
+		t.Error("a refused switch wrote to a monitor")
+	}
+}
+
+func TestSwitchWithUnsafeModelWarnsOnStderrAndDryRuns(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(strange())
+
+	stdout, stderr, code := world.run(
+		"switch", "hdmi", "--unsafe-model", "AOC/Q27P1B", "--dry-run",
+	)
+	if code != exitSent {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	for _, wanted := range []string{
+		"WARNING: identification bypassed by --unsafe-model.",
+		"Display: card1-HDMI-A-1 (XXX 0x2701)",
+		"Assumed: AOC Q27P1B (write-enabled: no, evidence: reported)",
+		"Input:   HDMI (0x11, vcp-input-source)",
+		"never verified",
+		"OSD",
+	} {
+		if !strings.Contains(stderr, wanted) {
+			t.Errorf("the warning does not say %q:\n%s", wanted, stderr)
+		}
+	}
+
+	if !strings.Contains(stdout, "Input:   HDMI (0x11)") {
+		t.Errorf("the dry run does not carry the recorded value:\n%s", stdout)
+	}
+
+	if !strings.Contains(stdout, "Display: card1-HDMI-A-1 (AOC Q27P1B) (identification bypassed)") {
+		t.Errorf("the dry run does not say the display was never identified:\n%s", stdout)
+	}
+
+	if !strings.Contains(stdout, "No DDC write was performed.") {
+		t.Errorf("the dry run does not promise nothing was written:\n%s", stdout)
+	}
+
+	if world.wrote() {
+		t.Error("a dry run wrote to a monitor")
+	}
+}
+
+func TestSwitchWithUnsafeModelSaysSoOnTheSuccessLine(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(strange())
+
+	stdout, stderr, code := world.run("switch", "hdmi", "--unsafe-model", "aoc q27p1b")
+	if code != exitSent {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	if !strings.Contains(stderr, "WARNING: identification bypassed") {
+		t.Errorf("a real run printed no warning:\n%s", stderr)
+	}
+
+	// The banner has to name the monitor that is about to be written to, and a
+	// real run has no dry-run block to say it instead.
+	if !strings.Contains(stderr, "Display: card1-HDMI-A-1 (XXX 0x2701)") {
+		t.Errorf("the warning does not name the display:\n%s", stderr)
+	}
+
+	want := "Input-switch command sent (HDMI, 0x11) to AOC Q27P1B via ddcutil " +
+		"(identification bypassed). Switch not independently confirmed.\n"
+	equal(t, "switch --unsafe-model", stdout, want)
+
+	executed := world.driver.Executed()
+	if len(executed) != 1 {
+		t.Fatalf("the backend executed %d operations, want 1", len(executed))
+	}
+
+	if executed[0].Value() != 0x11 || executed[0].Mechanism() != catalog.MechanismInputSource {
+		t.Errorf("the backend was handed %s", executed[0])
+	}
+}
+
+// A normal switch must keep reading as one: the note belongs to the override.
+func TestAnIdentifiedSwitchSaysNothingAboutBypassing(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, stderr, code := world.run("switch", "usb-c")
+	if code != exitSent {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	if strings.Contains(stdout, "identification bypassed") || stderr != "" {
+		t.Errorf("an identified switch mentioned the override:\n%s\n%s", stdout, stderr)
+	}
+}
+
+func TestSwitchWithAnUnknownUnsafeModelIsAnArgumentError(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(strange())
+
+	stdout, stderr, code := world.run(
+		"switch", "hdmi", "--unsafe-model", "Acme/Nothing", "--dry-run",
+	)
+	if code != exitToolError {
+		t.Fatalf("exit = %d, want %d", code, exitToolError)
+	}
+
+	if stdout != "" {
+		t.Errorf("an unknown model printed %q", stdout)
+	}
+
+	if !strings.Contains(stderr, "monmux catalog list") {
+		t.Errorf("the error does not point at the listing: %q", stderr)
+	}
+
+	if strings.Contains(stderr, "WARNING: identification bypassed") {
+		t.Errorf("the warning was printed for a name that is not a model: %q", stderr)
+	}
+
+	if world.driver.Calls() != nil {
+		t.Errorf("an argument error still reached the backend: %v", world.driver.Calls())
+	}
+
+	if world.wrote() {
+		t.Error("an argument error wrote to a monitor")
+	}
+}
+
+// The override is a flag, every invocation: no configuration key arms it.
+func TestTheConfigurationFileCannotArmTheOverride(t *testing.T) {
+	t.Parallel()
+
+	fields := reflect.VisibleFields(reflect.TypeFor[config.Config]())
+	for _, field := range fields {
+		if strings.Contains(strings.ToLower(field.Name), "unsafe") ||
+			strings.Contains(strings.ToLower(field.Name), "model") {
+			t.Errorf("config.Config carries %q, which could arm the override", field.Name)
+		}
 	}
 }

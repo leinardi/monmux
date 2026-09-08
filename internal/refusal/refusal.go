@@ -43,13 +43,15 @@ const (
 	EnumerationFailed Reason = "enumeration-failed"
 	// NoDisplays means enumeration succeeded and found nothing to act on.
 	NoDisplays Reason = "no-displays"
-	// DisplayNotWritable means the only supported display cannot be written to.
+	// DisplayNotWritable means the display that would have been the target
+	// cannot be written to.
 	DisplayNotWritable Reason = "display-not-writable"
 	// UnknownMonitor means no catalog entry matches the detected identity.
 	UnknownMonitor Reason = "unknown-monitor"
 	// AmbiguousCatalog means more than one catalog entry claims the identity.
 	AmbiguousCatalog Reason = "ambiguous-catalog"
-	// MultipleCandidates means more than one attached display is supported.
+	// MultipleCandidates means more than one attached display could be the one
+	// meant, and monmux will not choose between them.
 	MultipleCandidates Reason = "multiple-candidates"
 	// InputNotEnabled means the model has no evidence for the requested input.
 	InputNotEnabled Reason = "input-not-enabled"
@@ -92,10 +94,10 @@ var explanations = map[Reason]string{
 	BackendNotReady:    "The backend tool is not usable.",
 	EnumerationFailed:  "The displays attached to this system could not be enumerated.",
 	NoDisplays:         "No display was detected.",
-	DisplayNotWritable: "The supported display cannot be written to.",
+	DisplayNotWritable: "The display cannot be written to.",
 	UnknownMonitor:     "No supported-model catalog entry matches this identity.",
 	AmbiguousCatalog:   "More than one catalog entry claims this identity, so the match is not trustworthy.",
-	MultipleCandidates: "More than one attached display matches a supported model; pin one with --serial.",
+	MultipleCandidates: "More than one attached display could be the one meant; pin one with --serial.",
 	InputNotEnabled:    "The requested input is not enabled for this model.",
 	SerialMismatch:     "No attached display matches the pinned serial.",
 	TargetNotReady:     "The target display cannot be reached over DDC right now.",

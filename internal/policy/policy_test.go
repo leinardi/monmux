@@ -17,6 +17,7 @@
 package policy_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -324,5 +325,213 @@ func TestRefusalsRedactSerialsByDefault(t *testing.T) {
 
 	if strings.Contains(err.Error(), serialA) {
 		t.Errorf("the refusal leaked a serial:\n%s", err)
+	}
+}
+
+// --- the --unsafe-model assume path ---
+
+func TestAssumeWritesToAnUnidentifiedDisplay(t *testing.T) {
+	t.Parallel()
+
+	decision, err := policy.Resolve(
+		[]backend.Display{unknown()},
+		policy.Request{Input: catalog.Input("hdmi"), AssumeModel: "AOC/Q27P1B"},
+	)
+	if err != nil {
+		t.Fatalf("Resolve() refused an assumed model: %v", err)
+	}
+
+	if !decision.Assumed {
+		t.Error("the decision does not say identification was bypassed")
+	}
+
+	if !decision.Operation.Valid() || decision.Operation.Value() != 0x11 {
+		t.Errorf("operation = %s, want vcp-input-source 0x11", decision.Operation)
+	}
+
+	if decision.Operation.Mechanism() != catalog.MechanismInputSource {
+		t.Errorf("mechanism = %q", decision.Operation.Mechanism())
+	}
+
+	if decision.Model.FullName() != "AOC Q27P1B" {
+		t.Errorf("model = %q, want AOC Q27P1B", decision.Model.FullName())
+	}
+
+	if decision.Display.Handle != "card1-DP-2" {
+		t.Errorf("picked %q, want the unidentified display", decision.Display.Handle)
+	}
+}
+
+// The normal path says nothing about identification, and must keep saying
+// nothing: Assumed is set on the assume path only.
+func TestAnIdentifiedSwitchIsNotMarkedAssumed(t *testing.T) {
+	t.Parallel()
+
+	decision, err := policy.Resolve(
+		[]backend.Display{supported()},
+		policy.Request{Input: catalog.Input("dp")},
+	)
+	if err != nil {
+		t.Fatalf("Resolve() refused: %v", err)
+	}
+
+	if decision.Assumed {
+		t.Error("an identified switch claims identification was bypassed")
+	}
+}
+
+// An override that silently picked the first display would write an unverified
+// value to whichever monitor happened to be listed first.
+func TestAssumeRefusesMoreThanOneWritableDisplay(t *testing.T) {
+	t.Parallel()
+
+	_, err := policy.Resolve(
+		[]backend.Display{unknown(), supported()},
+		policy.Request{Input: catalog.Input("hdmi"), AssumeModel: "AOC/Q27P1B"},
+	)
+	if !refusal.Is(err, refusal.MultipleCandidates) {
+		t.Fatalf("Resolve() returned %v, want multiple-candidates", err)
+	}
+
+	var declined *refusal.Refusal
+	if !errors.As(err, &declined) {
+		t.Fatalf("Resolve() returned %v, want a refusal", err)
+	}
+
+	for _, wanted := range []string{"card1-DP-1", "card1-DP-2", "--serial"} {
+		if !strings.Contains(declined.Detail, wanted) {
+			t.Errorf("the refusal does not mention %q: %q", wanted, declined.Detail)
+		}
+	}
+}
+
+func TestAssumeWritesToTheDisplayThePinSelected(t *testing.T) {
+	t.Parallel()
+
+	decision, err := policy.Resolve(
+		[]backend.Display{unknown(), supported()},
+		policy.Request{
+			Input:       catalog.Input("hdmi"),
+			Serial:      serialB,
+			AssumeModel: "AOC/Q27P1B",
+		},
+	)
+	if err != nil {
+		t.Fatalf("Resolve() refused a pinned assumed model: %v", err)
+	}
+
+	if decision.Display.Handle != "card1-DP-2" {
+		t.Errorf("picked %q, want the pinned display", decision.Display.Handle)
+	}
+
+	if decision.Operation.Value() != 0x11 {
+		t.Errorf("value = 0x%02X, want 0x11", decision.Operation.Value())
+	}
+}
+
+// The override skips the write-enabled gate, not the catalog: an input the
+// assumed entry never recorded has no value, and none is invented for it.
+func TestAssumeRefusesAnInputTheModelDoesNotRecord(t *testing.T) {
+	t.Parallel()
+
+	_, err := policy.Resolve(
+		[]backend.Display{unknown()},
+		policy.Request{Input: catalog.Input("usb-c"), AssumeModel: "AOC/Q27P1B"},
+	)
+	if !refusal.Is(err, refusal.InputNotEnabled) {
+		t.Fatalf("Resolve() returned %v, want input-not-enabled", err)
+	}
+
+	var declined *refusal.Refusal
+	if !errors.As(err, &declined) {
+		t.Fatalf("Resolve() returned %v, want a refusal", err)
+	}
+
+	// The message lists what the entry records, not what it enables, which for a
+	// model that is not write-enabled would be nothing at all.
+	for _, wanted := range []string{"recorded inputs:", "dp", "hdmi", "dvi", "vga"} {
+		if !strings.Contains(declined.Detail, wanted) {
+			t.Errorf("the refusal does not mention %q: %q", wanted, declined.Detail)
+		}
+	}
+}
+
+// The override reaches a display monmux would not have identified; it does not
+// reach one it cannot write to at all.
+func TestAssumeStillRefusesAnUnwritableDisplay(t *testing.T) {
+	t.Parallel()
+
+	unwritable := supported()
+	unwritable.Writable = false
+	unwritable.Status = backend.StatusNoDDCChannel
+
+	_, err := policy.Resolve(
+		[]backend.Display{unwritable},
+		policy.Request{Input: catalog.Input("hdmi"), AssumeModel: "AOC/Q27P1B"},
+	)
+	if !refusal.Is(err, refusal.DisplayNotWritable) {
+		t.Fatalf("Resolve() returned %v, want display-not-writable", err)
+	}
+
+	// Identification is what the override bypassed, so an unmatched display is
+	// refused for the reason that is actually true of it: monmux cannot write to
+	// it. Telling the user no catalog entry matches would send them back to the
+	// flag they already used.
+	unidentified := unknown()
+	unidentified.Writable = false
+	unidentified.Status = backend.StatusNoDDCChannel
+
+	_, err = policy.Resolve(
+		[]backend.Display{unidentified},
+		policy.Request{Input: catalog.Input("hdmi"), AssumeModel: "AOC/Q27P1B"},
+	)
+	if !refusal.Is(err, refusal.DisplayNotWritable) {
+		t.Fatalf("Resolve() returned %v, want display-not-writable", err)
+	}
+
+	var declined *refusal.Refusal
+	if !errors.As(err, &declined) {
+		t.Fatalf("Resolve() returned %v, want a refusal", err)
+	}
+
+	for _, wanted := range []string{"card1-DP-2", backend.StatusNoDDCChannel} {
+		if !strings.Contains(declined.Detail, wanted) {
+			t.Errorf("the refusal does not mention %q: %q", wanted, declined.Detail)
+		}
+	}
+}
+
+func TestAssumeRefusesWithNoDisplaysAtAll(t *testing.T) {
+	t.Parallel()
+
+	_, err := policy.Resolve(
+		nil,
+		policy.Request{Input: catalog.Input("hdmi"), AssumeModel: "AOC/Q27P1B"},
+	)
+	if !refusal.Is(err, refusal.NoDisplays) {
+		t.Fatalf("Resolve() returned %v, want no-displays", err)
+	}
+}
+
+// A name that is not a catalog entry is an argument error rather than a refusal,
+// exactly as an unparseable input name is: the request could not be made. The
+// CLI rejects it before starting anything; this is the belt behind that.
+func TestAssumeRejectsAModelThatIsNotInTheCatalog(t *testing.T) {
+	t.Parallel()
+
+	_, err := policy.Resolve(
+		[]backend.Display{unknown()},
+		policy.Request{Input: catalog.Input("hdmi"), AssumeModel: "Acme/Nothing"},
+	)
+	if !errors.Is(err, policy.ErrUnknownModel) {
+		t.Fatalf("Resolve() returned %v, want an unknown-model error", err)
+	}
+
+	if _, ok := errors.AsType[*refusal.Refusal](err); ok {
+		t.Error("a bad argument was reported as a refusal")
+	}
+
+	if !strings.Contains(err.Error(), "monmux catalog list") {
+		t.Errorf("the error does not point at the listing: %v", err)
 	}
 }

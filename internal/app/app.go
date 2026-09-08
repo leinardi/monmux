@@ -41,6 +41,18 @@ type Options struct {
 	// DryRun stops after the command has been built and returns it unexecuted.
 	// Nothing is written, and the backend's Execute is never reached.
 	DryRun bool
+	// OnAssumed, when set, is called once the policy has selected a display
+	// without identifying it - the --unsafe-model path - and before anything is
+	// planned, checked or written. It exists so the CLI can print its warning
+	// naming the display that is about to be written to, which is knowable only
+	// here; a dry run calls it too. The arguments are read-only: mutating what
+	// they point at does not change what is written.
+	//
+	// The error it returns stops the switch where it stands, with nothing
+	// planned and nothing sent. That is the fail-closed answer: the banner is
+	// the only guard this path has, and a switch whose warning could not be
+	// printed must not happen.
+	OnAssumed func(display *backend.Display, model *catalog.Model, input catalog.Input) error
 }
 
 // Outcome is what [Switch] did. It carries everything the CLI needs to report
@@ -65,6 +77,10 @@ type Outcome struct {
 	// means the input-switch command was sent, not that the monitor switched:
 	// nothing here reads back what the display is doing.
 	Sent bool
+	// Assumed reports that the display was never identified: the model is the
+	// one the user asserted with --unsafe-model, so the report must not read as
+	// an ordinary switch.
+	Assumed bool
 }
 
 // Switch performs an input switch, or explains why it will not.
@@ -72,6 +88,13 @@ type Outcome struct {
 // Every failure up to and including the moment before the tool is executed is a
 // [refusal.Refusal], and for all of them nothing was written. Once the tool has
 // been executed the situation is different, and [ExecutionError] says so.
+//
+// Two failures before the write are ordinary errors rather than refusals,
+// because the request could not be made at all: a [policy.Request.AssumeModel]
+// that names no catalog entry, and an [Options.OnAssumed] that could not print
+// its warning. Both exit 1 rather than 2, which withholds the promise that
+// nothing was written rather than making it falsely; nothing was, in fact,
+// written on either path.
 func Switch(
 	ctx context.Context,
 	driver backend.Backend,
@@ -101,6 +124,22 @@ func Switch(
 	outcome.Display = decision.Display
 	outcome.Model = decision.Model
 	outcome.Operation = decision.Operation
+	outcome.Assumed = decision.Assumed
+
+	// The warning comes before the target is even checked for reachability, so
+	// nothing has been built and nothing has been sent when the user reads it -
+	// nor when it could not be shown to them, which stops the switch here.
+	if decision.Assumed && opts.OnAssumed != nil {
+		// Copies, so that what the callback is shown can never become what is
+		// written: the display and the model it is handed are not the ones
+		// Ready, Plan and Execute go on to use.
+		display, model := decision.Display, decision.Model
+
+		err = opts.OnAssumed(&display, &model, req.Input)
+		if err != nil {
+			return Outcome{}, err
+		}
+	}
 
 	// Whether the target can be reached is a question about this monitor rather
 	// than about the tool, so it is asked after the display has been chosen and

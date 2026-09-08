@@ -107,24 +107,112 @@ func renderOutcome(out io.Writer, outcome *app.Outcome, showSerial bool) error {
 
 	if !outcome.DryRun {
 		page.linef(
-			"Input-switch command sent (%s, 0x%02X) to %s via %s. "+
+			"Input-switch command sent (%s, 0x%02X) to %s via %s%s. "+
 				"Switch not independently confirmed.",
 			outcome.Input.Label(),
 			outcome.Operation.Value(),
 			outcome.Model.FullName(),
 			outcome.Backend,
+			bypassed(outcome.Assumed),
 		)
 
 		return page.err
 	}
 
 	page.linef("Dry run: nothing was sent.")
-	page.linef("  Display: %s (%s)", outcome.Display.Label, outcome.Model.FullName())
+	page.linef(
+		"  Display: %s (%s)%s",
+		outcome.Display.Label,
+		outcome.Model.FullName(),
+		bypassed(outcome.Assumed),
+	)
 	page.linef("  Input:   %s (0x%02X)", outcome.Input.Label(), outcome.Operation.Value())
 	page.linef("  Command: %s", outcome.Command.Render(showSerial))
 	page.linef("No DDC write was performed.")
 
 	return page.err
+}
+
+// renderUnsafeWarning prints the banner for a switch that bypasses
+// identification.
+//
+// It goes to stderr once the display has been selected and before anything is
+// planned or written, so the user is told which monitor is about to receive an
+// unverified value - in a dry run too, where none is. There is no prompt: the
+// flag's name and this banner are the guard, and a prompt would break scripting,
+// which is what the flag is for.
+func renderUnsafeWarning(
+	out io.Writer,
+	display *backend.Display,
+	assumed *catalog.Model,
+	input catalog.Input,
+) error {
+	page := &printer{out: out}
+
+	page.linef("WARNING: identification bypassed by --unsafe-model.")
+	page.linef("  Display: %s (%s)", display.Label, monitor(display.Identity))
+	page.linef(
+		"  Assumed: %s (write-enabled: %s, evidence: %s)",
+		assumed.FullName(),
+		yesNo(assumed.WriteEnabled),
+		assumedGrade(assumed, input),
+	)
+	page.linef("  Input:   %s", assumedInput(assumed, input))
+	page.linef("The display above was not identified, and the value was never verified on")
+	page.linef("this model by this project. A wrong value can leave the monitor on an input")
+	page.linef("with no signal; recover with the monitor's own OSD or by unplugging the")
+	page.linef("other inputs.")
+
+	return page.err
+}
+
+// bypassed is what the outcome line adds when the display was never identified,
+// so terminal scrollback shows this was not an ordinary switch.
+func bypassed(assumed bool) string {
+	if !assumed {
+		return ""
+	}
+
+	return " (identification bypassed)"
+}
+
+// assumedGrade renders the evidence behind the value the assumed model records
+// for this input.
+func assumedGrade(assumed *catalog.Model, input catalog.Input) string {
+	grade, recorded := assumed.InputGrade(input)
+	if !recorded {
+		return noneListed
+	}
+
+	return grade.String()
+}
+
+// assumedInput renders the input with the value and mechanism the assumed model
+// records for it. An input it does not record has no value to print, and the
+// switch is refused with input-not-enabled a moment later.
+func assumedInput(assumed *catalog.Model, input catalog.Input) string {
+	value, recorded := assumed.InputValue(input)
+
+	mechanism, known := assumed.InputMechanism(input)
+	if !recorded || !known {
+		return input.Label() + " (not recorded for this model)"
+	}
+
+	return fmt.Sprintf("%s (0x%02X, %s)", input.Label(), value, mechanism)
+}
+
+// modelNames are the catalog entries as "Vendor/Name". It is what --unsafe-model
+// completes against: being in the catalog is not a promise that monmux may write
+// to the model, which is exactly what that flag overrides.
+func modelNames() []string {
+	entries := catalog.Models()
+
+	names := make([]string, 0, len(entries))
+	for index := range entries {
+		names = append(names, entries[index].Vendor+"/"+entries[index].Name)
+	}
+
+	return names
 }
 
 // handle renders the backend's address for a display, masking it when it is

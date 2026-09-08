@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/leinardi/monmux/internal/app"
+	"github.com/leinardi/monmux/internal/backend"
 	"github.com/leinardi/monmux/internal/catalog"
 	"github.com/leinardi/monmux/internal/policy"
 )
@@ -30,8 +31,9 @@ import (
 // newSwitchCmd returns the `switch` subcommand, the only one that writes.
 func newSwitchCmd(state *cli) *cobra.Command {
 	var (
-		serial string
-		dryRun bool
+		serial      string
+		unsafeModel string
+		dryRun      bool
 	)
 
 	command := &cobra.Command{
@@ -46,11 +48,15 @@ func newSwitchCmd(state *cli) *cobra.Command {
 			"else is refused, and a refusal means nothing was written.\n\n" +
 			"With --dry-run the exact command that would run is printed and nothing is\n" +
 			"executed. Use --serial to pick one physical unit when two identical monitors\n" +
-			"are attached; it matches the alphanumeric serial only.",
+			"are attached; it matches the alphanumeric serial only.\n\n" +
+			"--unsafe-model is the one way past that. It treats the attached display as\n" +
+			"the catalog entry you name, without identifying it and without the\n" +
+			"write-enabled gate, and it sends a value nobody verified on your unit. Run it\n" +
+			"with --dry-run first, and have the monitor's OSD within reach.",
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: inputNames(),
 		RunE: func(command *cobra.Command, args []string) error {
-			return state.switchInput(command, args[0], serial, dryRun)
+			return state.switchInput(command, args[0], serial, unsafeModel, dryRun)
 		},
 	}
 
@@ -66,6 +72,24 @@ func newSwitchCmd(state *cli) *cobra.Command {
 		false,
 		"print the command that would run, and run nothing",
 	)
+	command.Flags().StringVar(
+		&unsafeModel,
+		"unsafe-model",
+		"",
+		"DANGEROUS: treat the display as this catalog model instead of identifying "+
+			"it, bypassing EDID matching and the write-enabled gate; see "+
+			"\"monmux catalog list\"",
+	)
+
+	// Completion offers every catalog entry, write-enabled or not: what the flag
+	// is for is the entries monmux would otherwise refuse. The error is ignored
+	// because the only way to get one is to name a flag that does not exist.
+	_ = command.RegisterFlagCompletionFunc(
+		"unsafe-model",
+		func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+			return modelNames(), cobra.ShellCompDirectiveNoFileComp
+		},
+	)
 
 	return command
 }
@@ -77,7 +101,11 @@ func newSwitchCmd(state *cli) *cobra.Command {
 // for the backend to discover, and nothing should be started for it. A name that
 // is well formed but not enabled for the matched model is a different thing, and
 // it is refused later, by the policy, with nothing written.
-func (c *cli) switchInput(command *cobra.Command, name, serial string, dryRun bool) error {
+func (c *cli) switchInput(
+	command *cobra.Command,
+	name, serial, unsafeModel string,
+	dryRun bool,
+) error {
 	input, err := catalog.ParseInput(name)
 	if err != nil {
 		return fmt.Errorf(
@@ -86,6 +114,20 @@ func (c *cli) switchInput(command *cobra.Command, name, serial string, dryRun bo
 			err,
 			strings.Join(kindNames(), ", "),
 		)
+	}
+
+	// The override names a catalog entry, so a name that is not one is a mistake
+	// in the request, the same as an input name that does not parse: it is an
+	// argument error rather than a refusal, and nothing is started for it.
+	if unsafeModel != "" {
+		_, known := catalog.Find(unsafeModel)
+		if !known {
+			return fmt.Errorf(
+				"%w %q (run \"monmux catalog list\" to see every entry)",
+				errUnknownModel,
+				unsafeModel,
+			)
+		}
 	}
 
 	driver, configured, err := c.open()
@@ -100,11 +142,27 @@ func (c *cli) switchInput(command *cobra.Command, name, serial string, dryRun bo
 		pinned = serial
 	}
 
+	// The warning is printed from inside the switch, once the display has been
+	// selected and before anything is planned or written, so it can name the
+	// monitor that is about to receive an unverified value. A dry run prints it
+	// too. Note what is not consulted anywhere here: the configuration file has
+	// no key for the override, so only this invocation's flag can have armed it.
+	opts := app.Options{DryRun: dryRun}
+	if unsafeModel != "" {
+		opts.OnAssumed = func(
+			display *backend.Display,
+			model *catalog.Model,
+			name catalog.Input,
+		) error {
+			return renderUnsafeWarning(command.ErrOrStderr(), display, model, name)
+		}
+	}
+
 	outcome, err := app.Switch(
 		command.Context(),
 		driver,
-		policy.Request{Input: input, Serial: pinned},
-		app.Options{DryRun: dryRun},
+		policy.Request{Input: input, Serial: pinned, AssumeModel: unsafeModel},
+		opts,
 	)
 	if err != nil {
 		//nolint:wrapcheck // a refusal is passed through unchanged; wrapping would corrupt its message
