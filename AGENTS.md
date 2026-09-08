@@ -31,7 +31,7 @@ Hardware validation is a checklist the human runs; agents prepare the commands a
 `monmux` is a cross-platform Go CLI that switches **supported monitors** between video inputs, with a fail-closed policy: a write happens
 only when the attached monitor is positively identified as a model in the built-in supported-monitor catalog *and* the requested input is
 explicitly enabled for that model. One model is verified so far (LG 38WR85QC-W); nothing in the code, CLI, or docs is vendor-specific
-except the catalog entry and the mechanism it uses.
+except the catalog entries and the mechanisms they use.
 
 It wraps `ddcutil` on Linux and `m1ddc` on macOS, permanently. There is no native I²C/IOKit backend and there never will be one.
 
@@ -129,12 +129,18 @@ Do not weaken any of these. They are the reason the tool exists.
 
 **Never add a raw VCP command.** No code path may take a VCP code or value from a flag, a config file, an environment variable, or any
 other input. The only bytes that reach a monitor come from a `catalog.Operation` built by the catalog's package-private constructor from
-a compiled-in table entry with recorded evidence. Adding an input or a model means editing `internal/catalog/models.yaml`, supplying
+a compiled-in table entry with graded evidence. Adding an input or a model means editing `internal/catalog/models.yaml`, supplying
 the evidence, and running `make go-generate` to re-render `models_gen.go` — commit both — see
 [`docs/adding-a-monitor.md`](docs/adding-a-monitor.md). A new connector *kind* is the one exception: the kinds are a closed list
 in `internal/catalog/internal/input`, so a monitor with an input nobody has named yet is a Go change there, added with the first
 model that needs it. A new *port* of a kind that already exists (`hdmi3`, `usb-c2`) is only a YAML edit. The YAML is a build input read at development time only: the binary contains no
 catalog parser and reads no catalog file at run time.
+
+A `Mechanism` is added the same way, together with the first model that needs it, and a **disabled** record counts as that model:
+the point is that the mechanism arrives with evidence attached, not that the first entry using it is trusted. Until a model using
+a mechanism is write-enabled, that backend path has never reached a monitor — `vcp-input-source` is in that state today. Enabling
+that first model is a first hardware run of the mechanism, done with the [`docs/testing.md`](docs/testing.md) checklist, not a
+routine catalog flip.
 
 **Backends only execute a `Command` produced by `Plan`.** `Command` is returned by `Plan` for display only and is never accepted as
 input by any method. `Execute` takes the `catalog.Operation`, not a `Command`, and rebuilds the invocation through the same private

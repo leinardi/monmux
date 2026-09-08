@@ -53,19 +53,42 @@ m1ddc display <UUID> set input-alt 209
 These exist so that a refactor cannot quietly change what reaches a monitor. If the bytes change, the test fails and somebody
 has to say why in a commit message.
 
+Each backend also has a table pinning the argv its private `arguments()` builder produces for a mechanism and a value — the
+`vcp-input-source` invocation, and the one catalog value that does not fit in a byte. That table can render argv the catalog
+does not enable, which is deliberately less power than it sounds: there is still no exported way to build a
+`catalog.Operation`, so a test can print an invocation and still not make a backend run one. A mechanism with no write-enabled
+model has no end-to-end `Plan` test, and cannot: the first pull request that enables such a model adds it.
+
 **Golden CLI output.** `info`, `info --json`, `doctor`, both dry-run renderings and the success sentence are compared exactly,
 including the redaction. Output is an interface too.
 
-**Invariant tests.** The catalog's rules are tested rather than trusted: a write-enabled model has at least one identity, an
-identity belongs to one model, every recorded input has evidence, a disabled model never matches, the zero operation is
-invalid. `TestCompatibilityDocumentMatchesTheCatalog` compares `docs/compatibility.md` against the catalog itself, and
+**Invariant tests.** The catalog's rules are tested rather than trusted:
+
+- a write-enabled model has at least one identity, and a disabled model never matches;
+- every recorded input has evidence, and every input of a **write-enabled** model is graded `verified` — a value nobody ran on
+  that unit never becomes writable;
+- an identity matches one model: two identities collide when the manufacturer and the product code are equal and either pins no
+  model name, or both pin the same one, so only two pinned identities with different names may share a reused product code;
+- every model carries at least one note, since the notes are the only place a negative report, a conflict or an alias is
+  written down;
+- the zero operation is invalid.
+
+`TestCompatibilityDocumentMatchesTheCatalog` compares the table in `docs/compatibility.md` against the catalog,
+`TestCompatibilityDocumentCarriesEveryNoteAndSource` compares each model's notes and sources against its section verbatim, and
 `TestGeneratedCatalogMatchesTheYAML` compares the catalog against `internal/catalog/models.yaml`, so a hand-edit of the
 generated Go fails the build instead of shipping. The `go-test-repo-mod` pre-commit hook is filtered to Go files and `go.mod`,
 which would let a commit that edits only the catalog file skip that test; `.pre-commit-config.yaml` widens the filter to include
 `models.yaml` so an edit without a regeneration cannot be committed. The generator has its own tests for every rule it enforces, and
-`TestGeneratorKnowsEveryMechanism` keeps its copy of the mechanism enum in step with the real one. Input names are not
-mirrored: the generator and the catalog import the one grammar from `internal/catalog/internal/input`, which has its own
-tests for what parses, how names sort and which numbering a model may not mix.
+`TestGeneratorKnowsEveryMechanism` and `TestGeneratorKnowsEveryGrade` keep its copies of those two enums in step with the real
+ones. Input names are not mirrored: the generator and the catalog import the one grammar from
+`internal/catalog/internal/input`, which has its own tests for what parses, how names sort and which numbering a model may not
+mix.
+
+**Cross-platform identity.** The model name is the one identity field the two backends read from different places — EDID
+descriptor `0xFC` on Linux, m1ddc's `Product name` on macOS — and a pinned catalog identity compares against whatever they
+produce. `internal/edid` and `internal/backend/m1ddc` each assert `LG ULTRAWIDE` for the same unit, and the macOS parser is
+tested with the field missing (the header name is used) and with both absent (the identity carries no model name, which matches
+no pinned entry — fail-closed, not a crash).
 
 **Structural tests.** A reflection test walks the `Backend` interface and fails if any method could be handed a `Command`,
 however deeply wrapped — that is what makes a command unforgeable.
@@ -165,5 +188,21 @@ Run this later, from the machine on the other input.
    this unit and must stay refused.
 2. `monmux switch usb-c --serial NOTMYSERIAL` — refused with `serial-mismatch`, exit code `2`.
 
-Record what you ran, on what date, on which OS, and what the monitor did. That paragraph is the evidence string in the catalog
-— see [adding-a-monitor.md](adding-a-monitor.md).
+Record what you ran, on what date, on which OS, and what the monitor did. Those are the `date`, `tool` and `note` fields of a
+`grade: verified` evidence record, which is the only grade a write-enabled model may carry — see
+[adding-a-monitor.md](adding-a-monitor.md).
+
+### The first model of a mechanism
+
+A mechanism enters the catalog with a **disabled** record, so its backend path has never reached a monitor. `vcp-input-source`
+is in that state today. Enabling the first model that uses one is therefore two firsts at once, and needs more than the
+checklist above:
+
+1. Work through the whole checklist for the model, substituting that mechanism's command line — the two are in
+   [backends.md](backends.md).
+2. Do it on **both** operating systems if you can reach them, because the two backends build the invocation separately and only
+   the catalog is shared.
+3. Have a second input already connected and displaying before you switch. At least one recorded model wedges its DDC engine
+   when switched to an input with no signal, and the OSD is then the only way back.
+4. Say in the pull request that it is the first hardware run of that mechanism, and add the end-to-end `Plan` golden test that
+   was impossible to write until a model using it was enabled.
