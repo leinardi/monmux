@@ -3,7 +3,11 @@ version: "2"
 linters:
   default: all
 
+  enable:
+    - gomodguard_v2
+
   disable:
+    - gomodguard # deprecated since v2.12.0; replaced by gomodguard_v2, enabled above
     - exhaustruct
     - gochecknoglobals
     - nonamedreturns
@@ -98,12 +102,10 @@ linters:
       - std-error-handling
       - common-false-positives
       - legacy
-    paths:
-      - test/testdata_etc # test files
-      - internal/go # extracted from Go code
-      - internal/x # extracted from x/tools code
-      - pkg/goformatters/gci/internal # extracted from gci code
-      - pkg/goanalysis/runner_checker.go # extracted from x/tools code
+    # No `paths:` here on purpose. Nothing in monmux is exempt from linting by
+    # location: internal/catalog/models_gen.go is generated but must lint clean
+    # like everything else, and it is skipped only if `exclusions.generated`
+    # (lax, the default) recognises its "Code generated ... DO NOT EDIT" line.
     rules:
       - path: (.+)_test\.go
         linters:
