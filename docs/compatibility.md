@@ -9,9 +9,9 @@ to a contributor who owns that monitor, disabled, and without an EDID fingerprin
 never be written to. A model is listed here whether or not monmux will write to it, because "we know about this monitor and
 deliberately will not touch it" is information a reader needs.
 
-Every value here goes through the one mechanism monmux implements, `lg-alt-input`, which is why every entry is an LG. Reports
-that switch inputs with the standard VCP code `0x60` are not representable and are not in the table; see
-[What is deliberately not here](#what-is-deliberately-not-here).
+monmux implements two mechanisms. `lg-alt-input` is the LG side channel, which is why most entries are LGs; `vcp-input-source`
+is the standard Input Source feature, `VCP 0x60`, and has one recorded model, disabled. "Standard" is a name, not a promise:
+which values a model accepts, and whether it accepts the write at all, are still per-model facts with per-input evidence.
 
 ## What the columns mean
 
@@ -25,7 +25,9 @@ that switch inputs with the standard VCP code `0x60` are not representable and a
   numbered when it has several, never both.
 - **Value** — the value written for that input, up to 16 bits. A SetVCP carries an SH/SL pair; most recorded values fit in the low byte, and one does not.
 - **Mechanism** — how it is written. `lg-alt-input` is the LG side channel: source address `0x50`, VCP `0xF4`, no verification.
-  It is a per-model property and never a fallback.
+  `vcp-input-source` is the standard Input Source feature: the ordinary source address, VCP `0x60`, no verification. A mechanism
+  is a per-model property and never a fallback — a backend that does not implement a model's mechanism refuses rather than
+  trying the other one.
 - **Enabled** — whether monmux will actually perform this switch. A row with `no` is recorded for reference only.
 - **Grade** — how strong the evidence is. `verified` is a direct test on the unit by this project and is the only grade that
   may be enabled; `documented` is the manufacturer's own documentation with no field report behind it; `reported` is somebody
@@ -145,6 +147,10 @@ that switch inputs with the standard VCP code `0x60` are not representable and a
 | LG 32U990A | none | `dp` | `0xD0` | `lg-alt-input` | no | quoted | Weaker report on the exact 32U990A by pyang2045 (m1ddc input-alt on macOS): the report quotes 0xD0 for DisplayPort and says it works, without saying which inputs were tried individually; not verified here: <https://github.com/pyang2045/streamdeck-display-knob> |
 | LG 32U990A | none | `hdmi` | `0x90` | `lg-alt-input` | no | quoted | Weaker report on the exact 32U990A by pyang2045 (m1ddc input-alt on macOS): the report quotes 0x90 for HDMI and says it works, without saying which inputs were tried individually; not verified here: <https://github.com/pyang2045/streamdeck-display-knob> |
 | LG 32U990A | none | `thunderbolt` | `0xD2` | `lg-alt-input` | no | quoted | Weaker report on the exact 32U990A by pyang2045 (m1ddc input-alt on macOS): the report quotes 0xD2 for Thunderbolt and says it works, without saying which inputs were tried individually; not verified here: <https://github.com/pyang2045/streamdeck-display-knob> |
+
+| Samsung LC49G95T | none | `dp1` | `0x0F` | `vcp-input-source` | no | reported | Reported working on the exact LC49G95T by DimpiM/monitor-switch (hardware-findings.md) (ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input): switching to DisplayPort 1 with 0x0F over the standard Input Source feature (VCP 0x60) succeeded; reading VCP 0x60 back afterwards gives 0x03, which is not the value that selects the input; not verified here: <https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md> |
+| Samsung LC49G95T | none | `dp2` | `0x10` | `vcp-input-source` | no | reported | Reported working on the exact LC49G95T by DimpiM/monitor-switch (hardware-findings.md) (ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input): switching to DisplayPort 2 with 0x10 over the standard Input Source feature (VCP 0x60) succeeded; reading VCP 0x60 back afterwards gives 0x04, which is not the value that selects the input; not verified here: <https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md> |
+| Samsung LC49G95T | none | `hdmi` | `0x11` | `vcp-input-source` | no | reported | Reported working on the exact LC49G95T by DimpiM/monitor-switch (hardware-findings.md) (ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input): switching to HDMI with 0x11 over the standard Input Source feature (VCP 0x60) succeeded; reading VCP 0x60 back afterwards gives 0x01, which is not the value that selects the input; not verified here: <https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md> |
 
 ## Notes on the entries
 
@@ -469,15 +475,30 @@ Sources:
 
 - <https://github.com/pyang2045/streamdeck-display-knob>
 
+### Samsung LC49G95T
+
+- The first record of the `vcp-input-source` mechanism, and the first entry that is not an LG. It is disabled and carries no identity like every other unverified entry, so that backend path has never reached a monitor: enabling this model would be the first hardware run of the mechanism, and belongs in the [testing.md](testing.md) checklist rather than in a routine catalog flip.
+- The values the monitor reports back are not the values that select an input. After a switch, reading VCP 0x60 gives 0x03 for DP1, 0x04 for DP2 and 0x01 for HDMI, and writing those back does not switch. That is one reason monmux never confirms a switch by reading a monitor.
+- DDC/CI answers only on the HDMI input; the DisplayPort inputs do not expose slave address 0x37 at all, so the switch has to be sent from HDMI.
+- Switching to an input with no signal wedges the monitor's DDC engine until a link reset or a trip through the OSD. Never switch blind: whoever verifies this model needs the target input already connected.
+- The capabilities string declares Input Source values the monitor does not have, so it is not a source of values for this model.
+- EDID, as text only: manufacturer `SAM`, model name `LC49G95T`. No product code has been published, which is the other reason the entry records no identity.
+
+Sources:
+
+- <https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md>
+- <https://github.com/DimpiM/monitor-switch/blob/main/service/profiles/samsung-lc49g95t.yaml>
+
 ## What is deliberately not here
 
 The table records what monmux could be taught to do. Several things people have published cannot be written down in it at all,
 and the reasons are worth stating, because "it is not in the table" is otherwise indistinguishable from "nobody looked".
 
-**A different mechanism.** monmux implements one mechanism, `lg-alt-input`. Every report that switches inputs with the standard
-VCP code `0x60` — which is most of them, including the whole of ddccontrol-db, the Samsung Odyssey G9, and the LG 34UM88C-P,
-32GK650F-B, 29UM57-P and 27UD88-W — has no mechanism to be recorded under. Inventing one to hold the values would mean shipping
-bytes no backend has ever sent, so those reports are left out until a second mechanism is implemented and tested.
+**A report with no named input.** `vcp-input-source` now exists, so a `VCP 0x60` report is representable — the Samsung Odyssey
+G9 is the first one recorded. What is still left out is the bulk of what people publish about `0x60`: ddccontrol-db and the
+reports about the LG 34UM88C-P, 32GK650F-B, 29UM57-P and 27UD88-W give values without saying which socket each one lit up on
+the unit that was tested, and a value with no input name has nothing to key an entry on. The rules below have not moved: a
+mechanism existing is not evidence that a model uses it.
 
 **More than one write.** A 34WP75C is reported switching to USB-C with `0xD1`, but only when the command is sent twice: the
 first write bounces back to DisplayPort. monmux performs exactly one write, so a row for it would not reproduce the reported

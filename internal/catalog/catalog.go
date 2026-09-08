@@ -143,26 +143,36 @@ func KnownInputs() []Input {
 	return known
 }
 
-// Mechanism is how a model's input is switched. It is a closed enum with one
-// value today, and it is the extension point for other vendors: a second
-// mechanism (the standard VCP 0x60 Input Source feature, say) is added only
-// together with the first evidenced model that needs it, never speculatively.
+// Mechanism is how a model's input is switched. It is a closed enum with two
+// values, and it is the extension point for other vendors: a mechanism is added
+// only together with the first evidenced model that needs it, never
+// speculatively, and a model that only records it - without being write-enabled
+// - counts as that model.
 //
 // The mechanism is a per-model property. It is never a fallback: if a backend
 // does not implement a model's mechanism it refuses with invalid-operation
 // rather than trying another one (req. 9.7).
 type Mechanism string
 
-// MechanismLGAltInput is the LG side channel documented by ddcutil: a SetVCP of
-// the manufacturer-specific VCP code 0xF4 sent with DDC/CI source address 0x50,
-// with no read-back verification. The value written is model-specific, which is
-// exactly why it lives in a per-model catalog entry.
-const MechanismLGAltInput Mechanism = "lg-alt-input"
+const (
+	// MechanismLGAltInput is the LG side channel documented by ddcutil: a SetVCP
+	// of the manufacturer-specific VCP code 0xF4 sent with DDC/CI source address
+	// 0x50, with no read-back verification. The value written is model-specific,
+	// which is exactly why it lives in a per-model catalog entry.
+	MechanismLGAltInput Mechanism = "lg-alt-input"
+
+	// MechanismInputSource is the standard Input Source feature, VCP 0x60, sent
+	// to the ordinary DDC/CI source address with no read-back verification. It
+	// is standard in name only: the values a model accepts, and whether it
+	// accepts the write at all, are still per-model facts with per-input
+	// evidence, and monmux never writes 0x60 merely because a monitor reads it.
+	MechanismInputSource Mechanism = "vcp-input-source"
+)
 
 // mechanisms is every mechanism monmux implements. A value outside this set can
 // never become a valid [Operation], so a catalog entry that names an unknown
 // mechanism is inert rather than dangerous.
-var mechanisms = []Mechanism{MechanismLGAltInput}
+var mechanisms = []Mechanism{MechanismLGAltInput, MechanismInputSource}
 
 // Mechanisms returns every implemented mechanism.
 func Mechanisms() []Mechanism {
@@ -183,6 +193,9 @@ const (
 	// LGAltInputVCP is the manufacturer-specific VCP code for the LG side
 	// channel's input-switch command.
 	LGAltInputVCP = 0xF4
+
+	// InputSourceVCP is the standard VCP code for Input Source.
+	InputSourceVCP = 0x60
 )
 
 // String returns the mechanism name as it appears in output and documentation.

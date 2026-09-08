@@ -57,11 +57,17 @@ monitor.
 
 ```text
 ddcutil --edid <256 hex characters> setvcp 0xF4 0xD1 --i2c-source-addr=0x50 --noverify
+ddcutil --edid <256 hex characters> setvcp 0x60 0x0F --noverify
 ```
 
+The first line is `lg-alt-input`, the second is `vcp-input-source`. They differ only in the VCP code and in the source address:
+the standard feature goes to the ordinary DDC/CI address, so it carries no `--i2c-source-addr`.
+
 `--edid` rather than `--bus` is a safety decision. The display is selected by its full EDID, so if the monitor on that bus is no
-longer the one monmux identified, `ddcutil` itself refuses. `--noverify` is required because the LG side channel has no
-meaningful read-back; monmux does not treat its absence as a problem to work around.
+longer the one monmux identified, `ddcutil` itself refuses. `--noverify` is on both lines, and not only because the LG side
+channel has no meaningful read-back: monmux never confirms a switch by reading a monitor at all, and a read of `0x60` is
+particularly unreliable — the one model recorded for that mechanism answers with values that are not the ones that select an
+input. monmux does not treat the absence of a read-back as a problem to work around.
 
 The EDID hex identifies a physical unit, so it is masked in output unless `--show-serial` is given.
 
@@ -117,10 +123,15 @@ display can be written to at all was already decided during enumeration.
 
 ```text
 m1ddc display <system UUID> set input-alt 209
+m1ddc display <system UUID> set input 15
 ```
 
-`input-alt` is the same LG side channel `ddcutil` reaches with `--i2c-source-addr=0x50`. The value is decimal: the catalog
+`input-alt` is `lg-alt-input`: the same LG side channel `ddcutil` reaches with `--i2c-source-addr=0x50`. `input` is
+`vcp-input-source`, the standard `VCP 0x60` feature. Neither reads the monitor back. The value is decimal on both: the catalog
 records `0xD1` and `m1ddc` is handed `209`.
+
+`m1ddc` takes a 16-bit value and splits the SH/SL pair itself, so the one catalog value that does not fit in a byte needs no
+special handling — `0x1D1` is handed over as `465`.
 
 Before that runs, the display list is re-read and the UUID must still carry the same identity, or the switch is refused as
 `identity-changed`.

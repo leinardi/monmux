@@ -53,6 +53,15 @@ func TestArgumentsAreTheSetvcpInvocation(t *testing.T) {
 				"setvcp", "0xF4", "0x1D1", "--i2c-source-addr=0x50", "--noverify",
 			},
 		},
+		// The standard feature goes to the ordinary DDC/CI source address, so
+		// there is no --i2c-source-addr. No end-to-end Plan golden test for this
+		// mechanism is possible until a model using it is write-enabled; the
+		// first pull request that enables one adds it.
+		"the standard Input Source feature": {
+			mechanism: catalog.MechanismInputSource,
+			value:     0x0F,
+			want:      []string{"setvcp", "0x60", "0x0F", "--noverify"},
+		},
 		"a mechanism this backend does not implement": {
 			mechanism: catalog.Mechanism("invented"),
 			value:     0xD1,

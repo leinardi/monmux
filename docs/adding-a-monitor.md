@@ -57,16 +57,23 @@ not evidence for this one — that is why the catalog carries evidence per input
 
 ## 3. Choose a mechanism
 
-`catalog.Mechanism` is a closed enum. Today it has one value, `lg-alt-input`: the LG side channel, source address `0x50`, VCP
-`0xF4`, no verification.
+`catalog.Mechanism` is a closed enum with two values:
 
-If your monitor switches through a different mechanism — the standard Input Source feature `VCP 0x60`, say — that mechanism does
-not exist yet, and adding it is part of your change. Two rules:
+- `lg-alt-input` — the LG side channel: source address `0x50`, VCP `0xF4`, no verification.
+- `vcp-input-source` — the standard Input Source feature: the ordinary source address, VCP `0x60`, no verification.
 
-- A mechanism is added **together with the first model that needs it**, never speculatively.
+If your monitor switches through neither, that mechanism does not exist yet, and adding it is part of your change. Three rules:
+
+- A mechanism is added **together with the first model that needs it**, never speculatively. A model that only *records* it —
+  disabled, with no identity — counts as that model: the point is that a mechanism enters the code with evidence attached, not
+  that the first entry using it is trusted.
+- A mechanism's backend path is **untested on hardware** until the first model using it is write-enabled. `vcp-input-source` is
+  in that state today. Enabling that first model is therefore a first hardware run of the mechanism as well as of the model:
+  work through the [testing.md](testing.md) checklist for it, and say in the pull request that it is the first, rather than
+  treating it as a routine catalog flip.
 - A mechanism is a per-model property and never a fallback. A backend that does not implement a model's mechanism refuses with
   `invalid-operation` rather than trying another one. In particular, monmux does not write `VCP 0x60` because a monitor happens
-  to read it.
+  to read it — only because a catalog entry names that mechanism.
 
 Implementing a new mechanism means: a value in the enum, the name table in `internal/catalog/internal/generate` that lets the
 catalog file spell it, the planner code in each backend that supports it, `ValidateOperation` accepting it there, and a golden

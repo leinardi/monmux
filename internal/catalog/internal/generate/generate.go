@@ -106,23 +106,27 @@ var (
 	ErrBadText = errors.New("generate: text holds a pipe or a line break")
 )
 
-// mechanismLGAltInput is the LG side channel. It mirrors
-// catalog.MechanismLGAltInput.
-const mechanismLGAltInput = "lg-alt-input"
+// The mechanisms. They mirror catalog.Mechanisms().
+const (
+	mechanismLGAltInput  = "lg-alt-input"
+	mechanismInputSource = "vcp-input-source"
+)
 
 // mechanismOrder is every mechanism a backend implements. It mirrors
 // catalog.Mechanisms().
-var mechanismOrder = []string{mechanismLGAltInput}
+var mechanismOrder = []string{mechanismLGAltInput, mechanismInputSource}
 
 // mechanismNames maps a mechanism name to the Go constant that names it.
 var mechanismNames = map[string]string{
-	mechanismLGAltInput: "MechanismLGAltInput",
+	mechanismLGAltInput:  "MechanismLGAltInput",
+	mechanismInputSource: "MechanismInputSource",
 }
 
 // mechanismPhrases maps a mechanism name to the way the evidence sentence
 // names it. It is prose, not a value: nothing here reaches a monitor.
 var mechanismPhrases = map[string]string{
-	mechanismLGAltInput: "the LG side channel (source address 0x50, VCP 0xF4)",
+	mechanismLGAltInput:  "the LG side channel (source address 0x50, VCP 0xF4)",
+	mechanismInputSource: "the standard Input Source feature (VCP 0x60)",
 }
 
 // The evidence grades. They mirror catalog.Grades(), which a test compares.

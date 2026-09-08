@@ -83,11 +83,15 @@ is sent. On Linux the write itself then selects the display by its full 256-char
 
 ### 4. A mechanism is a per-model property, never a fallback
 
-`catalog.Mechanism` is a closed enum with exactly one value today: `lg-alt-input`, the LG side channel — source address `0x50`,
-VCP `0xF4`, no verification. It is the extension point for other vendors, and a second mechanism (the standard Input Source
-feature `VCP 0x60`, say) is added only together with the first evidenced model that needs it. A backend that does not implement
-a model's mechanism refuses with `invalid-operation` rather than trying another one, and monmux never writes `0x60` as a
-fallback because a monitor happens to read it (requirement 9.7).
+`catalog.Mechanism` is a closed enum with two values: `lg-alt-input`, the LG side channel — source address `0x50`, VCP `0xF4`,
+no verification — and `vcp-input-source`, the standard Input Source feature — the ordinary source address, VCP `0x60`, no
+verification. It is the extension point for other vendors, and a mechanism is added only together with the first evidenced model
+that needs it, never speculatively; a model that merely records it, disabled, counts as that model, and the backend path stays
+untested on hardware until the first model using it is enabled.
+
+A backend that does not implement a model's mechanism refuses with `invalid-operation` rather than trying another one. Adding
+`vcp-input-source` did not make `0x60` a fallback for anything: monmux writes it only for a model whose catalog entry names it,
+never because a monitor happens to read it (requirement 9.7).
 
 ### 5. Sent is not confirmed
 

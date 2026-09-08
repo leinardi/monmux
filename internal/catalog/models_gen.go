@@ -1198,4 +1198,42 @@ var models = []Model{
 			"https://github.com/pyang2045/streamdeck-display-knob",
 		},
 	},
+	{
+		Name:         "LC49G95T",
+		Vendor:       "Samsung",
+		Identities:   nil,
+		WriteEnabled: false,
+		Inputs: map[Input]inputOp{
+			"dp1": {
+				mechanism: MechanismInputSource,
+				value:     0x0F,
+				grade:     GradeReported,
+				evidence:  "Reported working on the exact LC49G95T by DimpiM/monitor-switch (hardware-findings.md) (ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input): switching to DisplayPort 1 with 0x0F over the standard Input Source feature (VCP 0x60) succeeded; reading VCP 0x60 back afterwards gives 0x03, which is not the value that selects the input; not verified here: https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md",
+			},
+			"dp2": {
+				mechanism: MechanismInputSource,
+				value:     0x10,
+				grade:     GradeReported,
+				evidence:  "Reported working on the exact LC49G95T by DimpiM/monitor-switch (hardware-findings.md) (ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input): switching to DisplayPort 2 with 0x10 over the standard Input Source feature (VCP 0x60) succeeded; reading VCP 0x60 back afterwards gives 0x04, which is not the value that selects the input; not verified here: https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md",
+			},
+			"hdmi": {
+				mechanism: MechanismInputSource,
+				value:     0x11,
+				grade:     GradeReported,
+				evidence:  "Reported working on the exact LC49G95T by DimpiM/monitor-switch (hardware-findings.md) (ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input): switching to HDMI with 0x11 over the standard Input Source feature (VCP 0x60) succeeded; reading VCP 0x60 back afterwards gives 0x01, which is not the value that selects the input; not verified here: https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md",
+			},
+		},
+		Notes: []string{
+			"The first record of the `vcp-input-source` mechanism, and the first entry that is not an LG. It is disabled and carries no identity like every other unverified entry, so that backend path has never reached a monitor: enabling this model would be the first hardware run of the mechanism, and belongs in the [testing.md](testing.md) checklist rather than in a routine catalog flip.",
+			"The values the monitor reports back are not the values that select an input. After a switch, reading VCP 0x60 gives 0x03 for DP1, 0x04 for DP2 and 0x01 for HDMI, and writing those back does not switch. That is one reason monmux never confirms a switch by reading a monitor.",
+			"DDC/CI answers only on the HDMI input; the DisplayPort inputs do not expose slave address 0x37 at all, so the switch has to be sent from HDMI.",
+			"Switching to an input with no signal wedges the monitor's DDC engine until a link reset or a trip through the OSD. Never switch blind: whoever verifies this model needs the target input already connected.",
+			"The capabilities string declares Input Source values the monitor does not have, so it is not a source of values for this model.",
+			"EDID, as text only: manufacturer `SAM`, model name `LC49G95T`. No product code has been published, which is the other reason the entry records no identity.",
+		},
+		Sources: []string{
+			"https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md",
+			"https://github.com/DimpiM/monitor-switch/blob/main/service/profiles/samsung-lc49g95t.yaml",
+		},
+	},
 }

@@ -24,7 +24,9 @@
 # kind (dp, hdmi, usb-c, dvi, vga, thunderbolt) plus an optional port number
 # (hdmi1, usb-c2). Write a kind bare when the model has one port of it, numbered
 # when it has several; never both. The mechanism is a per-model property and
-# never a fallback; the only one implemented today is lg-alt-input.
+# never a fallback. Two are implemented: lg-alt-input, the LG side channel
+# (source address 0x50, VCP 0xF4), and vcp-input-source, the standard Input
+# Source feature (VCP 0x60). Only the first has ever reached a monitor.
 #
 # An identity may pin `model_name`, the EDID descriptor 0xFC text, because LG
 # assigns one product code to several products. Leave it out unless two models
@@ -1310,3 +1312,46 @@ models:
       - 'The weakest entry here. `lg.sh` in pyang2045/streamdeck-display-knob is described as "Manual control of the LG UltraFine 32U990A" and sends m1ddc `input-alt` 144, 208 and 210, but the script does not say whether it was run successfully. A single HDMI port is reported, so the input is written bare.'
     sources:
       - https://github.com/pyang2045/streamdeck-display-knob
+
+  - name: LC49G95T
+    vendor: Samsung
+    identities: []
+    write_enabled: false
+    inputs:
+      dp1:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: reported
+          by: "DimpiM/monitor-switch (hardware-findings.md)"
+          tool: "ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input"
+          url: https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md
+          note: "reading VCP 0x60 back afterwards gives 0x03, which is not the value that selects the input"
+      dp2:
+        mechanism: vcp-input-source
+        value: 0x10
+        evidence:
+          grade: reported
+          by: "DimpiM/monitor-switch (hardware-findings.md)"
+          tool: "ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input"
+          url: https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md
+          note: "reading VCP 0x60 back afterwards gives 0x04, which is not the value that selects the input"
+      hdmi:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: reported
+          by: "DimpiM/monitor-switch (hardware-findings.md)"
+          tool: "ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input"
+          url: https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md
+          note: "reading VCP 0x60 back afterwards gives 0x01, which is not the value that selects the input"
+    notes:
+      - "The first record of the `vcp-input-source` mechanism, and the first entry that is not an LG. It is disabled and carries no identity like every other unverified entry, so that backend path has never reached a monitor: enabling this model would be the first hardware run of the mechanism, and belongs in the [testing.md](testing.md) checklist rather than in a routine catalog flip."
+      - "The values the monitor reports back are not the values that select an input. After a switch, reading VCP 0x60 gives 0x03 for DP1, 0x04 for DP2 and 0x01 for HDMI, and writing those back does not switch. That is one reason monmux never confirms a switch by reading a monitor."
+      - "DDC/CI answers only on the HDMI input; the DisplayPort inputs do not expose slave address 0x37 at all, so the switch has to be sent from HDMI."
+      - "Switching to an input with no signal wedges the monitor's DDC engine until a link reset or a trip through the OSD. Never switch blind: whoever verifies this model needs the target input already connected."
+      - "The capabilities string declares Input Source values the monitor does not have, so it is not a source of values for this model."
+      - "EDID, as text only: manufacturer `SAM`, model name `LC49G95T`. No product code has been published, which is the other reason the entry records no identity."
+    sources:
+      - https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md
+      - https://github.com/DimpiM/monitor-switch/blob/main/service/profiles/samsung-lc49g95t.yaml

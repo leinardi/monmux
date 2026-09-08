@@ -86,9 +86,10 @@ Repo-local make targets live in `.mk/cross.mk`.
 - `cmd/monmux` — cobra commands: `info`, `switch`, `doctor`, `version`, `completion`. Owns flags, config loading, output formatting, and exit codes.
 - `internal/refusal` — the one typed refusal error used by every layer, with the reason enum and the rendered message.
 - `internal/edid` — EDID block-0 parser producing an `Identity`. Carries no raw EDID bytes.
-- `internal/catalog` — the supported-monitor catalog, the `Input` name (a connector kind plus an optional port number), the `Kind`
-  and `Mechanism` enums, and the opaque `Operation`. The catalog is written in `models.yaml` and rendered into the committed
-  `models_gen.go` by `make go-generate`; a test fails the build if the two disagree. `internal/catalog/internal/generate` is that
+- `internal/catalog` — the supported-monitor catalog, the `Input` name (a connector kind plus an optional port number), the `Kind`,
+  `Mechanism` and `Grade` enums, and the opaque `Operation` (a mechanism plus a 16-bit value). The catalog is written in
+  `models.yaml` and rendered into the committed `models_gen.go` by `make go-generate`; a test fails the build if the two
+  disagree. `internal/catalog/internal/generate` is that
   renderer, and it deliberately does not import `internal/catalog`, so a deleted or corrupt `models_gen.go` can still be
   regenerated.
 - `internal/catalog/internal/input` — the grammar of an input name: the closed list of connector kinds, the parser, the labels
