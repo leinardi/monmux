@@ -44,7 +44,7 @@ Documentation, and what each page is for:
 | [`README.md`](README.md)                               | What monmux is, how to install it, how to run it.                        |
 | [`docs/architecture.md`](docs/architecture.md)         | How a switch is decided, and the five things that make it safe.          |
 | [`docs/backends.md`](docs/backends.md)                 | ddcutil and m1ddc specifics: version floor, probes, permissions, quirks. |
-| [`docs/compatibility.md`](docs/compatibility.md)       | The catalog, in prose. Checked against the code by a test.               |
+| [`docs/compatibility.md`](docs/compatibility.md)       | The catalog, in prose. Its table and notes are generated from the YAML.  |
 | [`docs/adding-a-monitor.md`](docs/adding-a-monitor.md) | The procedure for enabling a model or an input.                          |
 | [`docs/configuration.md`](docs/configuration.md)       | The configuration file, the flags, and which wins.                       |
 | [`docs/security.md`](docs/security.md)                 | Threat model, mitigations, trust boundaries, what monmux never does.     |
@@ -53,9 +53,10 @@ Documentation, and what each page is for:
 | [`docs/release.md`](docs/release.md)                   | The release pipeline, as a design. Not implemented.                      |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md)                   | Prerequisites, workflow, and the catalog evidence rule.                  |
 
-A change to the catalog must update [`docs/compatibility.md`](docs/compatibility.md) and re-render `models_gen.go` in the same
-commit: one test compares the document against the catalog and another compares the catalog against its YAML, and both fail the build
-if they disagree.
+A change to the catalog is a change to `internal/catalog/models.yaml` followed by `make go-generate`, which re-renders both
+`models_gen.go` and the marked region of [`docs/compatibility.md`](docs/compatibility.md) — the table and the per-model notes.
+Commit all three. Three tests fail the build if they disagree: one compares each rendered file against a fresh rendering of the
+YAML, and one reads the document back and compares it against the compiled catalog. Do not hand-edit inside the markers.
 
 ## Common commands
 

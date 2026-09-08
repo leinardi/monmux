@@ -1,8 +1,12 @@
 # Compatibility
 
 This page is the human-readable copy of the supported-monitor catalog in `internal/catalog/models.yaml`. The catalog is what the
-binary uses; this page is checked against it by `TestCompatibilityDocumentMatchesTheCatalog` and
-`TestCompatibilityDocumentCarriesEveryNoteAndSource`, so the two cannot drift apart without failing the build.
+binary uses. The two sections between the `BEGIN GENERATED` and `END GENERATED` markers — the table and the per-model notes —
+are rendered from that file by `make go-generate`: edit the catalog, regenerate, and commit both. Everything outside the markers
+is written by hand. Three tests check the result, so the page and the catalog cannot drift apart without failing the build:
+`TestCompatibilityDocumentMatchesTheGenerator` compares this file against a fresh rendering, and
+`TestCompatibilityDocumentMatchesTheCatalog` and `TestCompatibilityDocumentCarriesEveryNoteAndSource` read it back and compare
+it against the compiled catalog, which is the copy the binary actually uses.
 
 One model is verified so far. Everything else in the table is a report somebody else published: recorded because it is useful
 to a contributor who owns that monitor, disabled, and without an EDID fingerprint, so it can never match a display and can
@@ -35,6 +39,8 @@ which values a model accepts, and whether it accepts the write at all, are still
   work, without saying which inputs were tried individually.
 - **Evidence** — why anyone believes that value does that thing on that model, composed from the fields the catalog records so
   that every row of one grade reads the same way.
+
+<!-- BEGIN GENERATED: edit internal/catalog/models.yaml, then run make go-generate -->
 
 ## Catalog
 
@@ -147,7 +153,6 @@ which values a model accepts, and whether it accepts the write at all, are still
 | LG 32U990A | none | `dp` | `0xD0` | `lg-alt-input` | no | quoted | Weaker report on the exact 32U990A by pyang2045 (m1ddc input-alt on macOS): the report quotes 0xD0 for DisplayPort and says it works, without saying which inputs were tried individually; not verified here: <https://github.com/pyang2045/streamdeck-display-knob> |
 | LG 32U990A | none | `hdmi` | `0x90` | `lg-alt-input` | no | quoted | Weaker report on the exact 32U990A by pyang2045 (m1ddc input-alt on macOS): the report quotes 0x90 for HDMI and says it works, without saying which inputs were tried individually; not verified here: <https://github.com/pyang2045/streamdeck-display-knob> |
 | LG 32U990A | none | `thunderbolt` | `0xD2` | `lg-alt-input` | no | quoted | Weaker report on the exact 32U990A by pyang2045 (m1ddc input-alt on macOS): the report quotes 0xD2 for Thunderbolt and says it works, without saying which inputs were tried individually; not verified here: <https://github.com/pyang2045/streamdeck-display-knob> |
-
 | Samsung LC49G95T | none | `dp1` | `0x0F` | `vcp-input-source` | no | reported | Reported working on the exact LC49G95T by DimpiM/monitor-switch (hardware-findings.md) (ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input): switching to DisplayPort 1 with 0x0F over the standard Input Source feature (VCP 0x60) succeeded; reading VCP 0x60 back afterwards gives 0x03, which is not the value that selects the input; not verified here: <https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md> |
 | Samsung LC49G95T | none | `dp2` | `0x10` | `vcp-input-source` | no | reported | Reported working on the exact LC49G95T by DimpiM/monitor-switch (hardware-findings.md) (ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input): switching to DisplayPort 2 with 0x10 over the standard Input Source feature (VCP 0x60) succeeded; reading VCP 0x60 back afterwards gives 0x04, which is not the value that selects the input; not verified here: <https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md> |
 | Samsung LC49G95T | none | `hdmi` | `0x11` | `vcp-input-source` | no | reported | Reported working on the exact LC49G95T by DimpiM/monitor-switch (hardware-findings.md) (ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input): switching to HDMI with 0x11 over the standard Input Source feature (VCP 0x60) succeeded; reading VCP 0x60 back afterwards gives 0x01, which is not the value that selects the input; not verified here: <https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md> |
@@ -488,6 +493,8 @@ Sources:
 
 - <https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md>
 - <https://github.com/DimpiM/monitor-switch/blob/main/service/profiles/samsung-lc49g95t.yaml>
+
+<!-- END GENERATED -->
 
 ## What is deliberately not here
 

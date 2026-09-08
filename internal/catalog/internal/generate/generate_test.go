@@ -377,6 +377,18 @@ func TestInvalidEvidenceIsRejected(t *testing.T) {
 			document: strings.Replace(valid, "- a named source", `- "a | source"`, 1),
 			want:     generate.ErrBadText,
 		},
+		"a model name holding a table separator": {
+			document: strings.Replace(valid, "name: TEST-1", `name: "TEST | 1"`, 1),
+			want:     generate.ErrBadText,
+		},
+		"a vendor holding a table separator": {
+			document: strings.Replace(valid, "vendor: ACME", `vendor: "AC | ME"`, 1),
+			want:     generate.ErrBadText,
+		},
+		"a vendor holding a line break": {
+			document: strings.Replace(valid, "vendor: ACME", `vendor: "AC\nME"`, 1),
+			want:     generate.ErrBadText,
+		},
 		"a bare identity beside a pinned one": {
 			document: valid + strings.Replace(
 				strings.Replace(entry, "name: TEST-1", "name: TEST-2", 1),

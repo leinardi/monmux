@@ -158,28 +158,16 @@ func renderIdentities(identities []Identity) []string {
 	return append(lines, "},")
 }
 
-// renderInputs renders the input map in catalog order - connector kind, then
-// port number - so the generated file does not depend on the order the keys
-// happen to have in the catalog file.
-//
-// A key that does not parse is an error rather than a name sorted at one end:
-// [Document.Validate] has already rejected such a document, so reaching here
-// means this package has a bug, and a fallback order would not be transitive.
+// renderInputs renders the input map in the order [sortedInputNames] decides,
+// so the generated file does not depend on the order the keys happen to have in
+// the catalog file.
 func renderInputs(model *Model) ([]string, error) {
 	entries := model.Inputs
 
-	names := make([]input.Name, 0, len(entries))
-
-	for name := range entries {
-		parsed, err := input.Parse(name)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %q: %w", ErrRender, name, err)
-		}
-
-		names = append(names, parsed)
+	names, err := sortedInputNames(model)
+	if err != nil {
+		return nil, err
 	}
-
-	slices.SortFunc(names, input.Compare)
 
 	lines := make([]string, 0, len(entries)*linesPerInput+2)
 	lines = append(lines, "Inputs: map[Input]inputOp{")
@@ -187,9 +175,9 @@ func renderInputs(model *Model) ([]string, error) {
 	for _, name := range names {
 		entry := entries[name.String()]
 
-		evidence, err := renderEvidence(model.Name, name, &entry)
-		if err != nil {
-			return nil, err
+		evidence, evidenceErr := renderEvidence(model.Name, name, &entry)
+		if evidenceErr != nil {
+			return nil, evidenceErr
 		}
 
 		lines = append(lines,
@@ -203,6 +191,32 @@ func renderInputs(model *Model) ([]string, error) {
 	}
 
 	return append(lines, "},"), nil
+}
+
+// sortedInputNames parses a model's input keys and puts them in catalog order -
+// connector kind, then port number - so neither the generated Go nor the
+// generated documentation depends on the order the keys happen to have in the
+// catalog file. Both renderers sort through this one function, which is what
+// makes a row of the table line up with an entry of the map.
+//
+// A key that does not parse is an error rather than a name sorted at one end:
+// [Document.Validate] has already rejected such a document, so reaching here
+// means this package has a bug, and a fallback order would not be transitive.
+func sortedInputNames(model *Model) ([]input.Name, error) {
+	names := make([]input.Name, 0, len(model.Inputs))
+
+	for name := range model.Inputs {
+		parsed, err := input.Parse(name)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %q: %w", ErrRender, name, err)
+		}
+
+		names = append(names, parsed)
+	}
+
+	slices.SortFunc(names, input.Compare)
+
+	return names, nil
 }
 
 // renderEvidence composes the sentence the catalog and the documentation both

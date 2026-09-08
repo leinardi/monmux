@@ -24,8 +24,11 @@
 // literal bytes with recorded evidence next to them, in both files at once. No
 // flag, config key or environment variable can introduce a value here.
 //
-// Edit models.yaml, run `make go-generate`, and commit both files.
-// TestGeneratedCatalogMatchesTheYAML fails the build if the two ever disagree.
+// Edit models.yaml, run `make go-generate`, and commit every file it rewrites:
+// this one's generated half, and the generated sections of
+// docs/compatibility.md. TestGeneratedCatalogMatchesTheYAML and
+// TestCompatibilityDocumentMatchesTheGenerator fail the build if any of them
+// ever disagree with the catalog file.
 //
 // The types enforce the fail-closed rule structurally. An [Operation] can only be
 // built by this package from a catalog entry; its zero value is invalid and every
@@ -33,7 +36,7 @@
 // never carries a byte of its own.
 package catalog
 
-//go:generate go run ./internal/generate/cmd -in models.yaml -out models_gen.go
+//go:generate go run ./internal/generate/cmd -in models.yaml -out models_gen.go -doc ../../docs/compatibility.md
 
 import (
 	"errors"

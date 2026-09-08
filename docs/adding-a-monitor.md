@@ -199,9 +199,9 @@ A disabled entry is not a lesser contribution. It is the thing that stops the ne
 
 ## 7. Update the documentation and the fixtures
 
-- [compatibility.md](compatibility.md) is checked against the catalog by two tests, so add your rows **and** your
-  `### Vendor Model` section — the notes as bullets, then a `Sources:` line, then the sources as bullets — in the same commit.
-  Both must be byte-identical to the catalog, once markdownlint's `<url>` brackets are undone.
+- The table and the `### Vendor Model` sections of [compatibility.md](compatibility.md) are generated: `make go-generate`
+  writes them from your `notes` and `sources`, so there are no rows to type and nothing to keep byte-identical by hand. Commit
+  the regenerated file. Anything you want to say that is not in those two lists belongs outside the markers, or in the YAML.
 - If you add a fixture — a captured EDID, or captured tool output — **sanitize it first**. Replace every serial and UUID with the
   synthetic values in `internal/backend/testdata/README.md`, recompute the EDID checksum, and check that the allowlist test
   passes. It fails the build if any other identifier appears anywhere under a `testdata` directory. Never commit a real serial.
@@ -212,8 +212,7 @@ A disabled entry is not a lesser contribution. It is the thing that stops the ne
 - [ ] Evidence recorded per input: date, OS, backend, command, and what the monitor did — in both directions.
 - [ ] Every value you tested yourself; nothing enabled on somebody else's say-so.
 - [ ] Catalog entry added to `models.yaml`, with `sources` naming where the values came from.
-- [ ] `make go-generate` run, and `models_gen.go` committed alongside the YAML.
-- [ ] `compatibility.md` updated to match: the table rows, and the model's notes-and-sources section.
+- [ ] `make go-generate` run, and everything it rewrote — `models_gen.go` and `compatibility.md` — committed alongside the YAML.
 - [ ] Any new fixture sanitized, and `make go-test` passing.
 - [ ] `make check` clean.
 - [ ] If you added a mechanism: the enum value, the generator's name table, both backends' handling of it, and a golden test for

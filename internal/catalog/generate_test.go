@@ -62,6 +62,40 @@ func TestGeneratedCatalogMatchesTheYAML(t *testing.T) {
 	)
 }
 
+// The generated sections of the compatibility document are rendered from
+// models.yaml by the same command that renders models_gen.go. A hand edit inside
+// the markers, or a catalog change committed without a regeneration, fails here.
+//
+// This is the gate; the pre-commit hook that regenerates the file is the
+// convenience that fixes it for you.
+func TestCompatibilityDocumentMatchesTheGenerator(t *testing.T) {
+	t.Parallel()
+
+	root := moduleRoot(t)
+
+	source, err := os.ReadFile(filepath.Join(root, "internal", "catalog", "models.yaml"))
+	if err != nil {
+		t.Fatalf("reading models.yaml: %v", err)
+	}
+
+	committed := []byte(contents(t))
+
+	rendered, err := generate.GenerateDocument(source, committed)
+	if err != nil {
+		t.Fatalf("%s does not render: %v", document, err)
+	}
+
+	if bytes.Equal(rendered, committed) {
+		return
+	}
+
+	t.Errorf(
+		"%s is stale: run `make go-generate` and commit the result.\n%s",
+		document,
+		firstDifference(string(committed), string(rendered)),
+	)
+}
+
 // firstDifference reports the first line where the committed file and a fresh
 // rendering diverge, which is enough to see what was edited by hand.
 func firstDifference(committed, rendered string) string {

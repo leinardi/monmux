@@ -431,6 +431,15 @@ func (m *Model) validate() []error {
 		problems = append(problems, fmt.Errorf("%w: %q has a blank vendor", ErrBlank, m.Name))
 	}
 
+	// The two together are a table cell and a Markdown heading in the generated
+	// documentation, so a pipe would shift every column of that row and a line
+	// break would split the heading in half.
+	if !renderable(m.Name) || !renderable(m.Vendor) {
+		problems = append(problems, fmt.Errorf(
+			"%w: %q has an unrenderable name or vendor", ErrBadText, m.Name,
+		))
+	}
+
 	problems = append(problems, m.validateIdentities()...)
 	problems = append(problems, m.validateInputs()...)
 	problems = append(problems, m.validateNotes()...)

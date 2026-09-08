@@ -73,12 +73,16 @@ including the redaction. Output is an interface too.
   written down;
 - the zero operation is invalid.
 
-`TestCompatibilityDocumentMatchesTheCatalog` compares the table in `docs/compatibility.md` against the catalog,
-`TestCompatibilityDocumentCarriesEveryNoteAndSource` compares each model's notes and sources against its section verbatim, and
-`TestGeneratedCatalogMatchesTheYAML` compares the catalog against `internal/catalog/models.yaml`, so a hand-edit of the
-generated Go fails the build instead of shipping. The `go-test-repo-mod` pre-commit hook is filtered to Go files and `go.mod`,
-which would let a commit that edits only the catalog file skip that test; `.pre-commit-config.yaml` widens the filter to include
-`models.yaml` so an edit without a regeneration cannot be committed. The generator has its own tests for every rule it enforces, and
+`TestGeneratedCatalogMatchesTheYAML` and `TestCompatibilityDocumentMatchesTheGenerator` compare the two rendered files —
+`internal/catalog/models_gen.go` and the marked region of `docs/compatibility.md` — against a fresh rendering of
+`internal/catalog/models.yaml`, so a hand-edit of either fails the build instead of shipping.
+`TestCompatibilityDocumentMatchesTheCatalog` compares the table in `docs/compatibility.md` against the catalog and
+`TestCompatibilityDocumentCarriesEveryNoteAndSource` compares each model's notes and sources against its section verbatim; both
+read the document back and check it against the compiled catalog rather than against the generator, so a generator that renders
+something the binary does not carry is caught too. The `go-test-repo-mod` pre-commit hook is filtered to Go files and `go.mod`,
+which would let a commit that edits only the catalog file or only the document skip those tests; `.pre-commit-config.yaml`
+widens the filter to include both, and a `go-generate-catalog` hook re-runs the generator so an edit without a regeneration
+cannot be committed. The generator has its own tests for every rule it enforces, and
 `TestGeneratorKnowsEveryMechanism` and `TestGeneratorKnowsEveryGrade` keep its copies of those two enums in step with the real
 ones. Input names are not mirrored: the generator and the catalog import the one grammar from
 `internal/catalog/internal/input`, which has its own tests for what parses, how names sort and which numbering a model may not

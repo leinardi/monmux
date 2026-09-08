@@ -31,6 +31,23 @@ repos:
         files: ^\.github/workflows/.*\.(yml|yaml)$
         args: ["-oneline", "-shellcheck", "shellcheck -S error"]
         stages: [manual]
+  # Before markdownlint, because this rewrites a Markdown file and the linter has
+  # to see the result. `go generate` rather than `make go-generate`: the Makefile
+  # fetches the shared .mk snippets over the network on first run, which a commit
+  # hook must never do.
+  - repo: local
+    hooks:
+      - id: go-generate-catalog
+        name: models_gen.go and compatibility.md are generated from models.yaml
+        entry: go generate ./internal/catalog/...
+        language: system
+        pass_filenames: false
+        # The generator's own sources are here too: internal/input decides the
+        # Input column's text and the row order, so editing it moves the
+        # document. TestGeneratedCatalogMatchesTheYAML and
+        # TestCompatibilityDocumentMatchesTheGenerator are the gate; this hook is
+        # the convenience that fixes the file for you.
+        files: '^(internal/catalog/models\.yaml|docs/compatibility\.md|internal/catalog/catalog\.go|internal/catalog/internal/(generate|input)/.*\.go)$'
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.23.2
     hooks:
@@ -88,9 +105,11 @@ repos:
     hooks:
       # The hook's own filter is Go files and go.mod. The supported-monitor
       # catalog is written in internal/catalog/models.yaml and rendered into a
-      # committed Go file, so a commit that edits only the YAML would stage no Go
-      # file, skip the suite, and let a stale models_gen.go through.
-      # TestGeneratedCatalogMatchesTheYAML is what catches that, so the suite has
-      # to run for the catalog file too.
+      # committed Go file and into the generated sections of the compatibility
+      # document, so a commit that edits only one of those would stage no Go
+      # file, skip the suite, and let a stale rendering through.
+      # TestGeneratedCatalogMatchesTheYAML and
+      # TestCompatibilityDocumentMatchesTheGenerator are what catch that, so the
+      # suite has to run for both files too.
       - id: go-test-repo-mod
-        files: '(\.go$)|(\bgo\.mod$)|(^internal/catalog/models\.yaml$)'
+        files: '(\.go$)|(\bgo\.mod$)|(^internal/catalog/models\.yaml$)|(^docs/compatibility\.md$)'
