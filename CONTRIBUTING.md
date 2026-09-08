@@ -41,6 +41,7 @@ make go-test           # go test -race ./...
 make go-vet
 make go-build-cross    # compile-check both OS backends, whatever the host
 make go-vet-cross      # and vet both, their build-tagged tests included
+make go-lint-cross     # and lint both, which `make check` does not
 make check             # the full pre-commit suite
 make check-stage       # the same, on staged files only
 ```

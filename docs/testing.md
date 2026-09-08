@@ -75,12 +75,19 @@ are named outright rather than derived as "the OS the host is not": `go env GOOS
 and a backend is left checked by nothing at all. A backend's parser and decisions carry no build tag, so they run in
 `make go-test` like everything else.
 
-There is deliberately no cross-lint target, and cross-vet is not a substitute for one. `golangci-lint` with `GOOS` set to the
-other OS aborts inside the standard library's own typecheck — the `go/types` it was built with is older than the toolchain's —
-and then reports nothing at all about this repository: a violation planted in a build-tagged file goes unreported. Excluding
-that typecheck error by path, the obvious next move, turns the run into a green result that checked nothing. So the linter only
-ever sees the host's backend, and **lint findings in the other backend surface only when somebody runs `make check` on that
-OS.** Closing that for real needs a runner of each OS — [release.md](release.md).
+`make go-lint-cross` does the same for the linter, and it is the one that matters: lint is where the two backends diverge most,
+and three findings in `internal/backend/m1ddc` went unreported for as long as the linter only ever ran on Linux. `make check`
+still covers the host's backend alone, so run the cross target before pushing a change to either one.
+
+It is also the one target that can fail for reasons outside this repository. When cross-targeting, `golangci-lint` typechecks
+the standard library from source using the `go/types` it was built with; if that is older than your toolchain it aborts inside
+`GOROOT` and then reports **nothing at all** about this repository — a violation planted in a build-tagged file is reported
+nowhere. v2.12.2, built with go1.26.5, does exactly that against a Go 1.27 toolchain; v2.13.2, built with go1.27.0, is clean.
+
+If the target fails inside `GOROOT` rather than inside monmux, your linter is older than your toolchain: update
+`.pre-commit-config.yaml`, or skip the target for now. **Never silence that typecheck error with a path exclusion.** It does not
+restore the analysis, it only hides the abort, and the run then goes green having checked nothing. Running the linter natively
+on each OS in CI is still the durable answer — [release.md](release.md).
 
 ## Fixtures
 
@@ -109,6 +116,7 @@ produced.
 make go-test          # go test -race ./...
 make go-build-cross   # compile-check both OS backends, whatever the host
 make go-vet-cross     # cross-vet both, including their build-tagged tests
+make go-lint-cross    # lint both, which `make check` does not
 make check            # everything pre-commit runs, for the host OS only
 ```
 

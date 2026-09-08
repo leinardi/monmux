@@ -15,13 +15,30 @@
 # such case. `go env GOHOSTOS` does not fix this: it pins these targets to the
 # host while the ones they complement still follow GOOS.
 #
-# There is deliberately no cross-lint target. golangci-lint with GOOS set to the
-# other OS aborts inside the standard library's own typecheck, because the
-# go/types it was built with is older than the toolchain's, and it then reports
-# nothing whatsoever about this repository - a planted violation in a
-# build-tagged file goes unreported. Excluding that typecheck error by path, the
-# obvious next move, turns the run into a green result that checked nothing.
-# Linting the other backend needs a runner of that OS; see docs/release.md.
+# go-lint-cross does the same for the linter, and it is the one that matters:
+# lint is where the two backends diverge most, and three findings in
+# internal/backend/m1ddc went unreported for as long as the linter only ever ran
+# on Linux.
+#
+# It is also the one that can break for reasons that have nothing to do with
+# this repository. golangci-lint typechecks the standard library from source
+# when cross-targeting, using the go/types it was built with; when that is older
+# than the toolchain it aborts in GOROOT and then reports nothing at all about
+# this repository. golangci-lint v2.12.2 (built with go1.26.5) does exactly that
+# against a Go 1.27 toolchain, while v2.13.2 (built with go1.27.0) is clean.
+#
+# If this target fails inside GOROOT rather than inside this repository, your
+# golangci-lint is older than your Go toolchain: update .pre-commit-config.yaml,
+# or skip the target. Never silence that typecheck error with a path exclusion.
+# It does not restore the analysis, it only hides the abort - the run goes green
+# having checked nothing, which is worse than not running it. Verified by
+# planting a violation in a build-tagged file: the aborting version reports it
+# nowhere, the working version reports it.
+
+# The linter is not part of make-common's Go snippet, and the copy the hooks use
+# lives inside pre-commit's cache, so this expects one on PATH. Override it to
+# point at another: make go-lint-cross GOLANGCI_LINT=/path/to/golangci-lint
+GOLANGCI_LINT ?= golangci-lint
 
 .PHONY: go-build-cross
 go-build-cross: ## Compile-check both OS backends, whatever the host (no binary kept)
@@ -32,6 +49,11 @@ go-build-cross: ## Compile-check both OS backends, whatever the host (no binary 
 go-vet-cross: ## Static checks (go vet) for both OS backends, build-tagged tests included
 	GOOS=linux $(GO) vet $(GO_PKG)
 	GOOS=darwin $(GO) vet $(GO_PKG)
+
+.PHONY: go-lint-cross
+go-lint-cross: ## Lint both OS backends; see the note above if it fails inside GOROOT
+	GOOS=linux $(GOLANGCI_LINT) run $(GO_PKG)
+	GOOS=darwin $(GOLANGCI_LINT) run $(GO_PKG)
 
 # The supported-monitor catalog is written in internal/catalog/models.yaml and
 # rendered into internal/catalog/models_gen.go, which is committed. Run this
