@@ -233,16 +233,20 @@ func (g Grade) String() string {
 // It is deliberately opaque. The fields are unexported and the constructor is
 // package-private, so the only way to obtain a valid Operation is to look one up
 // in this catalog. The zero value is invalid, and every backend rejects it.
+//
+// The value is 16 bits because DDC/CI carries one: a SetVCP writes an SH/SL
+// pair, and both backends already send both halves. Most recorded values fit in
+// a byte, and one does not.
 type Operation struct {
 	mechanism Mechanism
-	value     uint8
+	value     uint16
 	valid     bool
 }
 
 // newOperation builds a valid operation. It is package-private on purpose: no
 // caller outside the catalog may invent one. An unknown mechanism yields the
 // invalid zero value rather than something a backend might try to run.
-func newOperation(mechanism Mechanism, value uint8) Operation {
+func newOperation(mechanism Mechanism, value uint16) Operation {
 	if !mechanism.Known() {
 		return Operation{}
 	}
@@ -255,8 +259,9 @@ func (o Operation) Mechanism() Mechanism {
 	return o.mechanism
 }
 
-// Value returns the model-specific value to write.
-func (o Operation) Value() uint8 {
+// Value returns the model-specific value to write, as the 16-bit SH/SL pair a
+// SetVCP carries.
+func (o Operation) Value() uint16 {
 	return o.value
 }
 
@@ -296,7 +301,7 @@ func (i Identity) String() string {
 // merely reported elsewhere.
 type inputOp struct {
 	mechanism Mechanism
-	value     uint8
+	value     uint16
 	grade     Grade
 	evidence  string
 }
@@ -373,7 +378,7 @@ func (m Model) EnabledInputs() []Input {
 // is write-enabled. Documentation checks use it; nothing that writes does.
 //
 //nolint:gocritic // hugeParam: a value receiver keeps Model usable where it is not addressable
-func (m Model) InputValue(input Input) (uint8, bool) {
+func (m Model) InputValue(input Input) (uint16, bool) {
 	op, ok := m.Inputs[input]
 	if !ok {
 		return 0, false

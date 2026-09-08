@@ -1152,8 +1152,17 @@ models:
           by: "mikecarlton"
           tool: "BetterDisplay on macOS"
           url: https://github.com/waydabber/BetterDisplay/issues/4853
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0x1D1
+        evidence:
+          grade: reported
+          by: "mikecarlton"
+          tool: "BetterDisplay ddcAlt, macOS"
+          url: https://github.com/waydabber/BetterDisplay/issues/4853
+          note: "found by looping over values; the listed 0xD2 got no response; 0x1D1 is 465 decimal"
     notes:
-      - 'The report gives the values in decimal — ddcAlt 144, 145 and 208 "work correctly". USB-C is not recorded: 210 got no response and the value that did work, 465, needs two bytes. A catalog value is one byte, so there is nowhere to put it.'
+      - 'The report gives the values in decimal — ddcAlt 144, 145 and 208 "work correctly". The USB-C value is the one entry in the catalog that does not fit in a byte: 210 got no response, and 465 did.'
     sources:
       - https://github.com/waydabber/BetterDisplay/issues/4853
       - https://github.com/waydabber/BetterDisplay/discussions/4883

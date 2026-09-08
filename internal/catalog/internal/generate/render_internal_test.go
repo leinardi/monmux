@@ -29,7 +29,7 @@ import (
 func TestRenderEvidenceComposesOneSentencePerGrade(t *testing.T) {
 	t.Parallel()
 
-	value := uint8(0xD0)
+	value := uint16(0xD0)
 
 	cases := map[string]struct {
 		evidence Evidence
@@ -130,7 +130,7 @@ func TestRenderEvidenceComposesOneSentencePerGrade(t *testing.T) {
 func TestRenderEvidenceRefusesWhatItCannotName(t *testing.T) {
 	t.Parallel()
 
-	value := uint8(0xD0)
+	value := uint16(0xD0)
 
 	parsed, err := input.Parse("dp")
 	if err != nil {

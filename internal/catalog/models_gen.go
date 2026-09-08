@@ -1041,9 +1041,15 @@ var models = []Model{
 				grade:     GradeReported,
 				evidence:  "Reported working on the exact 34U650A-B by mikecarlton (BetterDisplay on macOS): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: https://github.com/waydabber/BetterDisplay/issues/4853",
 			},
+			"usb-c": {
+				mechanism: MechanismLGAltInput,
+				value:     0x1D1,
+				grade:     GradeReported,
+				evidence:  "Reported working on the exact 34U650A-B by mikecarlton (BetterDisplay ddcAlt, macOS): switching to USB-C with 0x1D1 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; found by looping over values; the listed 0xD2 got no response; 0x1D1 is 465 decimal; not verified here: https://github.com/waydabber/BetterDisplay/issues/4853",
+			},
 		},
 		Notes: []string{
-			"The report gives the values in decimal — ddcAlt 144, 145 and 208 \"work correctly\". USB-C is not recorded: 210 got no response and the value that did work, 465, needs two bytes. A catalog value is one byte, so there is nowhere to put it.",
+			"The report gives the values in decimal — ddcAlt 144, 145 and 208 \"work correctly\". The USB-C value is the one entry in the catalog that does not fit in a byte: 210 got no response, and 465 did.",
 		},
 		Sources: []string{
 			"https://github.com/waydabber/BetterDisplay/issues/4853",

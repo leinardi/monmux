@@ -1,6 +1,6 @@
 # Security
 
-monmux writes to hardware. The failure that matters is not a crash: it is sending a byte a monitor was never verified to accept,
+monmux writes to hardware. The failure that matters is not a crash: it is sending a value a monitor was never verified to accept,
 to a monitor that is not the one monmux thought it was addressing. Every design decision below exists for that reason.
 
 There is prior art for the consequences. A monitor that stops displaying anything after an unexpected manufacturer-specific
@@ -8,17 +8,17 @@ write is not recoverable by software, which is why the default in this project i
 
 ## Threat model
 
-### Wrong bytes
+### Wrong values
 
 **Risk.** A value that means "switch to USB-C" on one model means something else on another, and manufacturer-specific
 registers are not a documented, portable interface.
 
-**Mitigation.** A byte can only reach a monitor if it is written in the catalog next to evidence that someone tested it on that
+**Mitigation.** A value can only reach a monitor if it is written in the catalog next to evidence that someone tested it on that
 exact model. The catalog is `internal/catalog/models.yaml`, rendered by `make go-generate` into the committed
 `internal/catalog/models_gen.go` that the binary compiles. That rendering is a development-time step, so the shipped binary has
 no catalog parser and reads no catalog file at run time; both files appear in the same diff, and a test fails the build if they
 disagree, so the bytes a reviewer approved are the bytes that ship. The generator refuses a file that leaves a product code or
-a value out rather than defaulting it to zero, refuses a key it does not know, and refuses a second YAML document, so no byte
+a value out rather than defaulting it to zero, refuses a key it does not know, and refuses a second YAML document, so no value
 reaches the generated catalog that the file did not spell out. `catalog.Operation` has unexported fields and a package-private constructor, so no value that is
 not in the catalog can exist as an operation at all; the zero value is invalid and every backend rejects it. The CLI accepts
 symbolic inputs only — a connector kind such as `dp` or `hdmi`, optionally numbered such as `hdmi2` — and has no flag that takes

@@ -414,7 +414,7 @@ func TestTestedModelIsWriteEnabledForItsTwoVerifiedInputs(t *testing.T) {
 		t.Fatalf("matched %s, want LG 38WR85QC-W", model.FullName())
 	}
 
-	want := map[catalog.Input]uint8{catalog.Input("dp"): 0xD0, catalog.Input("usb-c"): 0xD1}
+	want := map[catalog.Input]uint16{catalog.Input("dp"): 0xD0, catalog.Input("usb-c"): 0xD1}
 
 	for input, value := range want {
 		op, ok := model.Operation(input)

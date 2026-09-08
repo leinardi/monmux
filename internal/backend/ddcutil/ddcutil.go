@@ -189,16 +189,36 @@ func (b *Backend) Execute(
 func plan(path string, known connector, operation catalog.Operation) backend.Command {
 	return backend.Command{
 		Path: path,
-		Args: []string{
-			"--edid", hex.EncodeToString(known.edid),
-			"setvcp",
-			fmt.Sprintf("0x%02X", catalog.LGAltInputVCP),
-			fmt.Sprintf("0x%02X", operation.Value()),
-			fmt.Sprintf("--i2c-source-addr=0x%02X", catalog.LGAltInputSourceAddr),
-			"--noverify",
-		},
+		Args: append(
+			[]string{"--edid", hex.EncodeToString(known.edid)},
+			arguments(operation.Mechanism(), operation.Value())...,
+		),
 		// The EDID hex identifies the physical unit, serial included.
 		Redact: []int{1},
+	}
+}
+
+// arguments builds the setvcp invocation for one mechanism and one value. It is
+// split out of [plan] so that a test can pin the exact argv for a value without
+// an exported way to build an [catalog.Operation]: rendering argv is not the
+// same power as making a backend run it, and only the catalog has the latter.
+//
+// A mechanism this backend does not implement yields nil rather than a guess.
+// [plan] is reached only after backend.ValidateOperation has accepted the
+// mechanism, so nil is unreachable there; it is the shape of "never fall back"
+// rather than a branch that runs.
+func arguments(mechanism catalog.Mechanism, value uint16) []string {
+	switch mechanism {
+	case catalog.MechanismLGAltInput:
+		return []string{
+			"setvcp",
+			fmt.Sprintf("0x%02X", catalog.LGAltInputVCP),
+			fmt.Sprintf("0x%02X", value),
+			fmt.Sprintf("--i2c-source-addr=0x%02X", catalog.LGAltInputSourceAddr),
+			"--noverify",
+		}
+	default:
+		return nil
 	}
 }
 

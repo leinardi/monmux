@@ -62,12 +62,33 @@ var trustedPrefixes = []string{"/opt/homebrew/", "/usr/local/"}
 func plan(path, uuid string, operation catalog.Operation) backend.Command {
 	return backend.Command{
 		Path: path,
-		Args: []string{
-			displaySubcommand, uuid,
-			"set", "input-alt", strconv.FormatUint(uint64(operation.Value()), 10),
-		},
+		Args: append(
+			[]string{displaySubcommand, uuid},
+			arguments(operation.Mechanism(), operation.Value())...,
+		),
 		// The UUID identifies the physical unit.
 		Redact: []int{1},
+	}
+}
+
+// arguments builds the set invocation for one mechanism and one value. It is
+// split out of [plan] so that a test can pin the exact argv for a value without
+// an exported way to build an [catalog.Operation]: rendering argv is not the
+// same power as making a backend run it, and only the catalog has the latter.
+//
+// m1ddc takes the value in decimal and sends both halves of the SH/SL pair, so
+// a value wider than a byte needs no special handling here.
+//
+// A mechanism this backend does not implement yields nil rather than a guess.
+// [plan] is reached only after [validate] has accepted the mechanism, so nil is
+// unreachable there; it is the shape of "never fall back" rather than a branch
+// that runs.
+func arguments(mechanism catalog.Mechanism, value uint16) []string {
+	switch mechanism {
+	case catalog.MechanismLGAltInput:
+		return []string{"set", "input-alt", strconv.FormatUint(uint64(value), 10)}
+	default:
+		return nil
 	}
 }
 

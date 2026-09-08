@@ -57,12 +57,12 @@ command reached the monitor is unknown."
 
 ### 1. An operation can only come from the catalog
 
-`catalog.Operation` carries the mechanism and the byte to write, and its fields are unexported. Its constructor is
-package-private, so the only operations that exist are the ones compiled in from the catalog. The catalog is written in
-`internal/catalog/models.yaml` and rendered into the committed `models_gen.go` by `make go-generate`; the rendering happens at
-development time, so the binary contains no catalog parser and reads no catalog file at run time, and a test fails the build if
-the two files disagree. The zero value is invalid,
-and every backend rejects it with `invalid-operation`. There is no code path that turns a number a user typed into an
+`catalog.Operation` carries the mechanism and the 16-bit value to write — a SetVCP sends an SH/SL pair — and its fields are
+unexported. Its constructor is package-private, so the only operations that exist are the ones compiled in from the catalog.
+The catalog is written in `internal/catalog/models.yaml` and rendered into the committed `models_gen.go` by `make go-generate`;
+the rendering happens at development time, so the binary contains no catalog parser and reads no catalog file at run time, and a
+test fails the build if the two files disagree. The zero value is invalid, and every backend rejects it with
+`invalid-operation`. There is no code path that turns a number a user typed into an
 operation — the CLI takes symbolic inputs, a connector kind such as `dp` or `hdmi` optionally numbered such as `hdmi2`, and
 nothing else.
 

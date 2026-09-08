@@ -100,8 +100,8 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 			),
 			want: generate.ErrMalformed,
 		},
-		"a value wider than a byte": {
-			document: strings.Replace(valid, "value: 0xD0", "value: 0x100", 1),
+		"a value wider than the SH/SL pair": {
+			document: strings.Replace(valid, "value: 0xD0", "value: 0x10000", 1),
 			want:     generate.ErrMalformed,
 		},
 		"a product code wider than two bytes": {
@@ -343,6 +343,24 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 				t.Errorf("%s gave %v, want %v", name, err, testCase.want)
 			}
 		})
+	}
+}
+
+// A SetVCP carries a 16-bit value, and one recorded entry needs the high byte.
+// Rendering it as two bytes rather than truncating it to one is the difference
+// between switching an input and writing something else entirely.
+func TestAValueWiderThanAByteRendersInFull(t *testing.T) {
+	t.Parallel()
+
+	rendered, err := generate.Generate(
+		[]byte(strings.Replace(valid, "value: 0xD0", "value: 0x1D1", 1)),
+	)
+	if err != nil {
+		t.Fatalf("a 16-bit value was rejected: %v", err)
+	}
+
+	if !strings.Contains(string(rendered), "value:     0x1D1,") {
+		t.Errorf("a 16-bit value was not rendered in full:\n%s", rendered)
 	}
 }
 

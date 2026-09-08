@@ -34,7 +34,8 @@ value and seeing what happens.
 
 ## 2. Find the values, from evidence rather than experiment
 
-You need, for each input you want to enable: which mechanism switches it, and which byte means that input.
+You need, for each input you want to enable: which mechanism switches it, and which value means that input. A value is up to
+16 bits wide, because a SetVCP carries an SH/SL pair; most are one byte.
 
 Do **not** find out by trying values. A manufacturer-specific register that means "select USB-C" on one model can mean something
 else entirely on another, and there is at least one report of a monitor left permanently unusable by an unexpected write.
@@ -156,7 +157,7 @@ Rules the generator refuses and the invariant tests re-check:
 - No text the documentation renders — `by`, `tool`, `date`, `url`, `note`, a `notes` entry or a source — holds a `|` or a line
   break, because the document test reads Markdown table cells and single-line bullets.
 - Every model names at least one source.
-- Every identity writes a `product_code`, and every input writes a `value`. Leaving one out is an error, not a zero: a byte
+- Every identity writes a `product_code`, and every input writes a `value`. Leaving one out is an error, not a zero: a value
   nobody recorded must never reach a monitor.
 
 An unknown key is an error rather than something ignored, so a misspelled field cannot silently drop an entry, and the file

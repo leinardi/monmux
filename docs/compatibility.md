@@ -21,7 +21,7 @@ that switch inputs with the standard VCP code `0x60` are not representable and a
 - **Input** — the symbolic input, as typed on the command line: a connector kind (`dp`, `hdmi`, `usb-c`, `dvi`, `vga`,
   `thunderbolt`) plus an optional port number, as in `hdmi2`. A kind is written bare when the model has one port of it and
   numbered when it has several, never both.
-- **Value** — the byte written for that input.
+- **Value** — the value written for that input, up to 16 bits. A SetVCP carries an SH/SL pair; most recorded values fit in the low byte, and one does not.
 - **Mechanism** — how it is written. `lg-alt-input` is the LG side channel: source address `0x50`, VCP `0xF4`, no verification.
   It is a per-model property and never a fallback.
 - **Enabled** — whether monmux will actually perform this switch. A row with `no` is recorded for reference only.
@@ -131,6 +131,7 @@ that switch inputs with the standard VCP code `0x60` are not representable and a
 | LG 34U650A-B | none | `dp` | `0xD0` | `lg-alt-input` | no | reported | Reported working on the exact 34U650A-B by mikecarlton (BetterDisplay on macOS): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: <https://github.com/waydabber/BetterDisplay/issues/4853> |
 | LG 34U650A-B | none | `hdmi1` | `0x90` | `lg-alt-input` | no | reported | Reported working on the exact 34U650A-B by mikecarlton (BetterDisplay on macOS): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: <https://github.com/waydabber/BetterDisplay/issues/4853> |
 | LG 34U650A-B | none | `hdmi2` | `0x91` | `lg-alt-input` | no | reported | Reported working on the exact 34U650A-B by mikecarlton (BetterDisplay on macOS): switching to HDMI 2 with 0x91 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: <https://github.com/waydabber/BetterDisplay/issues/4853> |
+| LG 34U650A-B | none | `usb-c` | `0x1D1` | `lg-alt-input` | no | reported | Reported working on the exact 34U650A-B by mikecarlton (BetterDisplay ddcAlt, macOS): switching to USB-C with 0x1D1 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; found by looping over values; the listed 0xD2 got no response; 0x1D1 is 465 decimal; not verified here: <https://github.com/waydabber/BetterDisplay/issues/4853> |
 | LG 40WP95X | none | `usb-c` | `0xD1` | `lg-alt-input` | no | reported | Reported working on the exact 40WP95X by stepahin (Windows, NVAPI): switching to USB-C with 0xD1 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: <https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5> |
 | LG 34GS95QE | none | `dp` | `0xD0` | `lg-alt-input` | no | reported | Reported working on the exact 34GS95QE by Vib0 (Windows, NVAPI): switching to DisplayPort with 0xD0 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: <https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2812426302> |
 | LG 34GS95QE | none | `hdmi1` | `0x90` | `lg-alt-input` | no | reported | Reported working on the exact 34GS95QE by Vib0 (Windows, NVAPI): switching to HDMI 1 with 0x90 over the LG side channel (source address 0x50, VCP 0xF4) succeeded; not verified here: <https://github.com/kaleb422/NVapi-write-value-to-monitor/issues/5#issuecomment-2812426302> |
@@ -413,7 +414,7 @@ Sources:
 
 ### LG 34U650A-B
 
-- The report gives the values in decimal — ddcAlt 144, 145 and 208 "work correctly". USB-C is not recorded: 210 got no response and the value that did work, 465, needs two bytes. A catalog value is one byte, so there is nowhere to put it.
+- The report gives the values in decimal — ddcAlt 144, 145 and 208 "work correctly". The USB-C value is the one entry in the catalog that does not fit in a byte: 210 got no response, and 465 did.
 
 Sources:
 
@@ -485,15 +486,13 @@ switch.
 entry on.
 
 **A conflict with no way to resolve it.** The 34GL750 is reported working over the side channel in one place and reported to
-need `0x60` in another; it is omitted entirely rather than recorded on a coin flip. The USB-C values of the 28MQ780-B and the
-34U650A-B are omitted for the same reason, and their entries say so.
+need `0x60` in another; it is omitted entirely rather than recorded on a coin flip. The USB-C value of the 28MQ780-B is
+omitted for the same reason, and its entry says so.
 
 **A source nobody else can open.** A blog post reports a 27GP95RP switching to DisplayPort with `0xD0` through
 amdddc-windows on Windows. No stable link to it could be established, and the only citable page about that model, in ddcutil
 issue #100, is about the 27GP95R — a different model name — and reports that it did not respond at all. An entry whose bytes
 rest on a citation a reader cannot check is worse than no entry, so there is none.
-
-**A value that is not a byte.** A catalog value is one byte. The 34U650A-B USB-C value that reportedly works, 465, is not.
 
 **A negative result.** There is no slot for "this model is known not to switch". The 27GP850P-B, 27GN850-B, 27GN950, 34GN850-B,
 38WN95C-W, 43UN700-B, 27UL600, 27GP95R, 40BP95C-W, the 2016 29UM69G-B and one 2025 45GX950A have all been reported as not

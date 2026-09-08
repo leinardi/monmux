@@ -213,12 +213,13 @@ type Identity struct {
 	ProductCode *uint16 `yaml:"product_code"`
 }
 
-// Input is what the file records for one input of one model. Value is a pointer
-// for the same reason as [Identity.ProductCode]: a byte nobody wrote must not
-// default to 0x00.
+// Input is what the file records for one input of one model. Value is 16 bits
+// wide because a SetVCP carries an SH/SL pair, and it is a pointer for the same
+// reason as [Identity.ProductCode]: a value nobody wrote must not default to
+// 0x0000.
 type Input struct {
 	Mechanism string   `yaml:"mechanism"`
-	Value     *uint8   `yaml:"value"`
+	Value     *uint16  `yaml:"value"`
 	Evidence  Evidence `yaml:"evidence"`
 }
 
