@@ -82,6 +82,9 @@ func newWorld(t *testing.T, rules ...exec.Rule) *world {
 		t.Fatalf("creating %s: %v", filepath.Dir(built.binary), err)
 	}
 
+	// The stand-in binary is never executed - the fake Runner answers instead - but
+	// ResolveTool checks the mode, so it has to be executable to be accepted.
+	//nolint:gosec // G306: an executable bit is the point of this file
 	err = os.WriteFile(built.binary, []byte("#!/bin/false\n"), 0o755)
 	if err != nil {
 		t.Fatalf("writing %s: %v", built.binary, err)
@@ -129,7 +132,7 @@ func fixture(t *testing.T, path string) string {
 }
 
 // operation returns the catalog's USB-C operation for the tested model.
-func operation(t *testing.T, identity backend.Display) catalog.Operation {
+func operation(t *testing.T, identity *backend.Display) catalog.Operation {
 	t.Helper()
 
 	model, result := catalog.Match(identity.Identity)
@@ -150,7 +153,7 @@ func operation(t *testing.T, identity backend.Display) catalog.Operation {
 func testedOperation(t *testing.T) catalog.Operation {
 	t.Helper()
 
-	return operation(t, backend.Display{
+	return operation(t, &backend.Display{
 		Identity: edid.Identity{Manufacturer: "GSM", ProductCode: 0x77D4},
 	})
 }
@@ -209,7 +212,7 @@ func TestPlanRunsNothing(t *testing.T) {
 
 	before := len(world.runner.Calls())
 
-	command, err := world.backend.Plan(displays[0], operation(t, displays[0]))
+	command, err := world.backend.Plan(displays[0], operation(t, &displays[0]))
 	if err != nil {
 		t.Fatalf("Plan() refused: %v", err)
 	}
@@ -230,7 +233,7 @@ func TestExecuteReverifiesAndSendsOneSwitch(t *testing.T) {
 
 	world := newWorld(t)
 	displays := world.ready(t)
-	op := operation(t, displays[0])
+	op := operation(t, &displays[0])
 
 	planned, err := world.backend.Plan(displays[0], op)
 	if err != nil {
@@ -275,7 +278,7 @@ func TestExecuteRefusesWhenTheIdentityChanged(t *testing.T) {
 
 	displays := world.ready(t)
 
-	err := world.backend.Execute(t.Context(), displays[0], operation(t, displays[0]))
+	err := world.backend.Execute(t.Context(), displays[0], operation(t, &displays[0]))
 	if !refusal.Is(err, refusal.IdentityChanged) {
 		t.Fatalf("Execute() error = %v, want identity-changed", err)
 	}
@@ -297,7 +300,7 @@ func TestExecuteRefusesAnUnwritableDisplay(t *testing.T) {
 
 	before := len(world.runner.Calls())
 
-	err := world.backend.Execute(t.Context(), displays[1], operation(t, displays[0]))
+	err := world.backend.Execute(t.Context(), displays[1], operation(t, &displays[0]))
 	if !refusal.Is(err, refusal.TargetNotReady) {
 		t.Errorf("Execute() error = %v, want target-not-ready", err)
 	}
