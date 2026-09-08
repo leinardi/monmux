@@ -18,9 +18,11 @@
 #   - A value that has not been observed on the model itself, or confirmed for
 #     that exact model by a named source, does not go in.
 #
-# Inputs are keyed by the symbolic name typed on the command line: dp, usb-c,
-# hdmi1, hdmi2. The mechanism is a per-model property and never a fallback; the
-# only one implemented today is lg-alt-input.
+# Inputs are keyed by the symbolic name typed on the command line: a connector
+# kind (dp, hdmi, usb-c, dvi, vga, thunderbolt) plus an optional port number
+# (hdmi1, usb-c2). Write a kind bare when the model has one port of it, numbered
+# when it has several; never both. The mechanism is a per-model property and
+# never a fallback; the only one implemented today is lg-alt-input.
 
 models:
   - name: 38WR85QC-W

@@ -21,7 +21,8 @@ disagree, so the bytes a reviewer approved are the bytes that ship. The generato
 a value out rather than defaulting it to zero, refuses a key it does not know, and refuses a second YAML document, so no byte
 reaches the generated catalog that the file did not spell out. `catalog.Operation` has unexported fields and a package-private constructor, so no value that is
 not in the catalog can exist as an operation at all; the zero value is invalid and every backend rejects it. The CLI accepts
-symbolic inputs only — `dp`, `usb-c`, `hdmi1`, `hdmi2` — and has no flag that takes a VCP code or a raw value (requirement 9.5).
+symbolic inputs only — a connector kind such as `dp` or `hdmi`, optionally numbered such as `hdmi2` — and has no flag that takes
+a VCP code or a raw value (requirement 9.5).
 An input nobody has tested on a model is not enabled for it, and asking for it is refused.
 
 ### Stale identity, and a bus that moved

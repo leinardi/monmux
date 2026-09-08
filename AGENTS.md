@@ -86,10 +86,14 @@ Repo-local make targets live in `.mk/cross.mk`.
 - `cmd/monmux` — cobra commands: `info`, `switch`, `doctor`, `version`, `completion`. Owns flags, config loading, output formatting, and exit codes.
 - `internal/refusal` — the one typed refusal error used by every layer, with the reason enum and the rendered message.
 - `internal/edid` — EDID block-0 parser producing an `Identity`. Carries no raw EDID bytes.
-- `internal/catalog` — the supported-monitor catalog, the `Input` and `Mechanism` enums, and the opaque `Operation`. The catalog is
-  written in `models.yaml` and rendered into the committed `models_gen.go` by `make go-generate`; a test fails the build if the two
-  disagree. `internal/catalog/internal/generate` is that renderer, and it deliberately does not import `internal/catalog`, so a
-  deleted or corrupt `models_gen.go` can still be regenerated.
+- `internal/catalog` — the supported-monitor catalog, the `Input` name (a connector kind plus an optional port number), the `Kind`
+  and `Mechanism` enums, and the opaque `Operation`. The catalog is written in `models.yaml` and rendered into the committed
+  `models_gen.go` by `make go-generate`; a test fails the build if the two disagree. `internal/catalog/internal/generate` is that
+  renderer, and it deliberately does not import `internal/catalog`, so a deleted or corrupt `models_gen.go` can still be
+  regenerated.
+- `internal/catalog/internal/input` — the grammar of an input name: the closed list of connector kinds, the parser, the labels
+  and the ordering. A shared leaf, imported by both `internal/catalog` and the generator, so the two agree on what a name is
+  without the generator importing the package whose source it writes.
 - `internal/policy` — pure decision logic: displays plus request in, `Decision` or refusal out. No I/O.
 - `internal/backend` — the `Backend` interface plus the `Display`, `Command` and `Check` types, the shared tool-path trust check
   (`toolpath.go`), the shared doctor check helpers (`check.go`) and the `Fake` backend the app and CLI tests drive. Imports no
@@ -125,7 +129,9 @@ Do not weaken any of these. They are the reason the tool exists.
 other input. The only bytes that reach a monitor come from a `catalog.Operation` built by the catalog's package-private constructor from
 a compiled-in table entry with recorded evidence. Adding an input or a model means editing `internal/catalog/models.yaml`, supplying
 the evidence, and running `make go-generate` to re-render `models_gen.go` — commit both — see
-[`docs/adding-a-monitor.md`](docs/adding-a-monitor.md). The YAML is a build input read at development time only: the binary contains no
+[`docs/adding-a-monitor.md`](docs/adding-a-monitor.md). A new connector *kind* is the one exception: the kinds are a closed list
+in `internal/catalog/internal/input`, so a monitor with an input nobody has named yet is a Go change there, added with the first
+model that needs it. A new *port* of a kind that already exists (`hdmi3`, `usb-c2`) is only a YAML edit. The YAML is a build input read at development time only: the binary contains no
 catalog parser and reads no catalog file at run time.
 
 **Backends only execute a `Command` produced by `Plan`.** `Command` is returned by `Plan` for display only and is never accepted as

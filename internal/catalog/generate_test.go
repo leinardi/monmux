@@ -95,20 +95,13 @@ func lineAt(lines []string, index int) string {
 }
 
 // The generator does not import this package, so that a deleted or corrupt
-// models_gen.go can still be regenerated. That decoupling costs it the enums,
-// which it mirrors instead. This is where the two copies are compared: adding an
-// input or a mechanism on one side without the other fails here.
-func TestGeneratorKnowsEveryInputAndMechanism(t *testing.T) {
+// models_gen.go can still be regenerated. That decoupling costs it the mechanism
+// enum, which it mirrors instead. This is where the two copies are compared:
+// adding a mechanism on one side without the other fails here. Input names are
+// not mirrored - both sides import the one grammar - so there is nothing to
+// compare for them.
+func TestGeneratorKnowsEveryMechanism(t *testing.T) {
 	t.Parallel()
-
-	inputs := make([]string, 0, len(catalog.Inputs()))
-	for _, input := range catalog.Inputs() {
-		inputs = append(inputs, input.String())
-	}
-
-	if !slices.Equal(inputs, generate.Inputs()) {
-		t.Errorf("the generator accepts inputs %v, the enum has %v", generate.Inputs(), inputs)
-	}
 
 	mechanisms := make([]string, 0, len(catalog.Mechanisms()))
 	for _, mechanism := range catalog.Mechanisms() {

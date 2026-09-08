@@ -217,7 +217,7 @@ func TestValidateOperationRejectsAnUnimplementedMechanism(t *testing.T) {
 		t.Fatalf("the tested model no longer matches: %s", result)
 	}
 
-	operation, enabled := model.Operation(catalog.InputDP)
+	operation, enabled := model.Operation(catalog.Input("dp"))
 	if !enabled {
 		t.Fatal("the tested model is no longer enabled for DisplayPort")
 	}

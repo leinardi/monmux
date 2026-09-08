@@ -64,6 +64,11 @@ Implementing a new mechanism means: a value in the enum, the name table in `inte
 catalog file spell it, the planner code in each backend that supports it, `ValidateOperation` accepting it there, and a golden
 test pinning the exact arguments it produces.
 
+A new connector **kind** works the same way. The kinds are a closed list in `internal/catalog/internal/input`, and a monitor
+whose input is not one of them needs a Go change there — added together with the first model that needs it, never
+speculatively. A new *port* of a kind that already exists is not a Go change at all: `hdmi3` or `usb-c2` is a `models.yaml`
+edit and a `make go-generate`.
+
 ## 4. Test it, by hand
 
 **You run these commands. No AI agent may run a command that writes to a monitor** — see [security.md](security.md).
@@ -119,7 +124,11 @@ Rules the generator refuses and the invariant tests re-check:
 - A model that is not write-enabled records no identity at all. Matching does not consult the flag, so an entry with a
   fingerprint would match a real display and then refuse late instead of never matching.
 - An identity belongs to exactly one model, across the whole catalog, and a manufacturer is three uppercase letters.
-- Every recorded input is one of `dp`, `usb-c`, `hdmi1`, `hdmi2`, and has non-empty evidence.
+- Every recorded input is a well-formed name and has non-empty evidence. A name is a connector kind — `dp`, `hdmi`, `usb-c`,
+  `dvi`, `vga`, `thunderbolt` — optionally followed by a port number: a positive decimal integer with no leading zero and no
+  separator, so `hdmi2` and `usb-c2` are names and `hdmi0`, `hdmi01` and `hdmi-1` are not. Write a kind bare when the model has
+  one port of it and numbered when it has several; one model may not do both, so `usb-c` next to `usb-c2` is rejected. The
+  human-readable label derives from the name — `hdmi3` prints as "HDMI 3" — so there is nothing else to add for a new port.
 - Every recorded input uses a mechanism some backend implements.
 - Every model names at least one source.
 - Every identity writes a `product_code`, and every input writes a `value`. Leaving one out is an error, not a zero: a byte

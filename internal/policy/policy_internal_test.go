@@ -50,7 +50,7 @@ func TestResolveRefusesAnAmbiguousCatalogMatch(t *testing.T) {
 
 	_, err := resolve(
 		[]backend.Display{writableDisplay()},
-		Request{Input: catalog.InputDP},
+		Request{Input: catalog.Input("dp")},
 		ambiguous,
 	)
 	if !refusal.Is(err, refusal.AmbiguousCatalog) {
@@ -81,7 +81,7 @@ func TestAnAmbiguousMatchStopsTheWholeResolution(t *testing.T) {
 
 	_, err := resolve(
 		[]backend.Display{writableDisplay(), second},
-		Request{Input: catalog.InputDP},
+		Request{Input: catalog.Input("dp")},
 		firstIsAmbiguous,
 	)
 
@@ -107,7 +107,7 @@ func TestAnAmbiguousMatchOnAnUnwritableDisplayIsStillAmbiguous(t *testing.T) {
 		return catalog.Model{}, catalog.MatchAmbiguous
 	}
 
-	_, err := resolve([]backend.Display{unwritable}, Request{Input: catalog.InputDP}, ambiguous)
+	_, err := resolve([]backend.Display{unwritable}, Request{Input: catalog.Input("dp")}, ambiguous)
 	if !refusal.Is(err, refusal.AmbiguousCatalog) {
 		t.Errorf("error = %v, want ambiguous-catalog", err)
 	}

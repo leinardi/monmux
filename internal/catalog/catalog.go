@@ -29,7 +29,8 @@
 //
 // The types enforce the fail-closed rule structurally. An [Operation] can only be
 // built by this package from a catalog entry; its zero value is invalid and every
-// backend rejects it.
+// backend rejects it. An [Input] is a name, not a value: it selects an entry and
+// never carries a byte of its own.
 package catalog
 
 //go:generate go run ./internal/generate/cmd -in models.yaml -out models_gen.go
@@ -39,54 +40,43 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
+	"github.com/leinardi/monmux/internal/catalog/internal/input"
 	"github.com/leinardi/monmux/internal/edid"
 )
 
-// ErrUnknownInput reports a symbolic input name that is not in the enum.
+// ErrUnknownInput reports a symbolic input name that is not well formed. It
+// wraps [input.ErrUnknownKind] and [input.ErrMalformedNumber], so a caller that
+// cares which rule was broken can still tell.
 var ErrUnknownInput = errors.New("catalog: unknown input")
 
-// Input is the closed set of symbolic, vendor-neutral input names monmux accepts
-// from the command line. Users never type a VCP code or a value (req. 9.5).
+// Input is a symbolic, vendor-neutral input name, as typed on the command line:
+// a connector kind and an optional port number, e.g. dp, hdmi2, usb-c. It only
+// selects a catalog entry; it never carries a VCP code or a value, and users
+// never type one (req. 9.5).
 type Input string
 
-const (
-	// InputDP is DisplayPort.
-	InputDP Input = "dp"
-	// InputUSBC is USB-C (DisplayPort alternate mode).
-	InputUSBC Input = "usb-c"
-	// InputHDMI1 is the first HDMI port.
-	InputHDMI1 Input = "hdmi1"
-	// InputHDMI2 is the second HDMI port.
-	InputHDMI2 Input = "hdmi2"
-)
+// Kind is a connector kind, the first half of an [Input]. The set is closed and
+// defined in internal/input; a new kind is a Go change, a new port of a known
+// kind is only a models.yaml edit.
+type Kind = input.Kind
 
-// inputs is every input in the enum, in the order the CLI lists them.
-var inputs = []Input{InputDP, InputUSBC, InputHDMI1, InputHDMI2}
-
-// labels are the human-readable names used in success and refusal messages.
-var labels = map[Input]string{
-	InputDP:    "DisplayPort",
-	InputUSBC:  "USB-C",
-	InputHDMI1: "HDMI 1",
-	InputHDMI2: "HDMI 2",
+// Kinds returns every connector kind, in the order inputs are listed.
+func Kinds() []Kind {
+	return input.Kinds()
 }
 
-// Inputs returns every input in the enum. The CLI uses it to build its help and
-// to validate an argument before anything else happens.
-func Inputs() []Input {
-	return slices.Clone(inputs)
-}
-
-// ParseInput converts a command-line argument into an [Input]. Anything outside
-// the enum is an error: there is no "pass it through and hope" path.
+// ParseInput converts a command-line argument into an [Input]. A name that is
+// not well formed is an error: there is no "pass it through and hope" path.
+// Whether the matched model enables the input is a separate, later question.
 func ParseInput(name string) (Input, error) {
-	candidate := Input(name)
-	if !slices.Contains(inputs, candidate) {
-		return "", fmt.Errorf("%w: %q", ErrUnknownInput, name)
+	_, err := input.Parse(name)
+	if err != nil {
+		return "", fmt.Errorf("%w: %q: %w", ErrUnknownInput, name, err)
 	}
 
-	return candidate, nil
+	return Input(name), nil
 }
 
 // String returns the symbolic name, as typed on the command line.
@@ -94,14 +84,63 @@ func (i Input) String() string {
 	return string(i)
 }
 
-// Label returns the human-readable name for messages, e.g. "DisplayPort".
+// Label returns the human-readable name for messages, e.g. "DisplayPort" or
+// "HDMI 2". A name that does not parse is returned as it is, so a diagnostic
+// still says what it was handed.
 func (i Input) Label() string {
-	label, ok := labels[i]
-	if !ok {
+	parsed, err := input.Parse(string(i))
+	if err != nil {
 		return string(i)
 	}
 
-	return label
+	return parsed.Label()
+}
+
+// CompareInputs orders two input names: by connector kind, then by port number,
+// with a bare kind before its numbered ports. It is a total order, so sorting is
+// transitive even in the presence of a name that does not parse: every parseable
+// name sorts before every unparseable one, and unparseable ones sort lexically.
+// The compiled catalog cannot hold an unparseable key - a test enforces that -
+// but a hand-built [Model] in a test must not be able to make a sort misbehave.
+func CompareInputs(first, second Input) int {
+	left, leftErr := input.Parse(string(first))
+	right, rightErr := input.Parse(string(second))
+
+	switch {
+	case leftErr != nil && rightErr != nil:
+		return strings.Compare(string(first), string(second))
+	case leftErr != nil:
+		return 1
+	case rightErr != nil:
+		return -1
+	default:
+		return input.Compare(left, right)
+	}
+}
+
+// KnownInputs returns every input any catalog entry records, de-duplicated and
+// in listing order. The CLI completes against it; it is not a promise that any
+// of them is writable, which is a per-model question.
+func KnownInputs() []Input {
+	seen := map[Input]bool{}
+
+	var known []Input
+
+	for _, model := range models {
+		for name := range model.Inputs {
+			if seen[name] {
+				continue
+			}
+
+			seen[name] = true
+
+			known = append(known, name)
+		}
+	}
+
+	slices.SortFunc(known, CompareInputs)
+
+	return known
 }
 
 // Mechanism is how a model's input is switched. It is a closed enum with one
@@ -266,21 +305,12 @@ func (m Model) Operation(input Input) (Operation, bool) {
 	return operation, true
 }
 
-// RecordedInputs returns every input this entry documents, in enum order,
+// RecordedInputs returns every input this entry documents, in listing order,
 // whether or not the model is write-enabled.
 //
 //nolint:gocritic // hugeParam: a value receiver keeps Model usable where it is not addressable
 func (m Model) RecordedInputs() []Input {
-	recorded := make([]Input, 0, len(m.Inputs))
-
-	for _, input := range inputs {
-		_, ok := m.Inputs[input]
-		if ok {
-			recorded = append(recorded, input)
-		}
-	}
-
-	return recorded
+	return slices.SortedFunc(maps.Keys(m.Inputs), CompareInputs)
 }
 
 // EnabledInputs returns the inputs monmux may actually switch this model to. For

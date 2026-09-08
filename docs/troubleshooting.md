@@ -159,10 +159,17 @@ the key — the valid ones are `serial`, `ddcutil_path` and `m1ddc_path`.
 ### An unknown input
 
 ```text
-Error: catalog: unknown input: "hdmi" (one of: dp, usb-c, hdmi1, hdmi2)
+Error: catalog: unknown input: "scart": input: unknown connector kind: "scart" (a connector kind - dp, hdmi, usb-c, dvi, vga,
+thunderbolt - optionally followed by a port number, e.g. hdmi2; run "monmux info" to see the inputs of the attached monitor)
 ```
 
-The symbolic inputs are the only thing `switch` accepts. There is no way to pass a raw VCP code or value, by design.
+An input name is a connector kind and, optionally, a port number: a positive decimal integer with no leading zero and no
+separator. `dp`, `hdmi2` and `usb-c` are names; `HDMI`, `hdmi0`, `hdmi01`, `hdmi-1` and `scart` are not. This is a usage error,
+exit code 1, and nothing is started for it.
+
+A name that is well formed but not enabled for the monitor you have is a different thing: it is refused with
+`input-not-enabled` and exit code 2, and `monmux info` lists the inputs the attached monitor is enabled for. Symbolic inputs
+are the only thing `switch` accepts either way. There is no way to pass a raw VCP code or value, by design.
 
 ## Reporting an issue
 

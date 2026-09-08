@@ -17,6 +17,7 @@
 package catalog
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/leinardi/monmux/internal/edid"
@@ -35,7 +36,7 @@ func TestMatchInRefusesAnAmbiguousCatalog(t *testing.T) {
 			Identities:   []Identity{{Manufacturer: "GSM", ProductCode: 0x77D3}},
 			WriteEnabled: true,
 			Inputs: map[Input]inputOp{
-				InputDP: {mechanism: MechanismLGAltInput, value: 0xD0, evidence: "test"},
+				"dp": {mechanism: MechanismLGAltInput, value: 0xD0, evidence: "test"},
 			},
 		},
 		{
@@ -44,7 +45,7 @@ func TestMatchInRefusesAnAmbiguousCatalog(t *testing.T) {
 			Identities:   []Identity{{Manufacturer: "GSM", ProductCode: 0x77D3}},
 			WriteEnabled: true,
 			Inputs: map[Input]inputOp{
-				InputDP: {mechanism: MechanismLGAltInput, value: 0xD1, evidence: "test"},
+				"dp": {mechanism: MechanismLGAltInput, value: 0xD1, evidence: "test"},
 			},
 		},
 	}
@@ -70,7 +71,7 @@ func TestMatchInStillResolvesAUniqueIdentity(t *testing.T) {
 			Identities:   []Identity{{Manufacturer: "GSM", ProductCode: 0x77D3}},
 			WriteEnabled: true,
 			Inputs: map[Input]inputOp{
-				InputDP: {mechanism: MechanismLGAltInput, value: 0xD0, evidence: "test"},
+				"dp": {mechanism: MechanismLGAltInput, value: 0xD0, evidence: "test"},
 			},
 		},
 		{
@@ -98,11 +99,11 @@ func TestUnknownMechanismYieldsNoOperation(t *testing.T) {
 		Identities:   []Identity{{Manufacturer: "ACM", ProductCode: 0x0001}},
 		WriteEnabled: true,
 		Inputs: map[Input]inputOp{
-			InputDP: {mechanism: Mechanism("not-implemented"), value: 0xD0, evidence: "test"},
+			"dp": {mechanism: Mechanism("not-implemented"), value: 0xD0, evidence: "test"},
 		},
 	}
 
-	op, ok := model.Operation(InputDP)
+	op, ok := model.Operation("dp")
 	if ok {
 		t.Errorf("an unimplemented mechanism yielded an operation: %s", op)
 	}
@@ -113,5 +114,54 @@ func TestUnknownMechanismYieldsNoOperation(t *testing.T) {
 
 	if newOperation("", 0xD0).Valid() {
 		t.Error("the empty mechanism produced a valid operation")
+	}
+}
+
+// The order inputs are listed in is the order they are compared and printed in,
+// and it must not be the order a map happens to iterate in. This is the internal
+// test because it builds an entry by hand, with keys the real catalog does not
+// have.
+func TestRecordedInputsSortByKindThenPort(t *testing.T) {
+	t.Parallel()
+
+	model := Model{
+		Name:   "TEST-1",
+		Vendor: "ACME",
+		Inputs: map[Input]inputOp{
+			"hdmi10":      {mechanism: MechanismLGAltInput, value: 0x90, evidence: "test"},
+			"hdmi2":       {mechanism: MechanismLGAltInput, value: 0x91, evidence: "test"},
+			"usb-c":       {mechanism: MechanismLGAltInput, value: 0xD1, evidence: "test"},
+			"dp":          {mechanism: MechanismLGAltInput, value: 0xD0, evidence: "test"},
+			"thunderbolt": {mechanism: MechanismLGAltInput, value: 0xD2, evidence: "test"},
+		},
+	}
+
+	want := []Input{"dp", "hdmi2", "hdmi10", "usb-c", "thunderbolt"}
+
+	got := model.RecordedInputs()
+	if !slices.Equal(got, want) {
+		t.Errorf("RecordedInputs() = %v, want %v", got, want)
+	}
+}
+
+// CompareInputs has to be a total order even for a name that does not parse, or
+// a sort over a hand-built entry could misbehave rather than merely order it
+// oddly. The compiled catalog cannot hold such a key - TestEveryRecordedInputParses
+// enforces that - so this is the only place one exists.
+func TestCompareInputsIsTotalEvenForNamesThatDoNotParse(t *testing.T) {
+	t.Parallel()
+
+	unsorted := []Input{"zzz", "hdmi2", "aaa", "dp", "usb-c"}
+	want := []Input{"dp", "hdmi2", "usb-c", "aaa", "zzz"}
+
+	sorted := slices.Clone(unsorted)
+	slices.SortFunc(sorted, CompareInputs)
+
+	if !slices.Equal(sorted, want) {
+		t.Errorf("sorted = %v, want %v", sorted, want)
+	}
+
+	if CompareInputs("dp", "dp") != 0 || CompareInputs("aaa", "aaa") != 0 {
+		t.Error("CompareInputs does not report a name equal to itself")
 	}
 }

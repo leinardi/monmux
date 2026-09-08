@@ -61,7 +61,7 @@ func TestTheSmallestValidCatalogRenders(t *testing.T) {
 		`Name:   "TEST-1"`,
 		`{Manufacturer: "ACM", ProductCode: 0x0001},`,
 		"WriteEnabled: true,",
-		"InputDP: {",
+		`"dp": {`,
 		"mechanism: MechanismLGAltInput,",
 		"value:     0xD0,",
 		`evidence:  "switched on the unit",`,
@@ -164,9 +164,27 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 			),
 			want: generate.ErrNoSources,
 		},
-		"an input outside the enum": {
-			document: strings.Replace(valid, "      dp:", "      dvi:", 1),
+		"an input of an unknown kind": {
+			document: strings.Replace(valid, "      dp:", "      scart:", 1),
 			want:     generate.ErrUnknownInput,
+		},
+		"a port number with a leading zero": {
+			document: strings.Replace(valid, "      dp:", "      hdmi01:", 1),
+			want:     generate.ErrUnknownInput,
+		},
+		"a port number of zero": {
+			document: strings.Replace(valid, "      dp:", "      hdmi0:", 1),
+			want:     generate.ErrUnknownInput,
+		},
+		"a bare and a numbered port of one kind": {
+			document: strings.Replace(
+				valid,
+				"      dp:\n",
+				"      usb-c:\n        mechanism: lg-alt-input\n        value: 0xD1\n"+
+					"        evidence: switched on the unit\n      usb-c2:\n",
+				1,
+			),
+			want: generate.ErrMixedNumbering,
 		},
 		"a mechanism no backend implements": {
 			document: strings.Replace(valid, "mechanism: lg-alt-input", "mechanism: vcp-60", 1),
@@ -296,7 +314,7 @@ func TestRenderRefusesADocumentItCannotTrust(t *testing.T) {
 // The rendered file must not depend on the order the keys happen to have in the
 // catalog file, or an unrelated edit would show up as a diff of the bytes sent
 // to a monitor.
-func TestInputsRenderInEnumOrderWhateverTheFileSays(t *testing.T) {
+func TestInputsRenderInCatalogOrderWhateverTheFileSays(t *testing.T) {
 	t.Parallel()
 
 	document := `
@@ -320,6 +338,10 @@ models:
         mechanism: lg-alt-input
         value: 0x90
         evidence: tested
+      hdmi10:
+        mechanism: lg-alt-input
+        value: 0x99
+        evidence: tested
       usb-c:
         mechanism: lg-alt-input
         value: 0xD1
@@ -333,7 +355,7 @@ models:
 		t.Fatalf("rendering: %v", err)
 	}
 
-	order := []string{"InputDP:", "InputUSBC:", "InputHDMI1:", "InputHDMI2:"}
+	order := []string{`"dp":`, `"hdmi1":`, `"hdmi2":`, `"hdmi10":`, `"usb-c":`}
 
 	previous := -1
 
@@ -344,7 +366,7 @@ models:
 		}
 
 		if at < previous {
-			t.Errorf("%s is rendered out of enum order", name)
+			t.Errorf("%s is rendered out of catalog order", name)
 		}
 
 		previous = at

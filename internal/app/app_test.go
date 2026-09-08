@@ -74,7 +74,7 @@ func unwritable() backend.Display {
 
 // request is what the user asked for in most of these tests.
 func request() policy.Request {
-	return policy.Request{Input: catalog.InputUSBC}
+	return policy.Request{Input: catalog.Input("usb-c")}
 }
 
 // fake returns a backend that reports the given displays and does everything it
@@ -110,7 +110,7 @@ func TestSwitchRunsEveryStepInOrderAndSendsOnce(t *testing.T) {
 	}
 
 	// Everything the CLI needs to say what happened, without asking again.
-	if outcome.Backend != "ddcutil" || outcome.Input != catalog.InputUSBC {
+	if outcome.Backend != "ddcutil" || outcome.Input != catalog.Input("usb-c") {
 		t.Errorf("outcome = %+v", outcome)
 	}
 
@@ -224,12 +224,12 @@ func TestSwitchRefusesWithTheReasonOfTheLayerThatRefused(t *testing.T) {
 		},
 		"the serial pin matches nothing": {
 			driver: fake(supported()),
-			req:    policy.Request{Input: catalog.InputUSBC, Serial: "OTHERSERIAL"},
+			req:    policy.Request{Input: catalog.Input("usb-c"), Serial: "OTHERSERIAL"},
 			want:   refusal.SerialMismatch,
 		},
 		"the input was never verified on this model": {
 			driver: fake(supported()),
-			req:    policy.Request{Input: catalog.InputHDMI1},
+			req:    policy.Request{Input: catalog.Input("hdmi1")},
 			want:   refusal.InputNotEnabled,
 		},
 		"the target cannot be reached": {
@@ -376,7 +376,7 @@ func TestASerialPinSelectsTheUnitItNames(t *testing.T) {
 	outcome, err := app.Switch(
 		t.Context(),
 		driver,
-		policy.Request{Input: catalog.InputUSBC, Serial: "TESTSERIAL02"},
+		policy.Request{Input: catalog.Input("usb-c"), Serial: "TESTSERIAL02"},
 		app.Options{},
 	)
 	if err != nil {

@@ -18,6 +18,7 @@ package catalog_test
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -145,20 +146,94 @@ func TestZeroOperationIsInvalid(t *testing.T) {
 	}
 }
 
-func TestEveryRecordedInputIsInTheEnum(t *testing.T) {
+func TestEveryRecordedInputParses(t *testing.T) {
 	t.Parallel()
-
-	known := map[catalog.Input]bool{}
-	for _, input := range catalog.Inputs() {
-		known[input] = true
-	}
 
 	for _, model := range catalog.Models() {
 		for input := range model.Inputs {
-			if !known[input] {
-				t.Errorf("%s records the unknown input %q", model.FullName(), input)
+			parsed, err := catalog.ParseInput(input.String())
+			if err != nil {
+				t.Errorf("%s records the unparseable input %q: %v", model.FullName(), input, err)
+
+				continue
+			}
+
+			if parsed != input {
+				t.Errorf("%s records %q, which parses back as %q", model.FullName(), input, parsed)
 			}
 		}
+	}
+}
+
+// A kind written bare means "the one port of this kind", so a model that also
+// numbers that kind leaves it undecided which port the bare name addresses. The
+// generator rejects it; this is the check on what actually compiled.
+func TestNoModelMixesBareAndNumberedPorts(t *testing.T) {
+	t.Parallel()
+
+	for _, model := range catalog.Models() {
+		bare := map[string]catalog.Input{}
+		numbered := map[string]catalog.Input{}
+
+		for _, input := range model.RecordedInputs() {
+			kind := strings.TrimRight(input.String(), "0123456789")
+			if kind == input.String() {
+				bare[kind] = input
+			} else {
+				numbered[kind] = input
+			}
+		}
+
+		for kind, name := range bare {
+			other, mixed := numbered[kind]
+			if mixed {
+				t.Errorf("%s records both %q and %q", model.FullName(), name, other)
+			}
+		}
+	}
+}
+
+// KnownInputs is what completion offers, so it must be exactly the union of what
+// the entries record, once each and in listing order. It is built from the
+// catalog at test time: adding a port to models.yaml needs no edit here.
+func TestKnownInputsIsTheOrderedUnion(t *testing.T) {
+	t.Parallel()
+
+	seen := map[catalog.Input]bool{}
+
+	var want []catalog.Input
+
+	for _, model := range catalog.Models() {
+		for _, input := range model.RecordedInputs() {
+			if seen[input] {
+				continue
+			}
+
+			seen[input] = true
+
+			want = append(want, input)
+		}
+	}
+
+	slices.SortFunc(want, catalog.CompareInputs)
+
+	known := catalog.KnownInputs()
+
+	if !slices.Equal(known, want) {
+		t.Errorf("KnownInputs() = %v, want %v", known, want)
+	}
+
+	if !slices.IsSortedFunc(known, catalog.CompareInputs) {
+		t.Errorf("KnownInputs() is not in listing order: %v", known)
+	}
+
+	offered := map[catalog.Input]bool{}
+	for _, input := range known {
+		if offered[input] {
+			t.Errorf("KnownInputs() offers %q twice", input)
+		}
+
+		offered[input] = true
 	}
 }
 
@@ -220,8 +295,8 @@ func TestReturnedModelsCannotMutateTheCatalog(t *testing.T) {
 	// Repoint an identity, graft an unverified input from the disabled entry
 	// onto the write-enabled one, drop a verified input, and rewrite a source.
 	enabled.Identities[0].ProductCode = 0x1234
-	enabled.Inputs[catalog.InputHDMI1] = disabled.Inputs[catalog.InputHDMI1]
-	delete(enabled.Inputs, catalog.InputDP)
+	enabled.Inputs[catalog.Input("hdmi1")] = disabled.Inputs[catalog.Input("hdmi1")]
+	delete(enabled.Inputs, catalog.Input("dp"))
 	enabled.Sources[0] = "invented"
 
 	after, result := catalog.Match(tested)
@@ -229,12 +304,12 @@ func TestReturnedModelsCannotMutateTheCatalog(t *testing.T) {
 		t.Fatalf("after mutation, GSM/0x77D3 match = %s, want exact", result)
 	}
 
-	_, hdmiEnabled := after.Operation(catalog.InputHDMI1)
+	_, hdmiEnabled := after.Operation(catalog.Input("hdmi1"))
 	if hdmiEnabled {
 		t.Error("an unverified HDMI value was grafted onto the write-enabled model")
 	}
 
-	op, dpEnabled := after.Operation(catalog.InputDP)
+	op, dpEnabled := after.Operation(catalog.Input("dp"))
 	if !dpEnabled || op.Value() != 0xD0 {
 		t.Errorf("the verified DisplayPort value was lost: enabled=%t op=%s", dpEnabled, op)
 	}
@@ -266,7 +341,7 @@ func TestTestedModelIsWriteEnabledForItsTwoVerifiedInputs(t *testing.T) {
 		t.Fatalf("matched %s, want LG 38WR85QC-W", model.FullName())
 	}
 
-	want := map[catalog.Input]uint8{catalog.InputDP: 0xD0, catalog.InputUSBC: 0xD1}
+	want := map[catalog.Input]uint8{catalog.Input("dp"): 0xD0, catalog.Input("usb-c"): 0xD1}
 
 	for input, value := range want {
 		op, ok := model.Operation(input)
@@ -315,7 +390,7 @@ func TestUntestedInputsAreNotEnabled(t *testing.T) {
 
 	model, _ := catalog.Match(edid.Identity{Manufacturer: "GSM", ProductCode: 0x77D3})
 
-	for _, input := range []catalog.Input{catalog.InputHDMI1, catalog.InputHDMI2} {
+	for _, input := range []catalog.Input{catalog.Input("hdmi1"), catalog.Input("hdmi2")} {
 		_, ok := model.Operation(input)
 		if ok {
 			t.Errorf(
@@ -375,39 +450,67 @@ func TestMatchIgnoresSerialsAndModelName(t *testing.T) {
 	}
 }
 
-// --- the input enum ---
+// --- input names ---
 
-func TestParseInputAcceptsExactlyTheEnum(t *testing.T) {
+// Parsing decides whether a name is well formed, not whether the attached
+// monitor enables it: hdmi3 parses even though no entry records it, and is
+// refused later, by the policy, with nothing written.
+func TestParseInput(t *testing.T) {
 	t.Parallel()
 
-	for _, input := range catalog.Inputs() {
-		parsed, err := catalog.ParseInput(input.String())
+	accepted := []string{
+		"dp", "usb-c", "hdmi", "hdmi1", "hdmi2", "hdmi3", "hdmi10",
+		"usb-c2", "dvi", "vga", "thunderbolt",
+	}
+
+	for _, name := range accepted {
+		parsed, err := catalog.ParseInput(name)
 		if err != nil {
-			t.Errorf("ParseInput(%q) returned %v", input, err)
+			t.Errorf("ParseInput(%q) returned %v", name, err)
+
+			continue
 		}
 
-		if parsed != input {
-			t.Errorf("ParseInput(%q) = %q", input, parsed)
+		if parsed.String() != name {
+			t.Errorf("ParseInput(%q) = %q", name, parsed)
 		}
 	}
 
-	for _, name := range []string{"", "DP", "displayport", "hdmi", "usbc", "0xD0"} {
-		_, err := catalog.ParseInput(name)
+	rejected := []string{
+		"", "DP", "displayport", "usbc", "0xD0", "hdmi0", "hdmi01", "hdmi-1", "scart",
+	}
+
+	for _, name := range rejected {
+		parsed, err := catalog.ParseInput(name)
 		if !errors.Is(err, catalog.ErrUnknownInput) {
-			t.Errorf("ParseInput(%q) error = %v, want ErrUnknownInput", name, err)
+			t.Errorf("ParseInput(%q) = %q, %v, want ErrUnknownInput", name, parsed, err)
 		}
 	}
 }
 
-func TestEveryInputHasItsOwnLabel(t *testing.T) {
+func TestLabelsDeriveFromTheParts(t *testing.T) {
 	t.Parallel()
+
+	cases := map[catalog.Input]string{
+		"dp":           "DisplayPort",
+		"hdmi":         "HDMI",
+		"hdmi3":        "HDMI 3",
+		"usb-c":        "USB-C",
+		"thunderbolt2": "Thunderbolt 2",
+	}
+
+	for input, want := range cases {
+		if input.Label() != want {
+			t.Errorf("%q.Label() = %q, want %q", input, input.Label(), want)
+		}
+	}
 
 	seen := map[string]bool{}
 
-	for _, input := range catalog.Inputs() {
-		label := input.Label()
-		if label == "" || label == input.String() {
-			t.Errorf("%q has no human-readable label", input)
+	for _, kind := range catalog.Kinds() {
+		label := kind.Label()
+		if label == "" || label == kind.String() {
+			t.Errorf("the %q kind has no human-readable label", kind)
 		}
 
 		if seen[label] {
@@ -415,5 +518,16 @@ func TestEveryInputHasItsOwnLabel(t *testing.T) {
 		}
 
 		seen[label] = true
+	}
+}
+
+// A name nothing can parse is still rendered as itself, so a diagnostic says
+// what it was handed rather than nothing at all.
+func TestAnUnparseableNameLabelsAsItself(t *testing.T) {
+	t.Parallel()
+
+	unparseable := catalog.Input("scart")
+	if unparseable.Label() != "scart" {
+		t.Errorf("Label() = %q, want %q", unparseable.Label(), "scart")
 	}
 }
