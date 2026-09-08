@@ -140,7 +140,7 @@ func operation(t *testing.T, identity *backend.Display) catalog.Operation {
 		t.Fatalf("match = %s, want exact", result)
 	}
 
-	op, enabled := model.Operation(catalog.InputUSBC)
+	op, enabled := model.Operation(catalog.Input("usb-c"))
 	if !enabled {
 		t.Fatalf("%s is no longer enabled for USB-C", model.FullName())
 	}

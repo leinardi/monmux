@@ -212,11 +212,27 @@ func verdict(ok bool) string {
 	return "FAIL"
 }
 
-// inputNames are the symbolic inputs, as typed on the command line.
+// inputNames are the inputs any catalog entry records, as typed on the command
+// line. It is what completion offers: a name being recorded says nothing about
+// whether the attached monitor enables it, which only `monmux info` can say.
 func inputNames() []string {
-	names := make([]string, 0, len(catalog.Inputs()))
-	for _, input := range catalog.Inputs() {
+	known := catalog.KnownInputs()
+
+	names := make([]string, 0, len(known))
+	for _, input := range known {
 		names = append(names, input.String())
+	}
+
+	return names
+}
+
+// kindNames are the connector kinds an input name can start with.
+func kindNames() []string {
+	kinds := catalog.Kinds()
+
+	names := make([]string, 0, len(kinds))
+	for _, kind := range kinds {
+		names = append(names, kind.String())
 	}
 
 	return names

@@ -31,12 +31,12 @@ var models = []Model{
 		},
 		WriteEnabled: true,
 		Inputs: map[Input]inputOp{
-			InputDP: {
+			"dp": {
 				mechanism: MechanismLGAltInput,
 				value:     0xD0,
 				evidence:  "Direct test on the unit, 2026-09-07, Linux (ddcutil) and macOS (m1ddc): switched from USB-C to DisplayPort",
 			},
-			InputUSBC: {
+			"usb-c": {
 				mechanism: MechanismLGAltInput,
 				value:     0xD1,
 				evidence:  "Direct test on the unit, 2026-09-07, Linux (ddcutil) and macOS (m1ddc): switched from DisplayPort to USB-C",
@@ -53,24 +53,24 @@ var models = []Model{
 		Identities:   nil,
 		WriteEnabled: false,
 		Inputs: map[Input]inputOp{
-			InputDP: {
+			"dp": {
 				mechanism: MechanismLGAltInput,
 				value:     0xD0,
 				evidence:  "Reported by a tester on the ddcutil LG wiki page; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
 			},
-			InputUSBC: {
-				mechanism: MechanismLGAltInput,
-				value:     0xD1,
-				evidence:  "Reported by a tester on the ddcutil LG wiki page; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
-			},
-			InputHDMI1: {
+			"hdmi1": {
 				mechanism: MechanismLGAltInput,
 				value:     0x90,
 				evidence:  "Reported by a tester on the ddcutil LG wiki page; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
 			},
-			InputHDMI2: {
+			"hdmi2": {
 				mechanism: MechanismLGAltInput,
 				value:     0x91,
+				evidence:  "Reported by a tester on the ddcutil LG wiki page; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
+			},
+			"usb-c": {
+				mechanism: MechanismLGAltInput,
+				value:     0xD1,
 				evidence:  "Reported by a tester on the ddcutil LG wiki page; not verified here: https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors",
 			},
 		},

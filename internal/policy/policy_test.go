@@ -65,7 +65,7 @@ func TestResolveSwitchesASupportedDisplay(t *testing.T) {
 
 	decision, err := policy.Resolve(
 		[]backend.Display{supported()},
-		policy.Request{Input: catalog.InputUSBC},
+		policy.Request{Input: catalog.Input("usb-c")},
 	)
 	if err != nil {
 		t.Fatalf("Resolve() refused a supported display: %v", err)
@@ -101,7 +101,7 @@ func TestResolveIgnoresUnrelatedDisplays(t *testing.T) {
 
 	displays := []backend.Display{unknown(), supported()}
 
-	decision, err := policy.Resolve(displays, policy.Request{Input: catalog.InputDP})
+	decision, err := policy.Resolve(displays, policy.Request{Input: catalog.Input("dp")})
 	if err != nil {
 		t.Fatalf("Resolve() refused: %v", err)
 	}
@@ -139,28 +139,28 @@ func TestResolveRefusals(t *testing.T) {
 	}{
 		"no displays at all": {
 			displays: nil,
-			request:  policy.Request{Input: catalog.InputDP},
+			request:  policy.Request{Input: catalog.Input("dp")},
 			want:     refusal.NoDisplays,
 		},
 		"unknown monitor": {
 			displays: []backend.Display{unknown()},
-			request:  policy.Request{Input: catalog.InputDP},
+			request:  policy.Request{Input: catalog.Input("dp")},
 			want:     refusal.UnknownMonitor,
 		},
 		"supported but not writable": {
 			displays: []backend.Display{unwritable},
-			request:  policy.Request{Input: catalog.InputDP},
+			request:  policy.Request{Input: catalog.Input("dp")},
 			want:     refusal.DisplayNotWritable,
 			detail:   backend.StatusNoDDCChannel,
 		},
 		"two supported displays": {
 			displays: []backend.Display{supported(), second},
-			request:  policy.Request{Input: catalog.InputDP},
+			request:  policy.Request{Input: catalog.Input("dp")},
 			want:     refusal.MultipleCandidates,
 		},
 		"input without evidence": {
 			displays: []backend.Display{supported()},
-			request:  policy.Request{Input: catalog.InputHDMI1},
+			request:  policy.Request{Input: catalog.Input("hdmi1")},
 			want:     refusal.InputNotEnabled,
 			detail:   "hdmi1",
 		},
@@ -171,12 +171,12 @@ func TestResolveRefusals(t *testing.T) {
 		},
 		"serial not attached": {
 			displays: []backend.Display{supported()},
-			request:  policy.Request{Input: catalog.InputDP, Serial: "NOTHERE"},
+			request:  policy.Request{Input: catalog.Input("dp"), Serial: "NOTHERE"},
 			want:     refusal.SerialMismatch,
 		},
 		"pinning a display with no serial": {
 			displays: []backend.Display{noSerial},
-			request:  policy.Request{Input: catalog.InputDP, Serial: serialA},
+			request:  policy.Request{Input: catalog.Input("dp"), Serial: serialA},
 			want:     refusal.SerialMismatch,
 			detail:   policy.NoSerialDetail,
 		},
@@ -186,19 +186,19 @@ func TestResolveRefusals(t *testing.T) {
 			// user chasing a typo instead of telling them that pinning is
 			// unavailable for that unit.
 			displays: []backend.Display{noSerial, unknown()},
-			request:  policy.Request{Input: catalog.InputDP, Serial: serialA},
+			request:  policy.Request{Input: catalog.Input("dp"), Serial: serialA},
 			want:     refusal.SerialMismatch,
 			detail:   noSerial.Label + ": " + policy.NoSerialDetail,
 		},
 		"every display exposes a serial, none is the pinned one": {
 			displays: []backend.Display{supported(), unknown()},
-			request:  policy.Request{Input: catalog.InputDP, Serial: "NOTHERE"},
+			request:  policy.Request{Input: catalog.Input("dp"), Serial: "NOTHERE"},
 			want:     refusal.SerialMismatch,
 			detail:   "No attached display carries the requested serial.",
 		},
 		"a blank pin is an unusable pin, not an absent one": {
 			displays: []backend.Display{supported()},
-			request:  policy.Request{Input: catalog.InputDP, Serial: "   "},
+			request:  policy.Request{Input: catalog.Input("dp"), Serial: "   "},
 			want:     refusal.SerialMismatch,
 		},
 	}
@@ -237,7 +237,7 @@ func TestSerialPinSelectsTheRequestedUnit(t *testing.T) {
 	second.Identity.SerialString = serialB
 
 	decision, err := policy.Resolve([]backend.Display{supported(), second}, policy.Request{
-		Input:  catalog.InputDP,
+		Input:  catalog.Input("dp"),
 		Serial: serialB,
 	})
 	if err != nil {
@@ -256,7 +256,7 @@ func TestSerialPinTrimsSurroundingWhitespaceOnBothSides(t *testing.T) {
 	padded.Identity.SerialString = "  " + serialA + "\n"
 
 	_, err := policy.Resolve([]backend.Display{padded}, policy.Request{
-		Input:  catalog.InputDP,
+		Input:  catalog.Input("dp"),
 		Serial: "\t" + serialA + " ",
 	})
 	if err != nil {
@@ -268,7 +268,7 @@ func TestSerialPinIsCaseSensitive(t *testing.T) {
 	t.Parallel()
 
 	_, err := policy.Resolve([]backend.Display{supported()}, policy.Request{
-		Input:  catalog.InputDP,
+		Input:  catalog.Input("dp"),
 		Serial: strings.ToLower(serialA),
 	})
 	if !refusal.Is(err, refusal.SerialMismatch) {
@@ -280,7 +280,7 @@ func TestSerialPinNeverUsesTheNumericSerial(t *testing.T) {
 	t.Parallel()
 
 	_, err := policy.Resolve([]backend.Display{supported()}, policy.Request{
-		Input:  catalog.InputDP,
+		Input:  catalog.Input("dp"),
 		Serial: "16909060", // 0x01020304 in decimal
 	})
 	if !refusal.Is(err, refusal.SerialMismatch) {
@@ -300,7 +300,7 @@ func TestUnwritableDisplaysAreNeverSelected(t *testing.T) {
 	unwritable.Identity.SerialString = serialB
 
 	decision, err := policy.Resolve([]backend.Display{unwritable, supported()}, policy.Request{
-		Input: catalog.InputDP,
+		Input: catalog.Input("dp"),
 	})
 	if err != nil {
 		t.Fatalf("Resolve() refused although a writable supported display was present: %v", err)
@@ -316,7 +316,7 @@ func TestRefusalsRedactSerialsByDefault(t *testing.T) {
 
 	_, err := policy.Resolve(
 		[]backend.Display{supported()},
-		policy.Request{Input: catalog.InputHDMI1},
+		policy.Request{Input: catalog.Input("hdmi1")},
 	)
 	if err == nil {
 		t.Fatal("Resolve() allowed an input with no evidence")

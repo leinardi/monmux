@@ -59,7 +59,7 @@ func TestInfoReportsEveryDisplay(t *testing.T) {
 		t.Errorf("the supported display was not identified: %+v", identified)
 	}
 
-	want := []catalog.Input{catalog.InputDP, catalog.InputUSBC}
+	want := []catalog.Input{catalog.Input("dp"), catalog.Input("usb-c")}
 	if !slices.Equal(identified.EnabledInputs, want) {
 		t.Errorf("enabled inputs = %v, want %v", identified.EnabledInputs, want)
 	}

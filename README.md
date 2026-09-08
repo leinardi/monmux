@@ -19,8 +19,8 @@ It wraps `ddcutil` on Linux and `m1ddc` on macOS; there is no native I²C or IOK
 The 38BR85QC row is in the catalog for a contributor who owns one: the values are written down, disabled, with a note saying
 where they came from. Because no EDID fingerprint for it has been collected, it cannot match a display at all.
 
-`hdmi1` and `hdmi2` exist as symbolic inputs but are not enabled for any model: nobody has tested those values on a real unit
-yet, so monmux refuses them. Enabling one means testing it on a real unit and recording the evidence in the catalog — see
+`hdmi1` and `hdmi2` are recorded for the 38BR85QC only, and enabled for no model: nobody has tested those values on a real
+unit yet, so monmux refuses them. Enabling one means testing it on a real unit and recording the evidence in the catalog — see
 [docs/adding-a-monitor.md](docs/adding-a-monitor.md). The full catalog, with the evidence for every value, is in
 [docs/compatibility.md](docs/compatibility.md).
 

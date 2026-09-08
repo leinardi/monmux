@@ -12,7 +12,9 @@ and deliberately will not touch it" is information a reader needs.
 - **Identities** — the EDID fingerprints, as `manufacturer/product code`, that match this model. A model can have several: the
   tested LG reports a different product code depending on which input it is currently displaying. A model with no identity
   recorded can never match a display, and so can never be written to.
-- **Input** — the symbolic input, as typed on the command line.
+- **Input** — the symbolic input, as typed on the command line: a connector kind (`dp`, `hdmi`, `usb-c`, `dvi`, `vga`,
+  `thunderbolt`) plus an optional port number, as in `hdmi2`. A kind is written bare when the model has one port of it and
+  numbered when it has several, never both.
 - **Value** — the byte written for that input.
 - **Mechanism** — how it is written. `lg-alt-input` is the LG side channel: source address `0x50`, VCP `0xF4`, no verification.
   It is a per-model property and never a fallback.
@@ -27,9 +29,9 @@ and deliberately will not touch it" is information a reader needs.
 | LG 38WR85QC-W | GSM/0x77D3, GSM/0x77D4 | `dp`    | `0xD0` | `lg-alt-input` | yes     | Direct test on the unit, 2026-09-07, Linux (ddcutil) and macOS (m1ddc): switched from USB-C to DisplayPort                                             |
 | LG 38WR85QC-W | GSM/0x77D3, GSM/0x77D4 | `usb-c` | `0xD1` | `lg-alt-input` | yes     | Direct test on the unit, 2026-09-07, Linux (ddcutil) and macOS (m1ddc): switched from DisplayPort to USB-C                                             |
 | LG 38BR85QC   | none                   | `dp`    | `0xD0` | `lg-alt-input` | no      | Reported by a tester on the ddcutil LG wiki page; not verified here: <https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors> |
-| LG 38BR85QC   | none                   | `usb-c` | `0xD1` | `lg-alt-input` | no      | Reported by a tester on the ddcutil LG wiki page; not verified here: <https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors> |
 | LG 38BR85QC   | none                   | `hdmi1` | `0x90` | `lg-alt-input` | no      | Reported by a tester on the ddcutil LG wiki page; not verified here: <https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors> |
 | LG 38BR85QC   | none                   | `hdmi2` | `0x91` | `lg-alt-input` | no      | Reported by a tester on the ddcutil LG wiki page; not verified here: <https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors> |
+| LG 38BR85QC   | none                   | `usb-c` | `0xD1` | `lg-alt-input` | no      | Reported by a tester on the ddcutil LG wiki page; not verified here: <https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors> |
 
 ## Notes on the entries
 

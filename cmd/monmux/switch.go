@@ -35,9 +35,12 @@ func newSwitchCmd(state *cli) *cobra.Command {
 	)
 
 	command := &cobra.Command{
-		Use:   "switch <" + strings.Join(inputNames(), "|") + ">",
+		Use:   "switch <input>",
 		Short: "Switch the identified monitor to an input",
 		Long: "Switches the attached monitor to the given input.\n\n" +
+			"An input is a connector kind - " + strings.Join(kindNames(), ", ") + " -\n" +
+			"optionally followed by a port number, as in hdmi2. Run \"monmux info\" to see\n" +
+			"the inputs the attached monitor is enabled for.\n\n" +
 			"The write happens only when exactly one attached display is positively\n" +
 			"identified as a catalog model that is write-enabled for that input. Anything\n" +
 			"else is refused, and a refusal means nothing was written.\n\n" +
@@ -69,13 +72,20 @@ func newSwitchCmd(state *cli) *cobra.Command {
 
 // switchInput performs one switch.
 //
-// The input is parsed before anything else happens: an argument outside the enum
-// is a mistake in the request rather than something for the backend to discover,
-// and nothing should be started for it.
+// The input is parsed before anything else happens: an argument that is not a
+// well-formed connector name is a mistake in the request rather than something
+// for the backend to discover, and nothing should be started for it. A name that
+// is well formed but not enabled for the matched model is a different thing, and
+// it is refused later, by the policy, with nothing written.
 func (c *cli) switchInput(command *cobra.Command, name, serial string, dryRun bool) error {
 	input, err := catalog.ParseInput(name)
 	if err != nil {
-		return fmt.Errorf("%w (one of: %s)", err, strings.Join(inputNames(), ", "))
+		return fmt.Errorf(
+			"%w (a connector kind - %s - optionally followed by a port number, e.g. hdmi2; "+
+				"run \"monmux info\" to see the inputs of the attached monitor)",
+			err,
+			strings.Join(kindNames(), ", "),
+		)
 	}
 
 	driver, configured, err := c.open()

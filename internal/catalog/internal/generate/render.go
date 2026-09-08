@@ -22,6 +22,8 @@ import (
 	"go/format"
 	"slices"
 	"strings"
+
+	"github.com/leinardi/monmux/internal/catalog/internal/input"
 )
 
 // ErrRender reports Go source the formatter rejected, which means this package
@@ -67,8 +69,14 @@ func Render(document Document) ([]byte, error) {
 	}
 
 	body := make([]string, 0, len(document.Models))
+
 	for index := range document.Models {
-		body = append(body, renderModel(&document.Models[index])...)
+		entry, renderErr := renderModel(&document.Models[index])
+		if renderErr != nil {
+			return nil, renderErr
+		}
+
+		body = append(body, entry...)
 	}
 
 	lines := slices.Concat(preamble(), body, []string{"}", ""})
@@ -100,7 +108,12 @@ func preamble() []string {
 }
 
 // renderModel renders one entry of the models slice.
-func renderModel(model *Model) []string {
+func renderModel(model *Model) ([]string, error) {
+	inputs, err := renderInputs(model.Inputs)
+	if err != nil {
+		return nil, err
+	}
+
 	return slices.Concat(
 		[]string{
 			"{",
@@ -109,10 +122,10 @@ func renderModel(model *Model) []string {
 		},
 		renderIdentities(model.Identities),
 		[]string{fmt.Sprintf("WriteEnabled: %t,", model.WriteEnabled)},
-		renderInputs(model.Inputs),
+		inputs,
 		renderSources(model.Sources),
 		[]string{"},"},
-	)
+	), nil
 }
 
 // renderIdentities renders the fingerprints. An entry with none renders as nil,
@@ -136,20 +149,35 @@ func renderIdentities(identities []Identity) []string {
 	return append(lines, "},")
 }
 
-// renderInputs renders the input map in enum order, so the generated file does
-// not depend on the order the keys happen to have in the catalog file.
-func renderInputs(entries map[string]Input) []string {
+// renderInputs renders the input map in catalog order - connector kind, then
+// port number - so the generated file does not depend on the order the keys
+// happen to have in the catalog file.
+//
+// A key that does not parse is an error rather than a name sorted at one end:
+// [Document.Validate] has already rejected such a document, so reaching here
+// means this package has a bug, and a fallback order would not be transitive.
+func renderInputs(entries map[string]Input) ([]string, error) {
+	names := make([]input.Name, 0, len(entries))
+
+	for name := range entries {
+		parsed, err := input.Parse(name)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %q: %w", ErrRender, name, err)
+		}
+
+		names = append(names, parsed)
+	}
+
+	slices.SortFunc(names, input.Compare)
+
 	lines := make([]string, 0, len(entries)*linesPerInput+2)
 	lines = append(lines, "Inputs: map[Input]inputOp{")
 
-	for _, name := range inputOrder {
-		entry, recorded := entries[name]
-		if !recorded {
-			continue
-		}
+	for _, name := range names {
+		entry := entries[name.String()]
 
 		lines = append(lines,
-			inputNames[name]+": {",
+			fmt.Sprintf("%q: {", name.String()),
 			fmt.Sprintf("mechanism: %s,", mechanismNames[entry.Mechanism]),
 			fmt.Sprintf("value: 0x%02X,", *entry.Value),
 			fmt.Sprintf("evidence: %q,", entry.Evidence),
@@ -157,7 +185,7 @@ func renderInputs(entries map[string]Input) []string {
 		)
 	}
 
-	return append(lines, "},")
+	return append(lines, "},"), nil
 }
 
 // renderSources renders the model-level references.

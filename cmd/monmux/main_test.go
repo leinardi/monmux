@@ -22,10 +22,12 @@ package main
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/leinardi/monmux/internal/backend"
+	"github.com/leinardi/monmux/internal/catalog"
 	"github.com/leinardi/monmux/internal/config"
 	"github.com/leinardi/monmux/internal/edid"
 	"github.com/leinardi/monmux/internal/refusal"
@@ -447,24 +449,97 @@ func TestAToolThatRanAndFailedExitsOne(t *testing.T) {
 	}
 }
 
-// An input outside the enum is a mistake in the request, and nothing should be
-// started for it.
+// An argument that is not a well-formed connector name is a mistake in the
+// request, and nothing should be started for it.
 func TestAnUnknownInputStartsNothing(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"hdmi01", "scart"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			world := newWorld()
+
+			_, stderr, code := world.run("switch", name)
+			if code != exitToolError {
+				t.Errorf("exit = %d, want %d", code, exitToolError)
+			}
+
+			if !strings.Contains(stderr, "monmux info") {
+				t.Errorf("the error does not point at monmux info:\n%s", stderr)
+			}
+
+			if len(world.driver.Calls()) != 0 {
+				t.Errorf("an unknown input still called the backend: %v", world.driver.Calls())
+			}
+		})
+	}
+}
+
+// A name that is well formed but not enabled for the matched model is the other
+// half of the same story: it is a refusal, not a usage error, and it promises
+// that nothing was written.
+func TestAParseableInputTheModelDoesNotEnableIsRefused(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"hdmi", "hdmi1", "hdmi3"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			world := newWorld()
+
+			_, stderr, code := world.run("switch", name)
+			if code != exitRefused {
+				t.Errorf("exit = %d, want %d", code, exitRefused)
+			}
+
+			if !strings.Contains(stderr, "The requested input is not enabled for this model.") {
+				t.Errorf("the refusal is not input-not-enabled:\n%s", stderr)
+			}
+
+			if !strings.Contains(stderr, "Requested "+name+" on LG 38WR85QC-W") {
+				t.Errorf("the refusal does not name the input asked for:\n%s", stderr)
+			}
+
+			if !strings.HasSuffix(stderr, "No DDC write was performed.\n") {
+				t.Errorf("the refusal does not end with the promise:\n%s", stderr)
+			}
+
+			if world.wrote() {
+				t.Error("a refused switch wrote to a monitor")
+			}
+		})
+	}
+}
+
+// Completion offers every input the catalog records, in listing order and once
+// each. It is built from the catalog, so adding a port to models.yaml needs no
+// edit here.
+func TestCompletionOffersEveryRecordedInput(t *testing.T) {
 	t.Parallel()
 
 	world := newWorld()
 
-	_, stderr, code := world.run("switch", "hdmi")
-	if code != exitToolError {
-		t.Errorf("exit = %d, want %d", code, exitToolError)
+	stdout, stderr, code := world.run("__complete", "switch", "")
+	if code != exitSent {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
 	}
 
-	if !strings.Contains(stderr, "dp, usb-c, hdmi1, hdmi2") {
-		t.Errorf("the error does not list the valid inputs:\n%s", stderr)
+	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
+
+	// cobra ends the list with a line naming the shell directive, which is not
+	// a candidate.
+	if len(lines) > 0 && strings.HasPrefix(lines[len(lines)-1], ":") {
+		lines = lines[:len(lines)-1]
 	}
 
-	if len(world.driver.Calls()) != 0 {
-		t.Errorf("an unknown input still called the backend: %v", world.driver.Calls())
+	want := make([]string, 0, len(catalog.KnownInputs()))
+	for _, input := range catalog.KnownInputs() {
+		want = append(want, input.String())
+	}
+
+	if !slices.Equal(lines, want) {
+		t.Errorf("completion offered %v, want %v", lines, want)
 	}
 }
 

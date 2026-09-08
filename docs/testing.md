@@ -63,7 +63,9 @@ invalid. `TestCompatibilityDocumentMatchesTheCatalog` compares `docs/compatibili
 generated Go fails the build instead of shipping. The `go-test-repo-mod` pre-commit hook is filtered to Go files and `go.mod`,
 which would let a commit that edits only the catalog file skip that test; `.pre-commit-config.yaml` widens the filter to include
 `models.yaml` so an edit without a regeneration cannot be committed. The generator has its own tests for every rule it enforces, and
-`TestGeneratorKnowsEveryInputAndMechanism` keeps its copy of the input and mechanism enums in step with the real ones.
+`TestGeneratorKnowsEveryMechanism` keeps its copy of the mechanism enum in step with the real one. Input names are not
+mirrored: the generator and the catalog import the one grammar from `internal/catalog/internal/input`, which has its own
+tests for what parses, how names sort and which numbering a model may not mix.
 
 **Structural tests.** A reflection test walks the `Backend` interface and fails if any method could be handed a `Command`,
 however deeply wrapped — that is what makes a command unforgeable.

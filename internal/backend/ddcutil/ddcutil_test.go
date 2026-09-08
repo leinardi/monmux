@@ -166,7 +166,7 @@ func operation(t *testing.T) catalog.Operation {
 		t.Fatalf("the tested model no longer matches: %s", match)
 	}
 
-	op, enabled := model.Operation(catalog.InputUSBC)
+	op, enabled := model.Operation(catalog.Input("usb-c"))
 	if !enabled {
 		t.Fatal("the tested model is no longer enabled for USB-C")
 	}

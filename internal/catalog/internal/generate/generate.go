@@ -21,8 +21,10 @@
 // It is deliberately a leaf package. It does not import internal/catalog, which
 // contains the file this package writes; if it did, deleting or corrupting the
 // generated file would stop the generator compiling and there would be no way
-// back. The two tables of accepted names below are therefore its own, and a test
-// in internal/catalog checks them against the enums they mirror.
+// back. The table of accepted mechanisms below is therefore its own, and a test
+// in internal/catalog checks it against the enum it mirrors. Input names are not
+// mirrored: their grammar lives in internal/catalog/internal/input, which is a
+// leaf too, so both sides can import the one copy.
 package generate
 
 import (
@@ -35,6 +37,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/leinardi/monmux/internal/catalog/internal/input"
 )
 
 // Errors reported by [Parse] and [Validate]. Every rule has its own sentinel so
@@ -72,23 +76,15 @@ var (
 	ErrNoInputs = errors.New("generate: the model records no input")
 	// ErrNoSources reports a model with no reference backing it.
 	ErrNoSources = errors.New("generate: the model records no source")
-	// ErrUnknownInput reports an input key outside the symbolic input enum.
+	// ErrUnknownInput reports an input key that is not a well-formed name: a
+	// known connector kind and an optional port number.
 	ErrUnknownInput = errors.New("generate: unknown input")
+	// ErrMixedNumbering reports a model that writes one connector kind both bare
+	// and numbered, which leaves it undecided which port the bare name means.
+	ErrMixedNumbering = errors.New("generate: a connector kind is written both bare and numbered")
 	// ErrUnknownMechanism reports a mechanism no backend implements.
 	ErrUnknownMechanism = errors.New("generate: unknown mechanism")
 )
-
-// inputOrder is the symbolic input enum, in the order entries are rendered. It
-// mirrors catalog.Inputs(); TestGeneratorKnowsEveryInputAndMechanism checks that.
-var inputOrder = []string{"dp", "usb-c", "hdmi1", "hdmi2"}
-
-// inputNames maps an input key to the Go constant that names it.
-var inputNames = map[string]string{
-	"dp":    "InputDP",
-	"usb-c": "InputUSBC",
-	"hdmi1": "InputHDMI1",
-	"hdmi2": "InputHDMI2",
-}
 
 // mechanismOrder is every mechanism a backend implements. It mirrors
 // catalog.Mechanisms().
@@ -101,11 +97,6 @@ var mechanismNames = map[string]string{
 
 // manufacturerLength is the length of an EDID PNP manufacturer ID.
 const manufacturerLength = 3
-
-// Inputs returns the input keys this generator accepts, in enum order.
-func Inputs() []string {
-	return slices.Clone(inputOrder)
-}
 
 // Mechanisms returns the mechanism names this generator accepts, in enum order.
 func Mechanisms() []string {
@@ -308,8 +299,9 @@ func (m *Model) validateIdentities() []error {
 	return problems
 }
 
-// validateInputs checks that every recorded input is one monmux knows, switched
-// by a mechanism a backend implements, with its own evidence.
+// validateInputs checks that every recorded input is a well-formed name switched
+// by a mechanism a backend implements, with its own evidence, and that no
+// connector kind is written both bare and numbered.
 func (m *Model) validateInputs() []error {
 	var problems []error
 
@@ -317,14 +309,19 @@ func (m *Model) validateInputs() []error {
 		problems = append(problems, fmt.Errorf("%w: %q", ErrNoInputs, m.Name))
 	}
 
+	parsed := make([]input.Name, 0, len(m.Inputs))
+
 	for _, name := range slices.Sorted(maps.Keys(m.Inputs)) {
 		entry := m.Inputs[name]
 
-		if !slices.Contains(inputOrder, name) {
+		candidate, err := input.Parse(name)
+		if err != nil {
 			problems = append(
 				problems,
-				fmt.Errorf("%w: %q records %q", ErrUnknownInput, m.Name, name),
+				fmt.Errorf("%w: %q records %q: %w", ErrUnknownInput, m.Name, name, err),
 			)
+		} else {
+			parsed = append(parsed, candidate)
 		}
 
 		if !slices.Contains(mechanismOrder, entry.Mechanism) {
@@ -346,6 +343,11 @@ func (m *Model) validateInputs() []error {
 				fmt.Errorf("%w: %q records %q with no evidence", ErrBlank, m.Name, name),
 			)
 		}
+	}
+
+	err := input.CheckNumbering(parsed)
+	if err != nil {
+		problems = append(problems, fmt.Errorf("%w: %q: %w", ErrMixedNumbering, m.Name, err))
 	}
 
 	return problems
