@@ -132,89 +132,6 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 			document: strings.Replace(valid, "vendor: ACME", `vendor: "  "`, 1),
 			want:     generate.ErrBlank,
 		},
-		"an evidence with no grade": {
-			document: strings.Replace(valid, "          grade: verified\n", "", 1),
-			want:     generate.ErrUnknownGrade,
-		},
-		"an evidence with a grade nobody defined": {
-			document: strings.Replace(valid, "grade: verified", "grade: hearsay", 1),
-			want:     generate.ErrUnknownGrade,
-		},
-		"a verified row with no date": {
-			document: strings.Replace(valid, "          date: \"2026-09-07\"\n", "", 1),
-			want:     generate.ErrBlank,
-		},
-		"a verified row with a blank tool": {
-			document: strings.Replace(valid, "tool: ddcutil", `tool: "  "`, 1),
-			want:     generate.ErrBlank,
-		},
-		"a verified row with no note": {
-			document: strings.Replace(
-				valid,
-				"          note: switched from HDMI 1 to DisplayPort\n",
-				"",
-				1,
-			),
-			want: generate.ErrBlank,
-		},
-		"a write-enabled model on reported evidence": {
-			document: strings.Replace(
-				valid,
-				"          grade: verified\n          date: \"2026-09-07\"\n"+
-					"          tool: ddcutil\n          note: switched from HDMI 1 to DisplayPort\n",
-				"          grade: reported\n          by: a tester\n          tool: ddcutil\n"+
-					"          url: https://example.com/report\n",
-				1,
-			),
-			want: generate.ErrUnverifiedEnabled,
-		},
-		"a reported row with no reporter": {
-			document: strings.Replace(
-				valid,
-				"          grade: verified\n          date: \"2026-09-07\"\n"+
-					"          tool: ddcutil\n          note: switched from HDMI 1 to DisplayPort\n",
-				"          grade: reported\n          tool: ddcutil\n"+
-					"          url: https://example.com/report\n",
-				1,
-			),
-			want: generate.ErrBlank,
-		},
-		"a reference that is not https": {
-			document: strings.Replace(
-				valid,
-				"          grade: verified\n          date: \"2026-09-07\"\n"+
-					"          tool: ddcutil\n          note: switched from HDMI 1 to DisplayPort\n",
-				"          grade: reported\n          by: a tester\n          tool: ddcutil\n"+
-					"          url: http://example.com/report\n",
-				1,
-			),
-			want: generate.ErrBadURL,
-		},
-		"an evidence field holding a table separator": {
-			document: strings.Replace(valid, "tool: ddcutil", `tool: "ddcutil | 2.2.0"`, 1),
-			want:     generate.ErrBadText,
-		},
-		"an evidence field holding a line break": {
-			document: strings.Replace(valid, "tool: ddcutil", `tool: "ddcutil\n2.2.0"`, 1),
-			want:     generate.ErrBadText,
-		},
-		"a blank note": {
-			document: strings.Replace(valid, "- a note about this entry", `- "  "`, 1),
-			want:     generate.ErrBadNote,
-		},
-		"a note holding a table separator": {
-			document: strings.Replace(
-				valid,
-				"- a note about this entry",
-				`- "a note | with a cell separator"`,
-				1,
-			),
-			want: generate.ErrBadText,
-		},
-		"a source holding a table separator": {
-			document: strings.Replace(valid, "- a named source", `- "a | source"`, 1),
-			want:     generate.ErrBadText,
-		},
 		"an empty source": {
 			document: strings.Replace(valid, "- a named source", `- ""`, 1),
 			want:     generate.ErrBlank,
@@ -328,6 +245,8 @@ func TestInvalidCatalogsAreRejected(t *testing.T) {
 			document: valid + strings.Replace(entry, "name: TEST-1", "name: TEST-2", 1),
 			want:     generate.ErrDuplicateIdentity,
 		},
+		// A bare identity matches every display with that code, the pinned
+		// entry's included, so it would make that display ambiguous.
 	}
 
 	for name, testCase := range cases {
@@ -361,6 +280,197 @@ func TestAValueWiderThanAByteRendersInFull(t *testing.T) {
 
 	if !strings.Contains(string(rendered), "value:     0x1D1,") {
 		t.Errorf("a 16-bit value was not rendered in full:\n%s", rendered)
+	}
+}
+
+// The evidence rules, and the file that breaks each one. They are their own
+// table because they are their own idea: the first table is about a catalog
+// entry being well formed, this one is about what the entry claims and whether
+// the claim is strong enough to be written to a monitor.
+func TestInvalidEvidenceIsRejected(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		document string
+		want     error
+	}{
+		"an evidence with no grade": {
+			document: strings.Replace(valid, "          grade: verified\n", "", 1),
+			want:     generate.ErrUnknownGrade,
+		},
+		"an evidence with a grade nobody defined": {
+			document: strings.Replace(valid, "grade: verified", "grade: hearsay", 1),
+			want:     generate.ErrUnknownGrade,
+		},
+		"a verified row with no date": {
+			document: strings.Replace(valid, "          date: \"2026-09-07\"\n", "", 1),
+			want:     generate.ErrBlank,
+		},
+		"a verified row with a blank tool": {
+			document: strings.Replace(valid, "tool: ddcutil", `tool: "  "`, 1),
+			want:     generate.ErrBlank,
+		},
+		"a verified row with no note": {
+			document: strings.Replace(
+				valid,
+				"          note: switched from HDMI 1 to DisplayPort\n",
+				"",
+				1,
+			),
+			want: generate.ErrBlank,
+		},
+		"a write-enabled model on reported evidence": {
+			document: strings.Replace(
+				valid,
+				"          grade: verified\n          date: \"2026-09-07\"\n"+
+					"          tool: ddcutil\n          note: switched from HDMI 1 to DisplayPort\n",
+				"          grade: reported\n          by: a tester\n          tool: ddcutil\n"+
+					"          url: https://example.com/report\n",
+				1,
+			),
+			want: generate.ErrUnverifiedEnabled,
+		},
+		"a reported row with no reporter": {
+			document: strings.Replace(
+				valid,
+				"          grade: verified\n          date: \"2026-09-07\"\n"+
+					"          tool: ddcutil\n          note: switched from HDMI 1 to DisplayPort\n",
+				"          grade: reported\n          tool: ddcutil\n"+
+					"          url: https://example.com/report\n",
+				1,
+			),
+			want: generate.ErrBlank,
+		},
+		"a reference that is not https": {
+			document: strings.Replace(
+				valid,
+				"          grade: verified\n          date: \"2026-09-07\"\n"+
+					"          tool: ddcutil\n          note: switched from HDMI 1 to DisplayPort\n",
+				"          grade: reported\n          by: a tester\n          tool: ddcutil\n"+
+					"          url: http://example.com/report\n",
+				1,
+			),
+			want: generate.ErrBadURL,
+		},
+		"an evidence field holding a table separator": {
+			document: strings.Replace(valid, "tool: ddcutil", `tool: "ddcutil | 2.2.0"`, 1),
+			want:     generate.ErrBadText,
+		},
+		"an evidence field holding a line break": {
+			document: strings.Replace(valid, "tool: ddcutil", `tool: "ddcutil\n2.2.0"`, 1),
+			want:     generate.ErrBadText,
+		},
+		"a blank note": {
+			document: strings.Replace(valid, "- a note about this entry", `- "  "`, 1),
+			want:     generate.ErrBadNote,
+		},
+		"a note holding a table separator": {
+			document: strings.Replace(
+				valid,
+				"- a note about this entry",
+				`- "a note | with a cell separator"`,
+				1,
+			),
+			want: generate.ErrBadText,
+		},
+		"a source holding a table separator": {
+			document: strings.Replace(valid, "- a named source", `- "a | source"`, 1),
+			want:     generate.ErrBadText,
+		},
+		"a bare identity beside a pinned one": {
+			document: valid + strings.Replace(
+				strings.Replace(entry, "name: TEST-1", "name: TEST-2", 1),
+				"        product_code: 0x0001",
+				"        product_code: 0x0001\n        model_name: ACME 4K",
+				1,
+			),
+			want: generate.ErrDuplicateIdentity,
+		},
+		"two identities pinning the same name": {
+			document: "models:\n" + pinned("TEST-1", "ACME 4K") + pinned("TEST-2", "ACME 4K"),
+			want:     generate.ErrDuplicateIdentity,
+		},
+		"a pinned name longer than an EDID descriptor": {
+			document: "models:\n" + pinned("TEST-1", "ACME 4K ULTRAWIDE"),
+			want:     generate.ErrModelName,
+		},
+		"a pinned name with untrimmed whitespace": {
+			document: "models:\n" + pinned("TEST-1", " ACME 4K"),
+			want:     generate.ErrModelName,
+		},
+		"a pinned name holding a table separator": {
+			document: "models:\n" + pinned("TEST-1", "ACME | 4K"),
+			want:     generate.ErrBadText,
+		},
+		"a pinned name outside printable ASCII": {
+			document: "models:\n" + pinned("TEST-1", "ACME\\t4K"),
+			want:     generate.ErrModelName,
+		},
+	}
+
+	for name, testCase := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := generate.Generate([]byte(testCase.document))
+			if err == nil {
+				t.Fatalf("%s was accepted", name)
+			}
+
+			if !errors.Is(err, testCase.want) {
+				t.Errorf("%s gave %v, want %v", name, err, testCase.want)
+			}
+		})
+	}
+}
+
+// pinned returns a one-model catalog file whose identity pins a model name.
+func pinned(name, modelName string) string {
+	body := strings.Replace(entry, "name: TEST-1", "name: "+name, 1)
+
+	return strings.Replace(
+		body,
+		"        product_code: 0x0001",
+		"        product_code: 0x0001\n        model_name: \""+modelName+"\"",
+		1,
+	)
+}
+
+// LG assigns one EDID product code to several products, so two entries sharing
+// a code is the case pinning exists for. Distinct pinned names are the only
+// shape of that the generator accepts.
+func TestPinnedModelNamesMayShareAProductCode(t *testing.T) {
+	t.Parallel()
+
+	document := "models:\n" + pinned("TEST-1", "ACME 4K") + pinned("TEST-2", "ACME 5K")
+
+	rendered, err := generate.Generate([]byte(document))
+	if err != nil {
+		t.Fatalf("two pinned names sharing a product code were rejected: %v", err)
+	}
+
+	for _, want := range []string{
+		`{Manufacturer: "ACM", ProductCode: 0x0001, ModelName: "ACME 4K"},`,
+		`{Manufacturer: "ACM", ProductCode: 0x0001, ModelName: "ACME 5K"},`,
+	} {
+		if !strings.Contains(string(rendered), want) {
+			t.Errorf("the rendered catalog does not contain %q:\n%s", want, rendered)
+		}
+	}
+}
+
+// An identity that pins nothing renders no ModelName field at all, so "this
+// matches on the code alone" is what the generated Go says.
+func TestAnUnpinnedIdentityRendersNoModelName(t *testing.T) {
+	t.Parallel()
+
+	rendered, err := generate.Generate([]byte(valid))
+	if err != nil {
+		t.Fatalf("rendering: %v", err)
+	}
+
+	if strings.Contains(string(rendered), "ModelName") {
+		t.Errorf("an unpinned identity rendered a ModelName:\n%s", rendered)
 	}
 }
 

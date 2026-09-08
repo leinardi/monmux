@@ -63,6 +63,10 @@ var (
 	ErrDuplicateIdentity = errors.New("generate: duplicate identity")
 	// ErrManufacturer reports a PNP ID that is not three uppercase letters.
 	ErrManufacturer = errors.New("generate: manufacturer must be three uppercase letters")
+	// ErrModelName reports a pinned model name that could not have come out of
+	// an EDID descriptor: too long, untrimmed, or holding something other than
+	// printable ASCII.
+	ErrModelName = errors.New("generate: bad pinned model name")
 	// ErrIdentityRequired reports a write-enabled model with no identity. It
 	// could never match, so it must not claim to be enabled.
 	ErrIdentityRequired = errors.New("generate: a write-enabled model needs at least one identity")
@@ -169,6 +173,15 @@ const urlScheme = "https://"
 // manufacturerLength is the length of an EDID PNP manufacturer ID.
 const manufacturerLength = 3
 
+// modelNameLength is the most an EDID descriptor can hold: 13 bytes of text.
+const modelNameLength = 13
+
+// The bounds of printable ASCII, which is all an EDID descriptor carries.
+const (
+	firstPrintable = 0x20
+	lastPrintable  = 0x7E
+)
+
 // Mechanisms returns the mechanism names this generator accepts, in enum order.
 func Mechanisms() []string {
 	return slices.Clone(mechanismOrder)
@@ -179,12 +192,41 @@ func Grades() []string {
 	return slices.Clone(gradeOrder)
 }
 
-// fingerprint is an [Identity] reduced to comparable values, so that two entries
-// claiming the same EDID are detected by what they say rather than by where the
-// decoder happened to put it.
-type fingerprint struct {
+// claim is one entry's assertion that an EDID belongs to it, reduced to
+// comparable values so that two entries claiming the same display are detected
+// by what they say rather than by where the decoder happened to put it.
+type claim struct {
 	manufacturer string
 	productCode  uint16
+	modelName    string
+	owner        string
+}
+
+// String renders the claim the way monmux documentation writes an identity.
+func (c claim) String() string {
+	rendered := fmt.Sprintf("%s/0x%04X", c.manufacturer, c.productCode)
+	if c.modelName == "" {
+		return rendered
+	}
+
+	return fmt.Sprintf("%s %q", rendered, c.modelName)
+}
+
+// collides reports whether two claims could both match one display.
+//
+// Two identities collide when the manufacturer and the product code are equal
+// and either pins no model name, or both pin the same one. A bare claim next to
+// a pinned one is a collision even though the strings differ: the bare one
+// matches every display with that code, the pinned one included, so the display
+// the pinned entry was written for would become ambiguous. Only two entries that
+// both pin, with different names, may share a product code - which is the whole
+// point of pinning, since one vendor code is reused across products.
+func (c claim) collides(other claim) bool {
+	if c.manufacturer != other.manufacturer || c.productCode != other.productCode {
+		return false
+	}
+
+	return c.modelName == "" || other.modelName == "" || c.modelName == other.modelName
 }
 
 // Document is the whole catalog file.
@@ -211,6 +253,11 @@ type Identity struct {
 	Manufacturer string `yaml:"manufacturer"`
 	//nolint:tagliatelle // see Model
 	ProductCode *uint16 `yaml:"product_code"`
+	// ModelName pins the EDID descriptor 0xFC text. It is optional and left out
+	// unless two models have to share a product code, which happens because a
+	// vendor reuses one. See [claim.collides].
+	//nolint:tagliatelle // see Model
+	ModelName string `yaml:"model_name"`
 }
 
 // Input is what the file records for one input of one model. Value is 16 bits
@@ -316,7 +363,7 @@ func (d Document) Validate() error {
 	var (
 		problems []error
 		names    = map[string]bool{}
-		owners   = map[fingerprint]string{}
+		claimed  []claim
 	)
 
 	for index := range d.Models {
@@ -332,29 +379,36 @@ func (d Document) Validate() error {
 
 		for _, identity := range model.Identities {
 			// A missing product code is reported by validateIdentities; there is
-			// no fingerprint to compare until the file supplies one.
+			// nothing to compare until the file supplies one.
 			if identity.ProductCode == nil {
 				continue
 			}
 
-			current := fingerprint{
+			current := claim{
 				manufacturer: identity.Manufacturer,
 				productCode:  *identity.ProductCode,
+				modelName:    identity.ModelName,
+				owner:        model.Name,
 			}
 
-			previous, taken := owners[current]
-			if taken {
+			// Pairwise rather than a map lookup, because the rule is not
+			// equality: a bare claim collides with a pinned one.
+			for _, previous := range claimed {
+				if !previous.collides(current) {
+					continue
+				}
+
 				problems = append(problems, fmt.Errorf(
-					"%w: %s/0x%04X is claimed by both %q and %q",
+					"%w: %s and %s could both match one display, for %q and %q",
 					ErrDuplicateIdentity,
-					current.manufacturer,
-					current.productCode,
 					previous,
-					model.Name,
+					current,
+					previous.owner,
+					current.owner,
 				))
 			}
 
-			owners[current] = model.Name
+			claimed = append(claimed, current)
 		}
 	}
 
@@ -404,6 +458,20 @@ func (m *Model) validateIdentities() []error {
 		if identity.ProductCode == nil {
 			problems = append(problems, fmt.Errorf(
 				"%w: %q has an identity with no product code", ErrMissing, m.Name,
+			))
+		}
+
+		if !validModelName(identity.ModelName) {
+			problems = append(problems, fmt.Errorf(
+				"%w: %q pins %q", ErrModelName, m.Name, identity.ModelName,
+			))
+		}
+
+		// Printable ASCII still admits the cell separator, and the Identities
+		// column of the document is a table cell like any other.
+		if !renderable(identity.ModelName) {
+			problems = append(problems, fmt.Errorf(
+				"%w: %q pins an unrenderable model name", ErrBadText, m.Name,
 			))
 		}
 	}
@@ -578,6 +646,26 @@ func emptyDocument(node *yaml.Node) bool {
 	}
 
 	return len(node.Content) == 1 && node.Content[0].Tag == nullTag
+}
+
+// validModelName reports whether a pinned name could have come out of an EDID
+// descriptor. An empty name is not pinned at all and is always fine.
+func validModelName(name string) bool {
+	if name == "" {
+		return true
+	}
+
+	if name != strings.TrimSpace(name) || len(name) > modelNameLength {
+		return false
+	}
+
+	for index := range len(name) {
+		if name[index] < firstPrintable || name[index] > lastPrintable {
+			return false
+		}
+	}
+
+	return true
 }
 
 // validManufacturer reports whether a PNP ID is three uppercase ASCII letters.

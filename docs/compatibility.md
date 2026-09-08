@@ -17,7 +17,9 @@ that switch inputs with the standard VCP code `0x60` are not representable and a
 
 - **Identities** — the EDID fingerprints, as `manufacturer/product code`, that match this model. A model can have several: the
   tested LG reports a different product code depending on which input it is currently displaying. A model with no identity
-  recorded can never match a display, and so can never be written to.
+  recorded can never match a display, and so can never be written to. A fingerprint may also pin the EDID model name, written
+  after the code as `GSM/0x7707 "LG HDR 4K"`; that is only used where two models share a reused product code, and no entry
+  needs it today.
 - **Input** — the symbolic input, as typed on the command line: a connector kind (`dp`, `hdmi`, `usb-c`, `dvi`, `vga`,
   `thunderbolt`) plus an optional port number, as in `hdmi2`. A kind is written bare when the model has one port of it and
   numbered when it has several, never both.
@@ -508,8 +510,13 @@ LG assigns the same EDID product code to more than one product. ddccontrol-db ma
 `GSM 0x7707` to the 32UD99 and the 27UN880-B, while the 32BL95U service manual assigns `0x7706`, `0x7707` and `0x7722` to that
 model's HDMI, DisplayPort and Thunderbolt inputs.
 
-The catalog requires one identity to belong to one model: the generator refuses two entries claiming the same fingerprint, and
-the matcher refuses a display that several models claim. That is the right behaviour — an ambiguous match must never turn into
-a write — but it means the first contributor to bring a real EDID for one of these models will hit a collision that no amount
-of care on their part can fix. Read [adding-a-monitor.md](adding-a-monitor.md) before collecting one, and say so in the pull
-request rather than working around it.
+The catalog requires one identity to match one model, and the matcher refuses a display that several models claim: an ambiguous
+match must never turn into a write. An identity may therefore pin the EDID model name — descriptor `0xFC` on Linux, the
+`Product name` m1ddc prints on macOS — and two identities collide only when the manufacturer and the product code are equal
+**and** either pins no name, or both pin the same one. So two models may share a reused code, provided both pin, with different
+names.
+
+A bare identity beside a pinned one with the same code is rejected, because the bare one matches every display with that code
+and would shadow the pinned entry. That makes bringing a real EDID for one of these models a change to the other entry as well
+as to yours: read [adding-a-monitor.md](adding-a-monitor.md) before collecting one, and say so in the pull request rather than
+working around it. No entry pins a name today.

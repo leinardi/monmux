@@ -110,8 +110,9 @@ Repo-local make targets live in `.mk/cross.mk`.
 
 Do not weaken any of these. They are the reason the tool exists.
 
-1. **Identify before writing.** A write requires an exact catalog match on the parsed EDID identity. Unknown, ambiguous, or multiple
-   candidate monitors are refused — never guessed at, never defaulted.
+1. **Identify before writing.** A write requires an exact catalog match on the parsed EDID identity — manufacturer and product code,
+   plus the EDID model name where an identity pins one, which is how two models sharing a reused product code are told apart.
+   Unknown, ambiguous, or multiple candidate monitors are refused — never guessed at, never defaulted.
 2. **Enabled inputs only.** An input is writable only if the matched model explicitly enables it, with recorded evidence. A model with no
    identities is never matched and therefore never written to.
 3. **Re-verify at the last moment.** `Execute` re-reads the identity (sysfs EDID and bus on Linux, `display list detailed` on macOS) and

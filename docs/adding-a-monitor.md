@@ -21,13 +21,20 @@ monmux info --json
 Run it once per connector you care about, with the monitor on that input. Record for each:
 
 - `identity.manufacturer` and `identity.productCode` — the fingerprint the catalog matches on.
-- `identity.modelName` — useful context; **not** used for matching.
+- `identity.modelName` — record it, on **both** operating systems if you can. It is not used for matching unless an identity
+  pins it, and pinning is only for the case below; if the two systems report different strings for the same monitor, do not pin.
 - `writable` and `status` — a display with `no-ddc-channel`, `edid-unreadable` or `no-uuid` cannot be switched at all, and that
   is a hardware or permissions problem to solve before anything else.
 
 Monitors often report a **different product code depending on which input they are currently displaying**. The model in the
 catalog today has two identities for exactly that reason. Check every input you can reach, or the entry you add will work in one
 direction and refuse in the other.
+
+A vendor also reuses one product code across products. LG does: `GSM/0x7707` is claimed by the 32UD99, the 27UN880-B and the
+32BL95U service manual. If the code you collected is already in the catalog under another model, add `model_name:` to **both**
+identities — the pinned EDID descriptor `0xFC` text is what tells them apart. The generator refuses a bare identity beside a
+pinned one with the same code, because the bare one would shadow the pinned one, so this is a change to the existing entry as
+well as to yours. Say so in the pull request rather than working around it.
 
 Nothing in this step writes. `monmux info` and `monmux doctor` are read-only by construction: monmux never probes by sending a
 value and seeing what happens.
@@ -96,6 +103,7 @@ The catalog is `internal/catalog/models.yaml`. Add your entry to the `models:` l
   identities:
       - manufacturer: ABC
         product_code: 0x1234
+        # model_name: ABC 4K   # only when two models share this product code
   write_enabled: true
   inputs:
       dp:
@@ -143,7 +151,11 @@ Rules the generator refuses and the invariant tests re-check:
   claim to be enabled.
 - A model that is not write-enabled records no identity at all. Matching does not consult the flag, so an entry with a
   fingerprint would match a real display and then refuse late instead of never matching.
-- An identity belongs to exactly one model, across the whole catalog, and a manufacturer is three uppercase letters.
+- An identity belongs to exactly one model, across the whole catalog, and a manufacturer is three uppercase letters. Two
+  identities collide when the manufacturer and the product code are equal and either pins no `model_name`, or both pin the
+  same one — so only two identities that both pin, with different names, may share a product code.
+- A pinned `model_name` is 1 to 13 characters of printable ASCII with no leading or trailing whitespace, because that is what
+  an EDID descriptor can hold.
 - Every recorded input is a well-formed name. A name is a connector kind — `dp`, `hdmi`, `usb-c`,
   `dvi`, `vga`, `thunderbolt` — optionally followed by a port number: a positive decimal integer with no leading zero and no
   separator, so `hdmi2` and `usb-c2` are names and `hdmi0`, `hdmi01` and `hdmi-1` are not. Write a kind bare when the model has

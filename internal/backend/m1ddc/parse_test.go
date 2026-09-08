@@ -23,6 +23,7 @@ package m1ddc
 import (
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/leinardi/monmux/internal/backend"
@@ -90,6 +91,95 @@ func TestTheCapturedListYieldsTheSupportedDisplay(t *testing.T) {
 
 	if first != want {
 		t.Errorf("display =\n%+v\nwant\n%+v", first, want)
+	}
+}
+
+// The model name is the one identity field the two backends read from different
+// places: EDID descriptor 0xFC on Linux, m1ddc's "Product name" here. A catalog
+// entry that pins a name compares against whatever this produces, so the two
+// must agree for the same unit - internal/edid asserts the same string from the
+// same monitor's EDID.
+func TestTheCapturedListYieldsTheSameModelNameAsTheEDID(t *testing.T) {
+	t.Parallel()
+
+	const want = "LG ULTRAWIDE"
+
+	name := listed(t)[0].display.Identity.ModelName
+	if name != want {
+		t.Errorf("ModelName = %q, want %q", name, want)
+	}
+
+	if name != strings.TrimSpace(name) {
+		t.Errorf("ModelName = %q, which is not trimmed", name)
+	}
+}
+
+// m1ddc prints "Product name" from the IORegistry, and the IORegistry does not
+// always supply it. The header name is the fallback, and when neither is there
+// the identity carries no model name at all - which matches no pinned catalog
+// entry, and so refuses rather than guessing.
+func TestTheModelNameFallsBackToTheHeaderAndThenToNothing(t *testing.T) {
+	t.Parallel()
+
+	const detail = ` - Manufacturer:  GSM
+ - AN Serial:     TESTSERIAL01
+ - Vendor:        7789 (0x1e6d)
+ - Model:         30676 (0x77d4)
+ - Serial:        16909060 (0x01020304)
+ - Display ID:    1
+ - System UUID:   00000000-0000-4000-8000-000000000001
+ - EDID UUID:     00000000-0000-4000-8000-000000000001
+`
+
+	cases := map[string]struct {
+		output string
+		want   string
+	}{
+		"the product name is used when m1ddc prints it": {
+			output: "[1] LG ULTRAWIDE (00000000-0000-4000-8000-000000000001)\n" +
+				" - Product name:  LG ULTRAWIDE\n" + detail,
+			want: "LG ULTRAWIDE",
+		},
+		"the header name is used when it is missing": {
+			output: "[1] LG ULTRAWIDE (00000000-0000-4000-8000-000000000001)\n" + detail,
+			want:   "LG ULTRAWIDE",
+		},
+		"the product name is used when the IORegistry supplied nothing": {
+			output: "[1] LG ULTRAWIDE (00000000-0000-4000-8000-000000000001)\n" +
+				" - Product name:  (null)\n" + detail,
+			want: "LG ULTRAWIDE",
+		},
+		"neither leaves the identity with no model name": {
+			output: "[1]  (00000000-0000-4000-8000-000000000001)\n" + detail,
+			want:   "",
+		},
+	}
+
+	for name, testCase := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			records, err := parseDisplayList(testCase.output)
+			if err != nil {
+				t.Fatalf("parsing: %v", err)
+			}
+
+			if len(records) != 1 {
+				t.Fatalf("parsed %d displays, want 1", len(records))
+			}
+
+			got := records[0].display.Identity.ModelName
+			if got != testCase.want {
+				t.Errorf("ModelName = %q, want %q", got, testCase.want)
+			}
+
+			// Whatever the name, the display is still enumerated and still
+			// writable: an absent model string is not a broken display, it just
+			// cannot satisfy a pinned identity.
+			if !records[0].display.Writable {
+				t.Error("the display was reported unwritable")
+			}
+		})
 	}
 }
 

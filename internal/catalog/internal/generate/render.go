@@ -140,11 +140,19 @@ func renderIdentities(identities []Identity) []string {
 	lines = append(lines, "Identities: []Identity{")
 
 	for _, identity := range identities {
-		lines = append(lines, fmt.Sprintf(
-			"{Manufacturer: %q, ProductCode: 0x%04X},",
+		rendered := fmt.Sprintf(
+			"{Manufacturer: %q, ProductCode: 0x%04X",
 			identity.Manufacturer,
 			*identity.ProductCode,
-		))
+		)
+
+		// An unpinned name renders as nothing rather than as an empty string, so
+		// that "this identity matches on the code alone" is what the Go says.
+		if identity.ModelName != "" {
+			rendered += fmt.Sprintf(", ModelName: %q", identity.ModelName)
+		}
+
+		lines = append(lines, rendered+"},")
 	}
 
 	return append(lines, "},")

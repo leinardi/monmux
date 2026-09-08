@@ -106,10 +106,19 @@ Both backends produce the same `edid.Identity`, which is what lets one catalog s
 | Product code  | EDID bytes 10–11                          | `CGDisplayModelNumber`                                          |
 | Serial number | EDID bytes 12–15                          | `CGDisplaySerialNumber`                                         |
 | Serial string | EDID descriptor `0xFF`                    | IORegistry `AlphanumericSerialNumber`                           |
+| Model name    | EDID descriptor `0xFC`                    | IORegistry `Product name`, or the display list's header name    |
 | Handle        | the DRM connector name, e.g. `card1-DP-1` | the display's system UUID — private data, masked in output      |
 
 A display monmux cannot address is still reported, with a status saying why: `no-ddc-channel`, `edid-unreadable`, `no-uuid`.
 `info` lists it; policy can never select it.
+
+A catalog entry matches on the manufacturer and the product code. The serials never take part: they identify a unit, not a
+model. The model name normally does not either — it is context in `info` and nothing more — but an identity **may** pin it,
+because a vendor reuses one product code across products. LG does: `GSM/0x7707` is claimed by the 32UD99, the 27UN880-B and the
+32BL95U service manual. Pinning is what lets two such models live in one catalog without every match becoming ambiguous, so it
+is used only there, and the generator refuses a bare identity beside a pinned one with the same code — otherwise the bare entry
+would shadow the pinned one. A display whose model name is empty matches no pinned identity at all, which is the fail-closed
+answer rather than a guess.
 
 ## What each backend actually runs
 

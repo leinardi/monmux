@@ -288,11 +288,24 @@ type Identity struct {
 	Manufacturer string
 	// ProductCode is the EDID product code, e.g. 0x77D3.
 	ProductCode uint16
+	// ModelName optionally pins the EDID descriptor 0xFC text, e.g. "LG HDR 4K".
+	// It is empty on almost every entry, because a manufacturer and a product
+	// code are normally enough. It is set only where a vendor reuses one product
+	// code across products, which LG does: pinning is what lets two models share
+	// a code without every match becoming ambiguous. The generator refuses a
+	// bare identity next to a pinned one with the same code, so a pinned entry
+	// can never be shadowed by one that matches on the code alone.
+	ModelName string
 }
 
 // String renders the fingerprint the way monmux documentation writes it.
 func (i Identity) String() string {
-	return fmt.Sprintf("%s/0x%04X", i.Manufacturer, i.ProductCode)
+	rendered := fmt.Sprintf("%s/0x%04X", i.Manufacturer, i.ProductCode)
+	if i.ModelName == "" {
+		return rendered
+	}
+
+	return fmt.Sprintf("%s %q", rendered, i.ModelName)
 }
 
 // inputOp is what the catalog records for one input of one model: how to switch,
@@ -425,13 +438,25 @@ func (m Model) InputMechanism(input Input) (Mechanism, bool) {
 
 // Matches reports whether an EDID identity is one of this model's fingerprints.
 //
+// The serial fields are never consulted: they identify a unit, not a model. The
+// model name is consulted only where the entry pins one, which is how two models
+// that share a reused product code are told apart. A display whose model name is
+// empty - a macOS listing with neither field, say - therefore matches no pinned
+// identity at all, which is the fail-closed answer rather than a guess.
+//
 //nolint:gocritic // hugeParam: a value receiver keeps Model usable where it is not addressable
 func (m Model) Matches(identity edid.Identity) bool {
 	for _, known := range m.Identities {
-		if known.Manufacturer == identity.Manufacturer &&
-			known.ProductCode == identity.ProductCode {
-			return true
+		if known.Manufacturer != identity.Manufacturer ||
+			known.ProductCode != identity.ProductCode {
+			continue
 		}
+
+		if known.ModelName != "" && known.ModelName != identity.ModelName {
+			continue
+		}
+
+		return true
 	}
 
 	return false

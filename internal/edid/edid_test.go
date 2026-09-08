@@ -63,6 +63,11 @@ func TestParseFixture(t *testing.T) {
 		t.Errorf("ProductCode = %#04X, want %#04X", identity.ProductCode, wantProductCode)
 	}
 
+	// Exact, not "contains": descriptor 0xFC pads with spaces and terminates
+	// with 0x0A, and a catalog entry that pins a model name compares this string
+	// against what the macOS backend produces for the same unit. A stray space
+	// would make the same monitor match on one operating system and not on the
+	// other.
 	if identity.ModelName != wantModelName {
 		t.Errorf("ModelName = %q, want %q", identity.ModelName, wantModelName)
 	}

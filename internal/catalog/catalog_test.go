@@ -38,19 +38,43 @@ func TestWriteEnabledModelsHaveAtLeastOneIdentity(t *testing.T) {
 	}
 }
 
+// Two identities collide when the manufacturer and the product code are equal
+// and either pins no model name, or both pin the same one. A map keyed on the
+// whole struct would let a bare identity and a pinned one with the same code
+// coexist, and the bare one would then shadow the pinned one - so this is the
+// same pairwise rule the generator enforces, checked against what compiled.
 func TestIdentitiesAreUniqueAcrossModels(t *testing.T) {
 	t.Parallel()
 
-	owner := map[catalog.Identity]string{}
+	type claim struct {
+		identity catalog.Identity
+		owner    string
+	}
+
+	var claimed []claim
 
 	for _, model := range catalog.Models() {
 		for _, identity := range model.Identities {
-			previous, taken := owner[identity]
-			if taken {
-				t.Errorf("%s is claimed by both %s and %s", identity, previous, model.FullName())
+			for _, previous := range claimed {
+				same := previous.identity.Manufacturer == identity.Manufacturer &&
+					previous.identity.ProductCode == identity.ProductCode
+
+				distinct := previous.identity.ModelName != "" &&
+					identity.ModelName != "" &&
+					previous.identity.ModelName != identity.ModelName
+
+				if same && !distinct {
+					t.Errorf(
+						"%s and %s could both match one display, for %s and %s",
+						previous.identity,
+						identity,
+						previous.owner,
+						model.FullName(),
+					)
+				}
 			}
 
-			owner[identity] = model.FullName()
+			claimed = append(claimed, claim{identity: identity, owner: model.FullName()})
 		}
 	}
 }
@@ -503,7 +527,7 @@ func TestMatchReportsUnknownMonitors(t *testing.T) {
 	}
 }
 
-func TestMatchIgnoresSerialsAndModelName(t *testing.T) {
+func TestMatchIgnoresSerials(t *testing.T) {
 	t.Parallel()
 
 	identity := edid.Identity{
@@ -520,6 +544,26 @@ func TestMatchIgnoresSerialsAndModelName(t *testing.T) {
 
 	if withSerials != redacted || withSerials != catalog.MatchExact {
 		t.Errorf("match depends on the serial fields: %s vs %s", withSerials, redacted)
+	}
+}
+
+// A model name is consulted only where the entry pins one. No entry in the
+// catalog does today, so the model string a display reports must not change any
+// match: the same unit reporting a different string, or none, still matches.
+func TestMatchIgnoresTheModelNameWhereNoIdentityPinsOne(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"LG ULTRAWIDE", "LG HDR 4K", ""} {
+		identity := edid.Identity{
+			Manufacturer: "GSM",
+			ProductCode:  0x77D3,
+			ModelName:    name,
+		}
+
+		model, result := catalog.Match(identity)
+		if result != catalog.MatchExact || model.Name != "38WR85QC-W" {
+			t.Errorf("model name %q gave %s for %s", name, result, model.FullName())
+		}
 	}
 }
 
