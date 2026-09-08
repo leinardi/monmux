@@ -1,7 +1,7 @@
 # Contributing
 
 monmux writes to hardware. The rules below are stricter than a typical Go project's for that reason, and one of them is
-absolute — read [The rule](#the-rule) first.
+absolute — read [The rule](#the-rule-no-ai-agent-writes-to-a-monitor) first.
 
 ## Prerequisites
 
@@ -13,10 +13,14 @@ Development works from either operating system. `make go-build-cross` and `make 
 backends whichever host you are on, and everything that is not a backend is tag-free and tested on both. Note that the linter
 only ever sees your host's backend — see [docs/testing.md](docs/testing.md).
 
-## The rule
+## The rule: no AI agent writes to a monitor
 
-**No AI agent — an assistant in an editor, a coding agent, a subagent, a review bot, any tool-driven automation — may run a
-command that writes to a monitor.** Only a human runs a writing command, by hand, deliberately.
+**AI agents are welcome to work on monmux. What no AI agent may do is run a command that writes to a monitor.**
+
+The restriction is on one class of command, not on who contributes. An assistant in an editor, a coding agent, a subagent, a
+review bot or any other tool-driven automation may write, refactor, test and review this project like any other Go codebase —
+during implementation and during review alike. It must stop at the point where a command would change a monitor's state. Only a
+human runs a writing command, by hand, deliberately.
 
 Forbidden for agents: `ddcutil setvcp …`, any `ddcutil` invocation with `--i2c-source-addr`, `m1ddc … set …`, `monmux switch`
 without `--dry-run`, `i2cset`, `i2ctransfer`, any direct write to `/dev/i2c-*`, and any test or script that executes the real
