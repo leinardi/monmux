@@ -192,12 +192,22 @@ exit code 1, and nothing is started for it.
 ### An unknown `--unsafe-model` name
 
 ```text
-Error: no catalog entry is named "AOC/Q27P1C" (run "monmux catalog list" to see every entry)
+Error: no catalog entry is named "AOC/Q27P1C" (a name is VENDOR/MODEL, as printed by "monmux catalog list",
+e.g. LG/38WR85QC-W; the model name alone is not a name)
 ```
 
 The override names a catalog entry, so a name that is not one is a usage error, exit code 1, and nothing is started for it.
-The accepted spellings are `Vendor/Name` and `Vendor Name`, case-insensitively — `monmux catalog list` prints them, and shell
-completion offers them.
+
+A name is the `VENDOR` and `MODEL` columns of `monmux catalog list` joined with a slash — `AOC/Q27P1B`. A space works in place
+of the slash (`"AOC Q27P1B"`), and case does not matter. **The model name on its own is not a name**, because two vendors may
+use the same one; when it matches an entry, the error says which name to type instead:
+
+```text
+Error: no catalog entry is named "Q27P1B"; did you mean "AOC/Q27P1B"? (a name is VENDOR/MODEL, the first two columns of
+"monmux catalog list" joined with a slash)
+```
+
+`monmux catalog show` takes the same names and gives the same error, and shell completion offers them for both.
 
 A name that is well formed but not enabled for the monitor you have is a different thing: it is refused with
 `input-not-enabled` and exit code 2, and `monmux info` lists the inputs the attached monitor is enabled for. Symbolic inputs
