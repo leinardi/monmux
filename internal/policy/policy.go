@@ -25,6 +25,8 @@
 package policy
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/leinardi/monmux/internal/backend"
@@ -38,6 +40,12 @@ import (
 // for such a unit, and the documentation says so.
 const NoSerialDetail = "display exposes no alphanumeric serial"
 
+// ErrUnknownModel reports an [Request.AssumeModel] that names no catalog entry.
+// It is an argument error rather than a refusal, exactly as an unparseable input
+// name is: the request could not be made, so nothing was started for it and
+// nothing was written.
+var ErrUnknownModel = errors.New("policy: no catalog entry is named")
+
 // Request is what the user asked for.
 type Request struct {
 	// Input is the symbolic input to switch to.
@@ -46,11 +54,24 @@ type Request struct {
 	// alphanumeric serial string only, never the numeric serial: exact,
 	// case-sensitive, after trimming surrounding whitespace on both sides.
 	Serial string
+	// AssumeModel, when non-empty, names the catalog entry to treat the selected
+	// display as, instead of identifying it from its EDID. It is what
+	// --unsafe-model sets, and it is the only way a display that matches no
+	// entry, or a model that is not write-enabled, can be written to.
+	//
+	// Nothing but the flag sets it: the configuration file has no key for it, on
+	// purpose, so the weakening is asked for once per invocation.
+	AssumeModel string
 }
 
 // Decision is a switch monmux is willing to perform. Holding one means the
 // display was identified, the model is write-enabled, and the input is enabled
 // for that model with recorded evidence.
+//
+// Except when [Decision.Assumed] is set. There the user asserted the model with
+// --unsafe-model, so none of those three holds: nothing was identified, the
+// model need not be write-enabled, and the only check that ran is that the entry
+// records the requested input. The value still comes from the catalog.
 type Decision struct {
 	// Display is the display to write to.
 	Display backend.Display
@@ -58,6 +79,10 @@ type Decision struct {
 	Model catalog.Model
 	// Operation is the mechanism and value to write. It is always valid.
 	Operation catalog.Operation
+	// Assumed reports that the display was never identified: the model is the
+	// one the user asserted with --unsafe-model. The CLI warns on it, and the
+	// outcome says the switch was performed without identification.
+	Assumed bool
 }
 
 // matcher looks an identity up in the catalog. It exists as a seam so the
@@ -111,6 +136,10 @@ func resolve(displays []backend.Display, req Request, match matcher) (Decision, 
 
 	writable, unwritable := partition(selected)
 
+	if req.AssumeModel != "" {
+		return assume(selected, writable, unwritable, req)
+	}
+
 	candidates, err := supported(writable, match)
 	if err != nil {
 		return Decision{}, err
@@ -128,6 +157,86 @@ func resolve(displays []backend.Display, req Request, match matcher) (Decision, 
 	}
 
 	return decide(&candidates[0], req.Input)
+}
+
+// assume is the --unsafe-model path: the user names the catalog entry, and the
+// display is written to as that model without ever being identified.
+//
+// It weakens two of the fail-closed rules, and only those two: identification,
+// and the write-enabled gate. Everything else still holds. The value comes from
+// the compiled-in catalog through the same package-private constructor, so no
+// byte is introduced here; exactly one display may be selected, and more than
+// one writable display is refused rather than picked from, because an override
+// that silently wrote an unverified value to the wrong monitor would be the
+// worst outcome available; and the backend still re-reads the identity and
+// refuses identity-changed if the display moved, because that check compares
+// against what was enumerated rather than against the catalog.
+func assume(selected, writable, unwritable []backend.Display, req Request) (Decision, error) {
+	// The CLI resolves the name first and rejects an unknown one as an argument
+	// error, so this is the belt: a name that reaches here without an entry
+	// produces no operation at all rather than a default.
+	model, known := catalog.Find(req.AssumeModel)
+	if !known {
+		return Decision{}, fmt.Errorf(
+			"%w %q (run \"monmux catalog list\" to see every entry)",
+			ErrUnknownModel,
+			req.AssumeModel,
+		)
+	}
+
+	switch {
+	case len(writable) == 0:
+		return Decision{}, notWritable(selected, unwritable)
+	case len(writable) > 1:
+		return Decision{}, refusal.New(
+			refusal.MultipleCandidates,
+			"Writable: "+displayLabels(writable)+". An assumed model identifies nothing, "+
+				"so monmux will not choose between them; pin one with --serial.",
+			identities(writable)...,
+		)
+	}
+
+	operation, recorded := model.UnsafeOperation(req.Input)
+	if !recorded {
+		return Decision{}, refusal.New(
+			refusal.InputNotEnabled,
+			inputDetail(&model, req.Input, true),
+			writable[0].Identity,
+		)
+	}
+
+	return Decision{
+		Display:   writable[0],
+		Model:     model,
+		Operation: operation,
+		Assumed:   true,
+	}, nil
+}
+
+// notWritable explains why the assume path found nothing to write to.
+//
+// The catalog is deliberately not consulted here: identification is exactly what
+// the user bypassed, so telling them no entry matches the identity would send
+// them back to the flag they already used. The answer that helps is the one
+// about reachability - this display cannot be written to, and here is its
+// status.
+func notWritable(selected, unwritable []backend.Display) error {
+	if len(unwritable) == 0 {
+		// Unreachable: an empty display list and an empty pin both refuse
+		// earlier, so something unwritable is what is left. Fail closed anyway.
+		return refusal.New(refusal.UnknownMonitor, "", identities(selected)...)
+	}
+
+	states := make([]string, 0, len(unwritable))
+	for _, display := range unwritable {
+		states = append(states, display.Label+" (status: "+display.Status+")")
+	}
+
+	return refusal.New(
+		refusal.DisplayNotWritable,
+		"Not writable: "+strings.Join(states, ", ")+".",
+		identities(unwritable)...,
+	)
 }
 
 // pin narrows the displays to the one whose alphanumeric serial matches. The
@@ -241,7 +350,7 @@ func decide(target *candidate, input catalog.Input) (Decision, error) {
 	if !enabled {
 		return Decision{}, refusal.New(
 			refusal.InputNotEnabled,
-			inputDetail(&target.model, input),
+			inputDetail(&target.model, input, false),
 			target.display.Identity,
 		)
 	}
@@ -254,17 +363,29 @@ func decide(target *candidate, input catalog.Input) (Decision, error) {
 }
 
 // inputDetail says which input was asked for and which ones this model has.
-func inputDetail(model *catalog.Model, input catalog.Input) string {
-	detail := "Requested " + input.String() + " on " + model.FullName() + "; enabled inputs: "
+//
+// On the assume path it lists what the entry records rather than what it
+// enables: the user has already been told the model is not write-enabled, and
+// the useful answer is the set of inputs they could have asked for.
+func inputDetail(model *catalog.Model, input catalog.Input, assumed bool) string {
+	label := "enabled inputs: "
 
-	enabled := model.EnabledInputs()
-	if len(enabled) == 0 {
+	available := model.EnabledInputs()
+
+	if assumed {
+		label = "recorded inputs: "
+		available = model.RecordedInputs()
+	}
+
+	detail := "Requested " + input.String() + " on " + model.FullName() + "; " + label
+
+	if len(available) == 0 {
 		return detail + "none."
 	}
 
-	names := make([]string, 0, len(enabled))
-	for _, enabledInput := range enabled {
-		names = append(names, enabledInput.String())
+	names := make([]string, 0, len(available))
+	for _, name := range available {
+		names = append(names, name.String())
 	}
 
 	return detail + strings.Join(names, ", ") + "."
@@ -288,6 +409,17 @@ func identitiesOf(candidates []candidate) []edid.Identity {
 	}
 
 	return found
+}
+
+// displayLabels lists displays by their public labels, never by their handles:
+// a handle can be private data.
+func displayLabels(displays []backend.Display) string {
+	names := make([]string, 0, len(displays))
+	for _, display := range displays {
+		names = append(names, display.Label)
+	}
+
+	return strings.Join(names, ", ")
 }
 
 // labels lists the candidates by their public labels, never by their handles:

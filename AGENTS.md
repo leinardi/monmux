@@ -10,6 +10,8 @@ Forbidden for agents:
 - `ddcutil setvcp …`, and any `ddcutil` invocation with `--i2c-source-addr`
 - `m1ddc … set …`
 - `monmux switch` without `--dry-run`
+- `monmux switch --unsafe-model …` without `--dry-run` — the override bypasses identification, which makes it more of a write
+  than a normal switch, not less
 - `i2cset`, `i2ctransfer`, or any direct write to `/dev/i2c-*`
 - any test or script that executes the real `ddcutil` / `m1ddc` binaries
 
@@ -17,7 +19,8 @@ Allowed for agents (read-only):
 
 - reading `/sys/class/drm/**`
 - `ddcutil --version`, `ddcutil --help`, `ddcutil detect`
-- `monmux info`, `monmux doctor`, `monmux switch … --dry-run`
+- `monmux info`, `monmux doctor`, `monmux switch … --dry-run`, including `monmux switch … --unsafe-model … --dry-run`
+- `monmux catalog list`, `monmux catalog show …` — the compiled-in catalog, no backend and no monitor involved
 
 **Tests never perform DDC writes and never execute any external binary at all.** Unit tests use only the recording fake `Runner`.
 This is enforced from inside the real runner: it refuses to execute when `testing.Testing()` is true (which covers `make go-test`, the
@@ -30,7 +33,8 @@ Hardware validation is a checklist the human runs; agents prepare the commands a
 
 `monmux` is a cross-platform Go CLI that switches **supported monitors** between video inputs, with a fail-closed policy: a write happens
 only when the attached monitor is positively identified as a model in the built-in supported-monitor catalog *and* the requested input is
-explicitly enabled for that model. One model is verified so far (LG 38WR85QC-W); nothing in the code, CLI, or docs is vendor-specific
+explicitly enabled for that model — except under the `--unsafe-model` override, the one documented exception, which is spelled out in
+invariants 1 and 2 below. One model is verified so far (LG 38WR85QC-W); nothing in the code, CLI, or docs is vendor-specific
 except the catalog entries and the mechanisms they use.
 
 It wraps `ddcutil` on Linux and `m1ddc` on macOS, permanently. There is no native I²C/IOKit backend and there never will be one.
@@ -84,7 +88,7 @@ Repo-local make targets live in `.mk/cross.mk`.
 
 ## Package map
 
-- `cmd/monmux` — cobra commands: `info`, `switch`, `doctor`, `version`, `completion`. Owns flags, config loading, output formatting, and exit codes.
+- `cmd/monmux` — cobra commands: `info`, `switch`, `catalog list`, `catalog show`, `doctor`, `version`, `completion`. Owns flags, config loading, output formatting, and exit codes.
 - `internal/refusal` — the one typed refusal error used by every layer, with the reason enum and the rendered message.
 - `internal/edid` — EDID block-0 parser producing an `Identity`. Carries no raw EDID bytes.
 - `internal/catalog` — the supported-monitor catalog, the `Input` name (a connector kind plus an optional port number), the `Kind`,
@@ -96,7 +100,8 @@ Repo-local make targets live in `.mk/cross.mk`.
 - `internal/catalog/internal/input` — the grammar of an input name: the closed list of connector kinds, the parser, the labels
   and the ordering. A shared leaf, imported by both `internal/catalog` and the generator, so the two agree on what a name is
   without the generator importing the package whose source it writes.
-- `internal/policy` — pure decision logic: displays plus request in, `Decision` or refusal out. No I/O.
+- `internal/policy` — pure decision logic: displays plus request in, `Decision` or refusal out. No I/O. It holds the assume
+  path too: `Request.AssumeModel` is what `--unsafe-model` sets, and `Decision.Assumed` is what makes the CLI warn.
 - `internal/backend` — the `Backend` interface plus the `Display`, `Command` and `Check` types, the shared tool-path trust check
   (`toolpath.go`), the shared doctor check helpers (`check.go`) and the `Fake` backend the app and CLI tests drive. Imports no
   backend subpackage.
@@ -114,9 +119,14 @@ Do not weaken any of these. They are the reason the tool exists.
 
 1. **Identify before writing.** A write requires an exact catalog match on the parsed EDID identity — manufacturer and product code,
    plus the EDID model name where an identity pins one, which is how two models sharing a reused product code are told apart.
-   Unknown, ambiguous, or multiple candidate monitors are refused — never guessed at, never defaulted.
+   Unknown, ambiguous, or multiple candidate monitors are refused — never guessed at, never defaulted. The one documented
+   exception is `--unsafe-model`, where the user names the catalog entry to assume and the EDID is not consulted at all; it is
+   still refused when more than one attached display is writable, because an override that picked for you would write an
+   unverified value to the wrong monitor.
 2. **Enabled inputs only.** An input is writable only if the matched model explicitly enables it, with recorded evidence. A model with no
-   identities is never matched and therefore never written to.
+   identities is never matched and therefore never written to. `--unsafe-model` is the documented exception here too: it reaches
+   `Model.UnsafeOperation`, which ignores `write_enabled`. It ignores nothing else — an input the named entry does not record
+   has no value at all, and is still refused with `input-not-enabled`.
 3. **Re-verify at the last moment.** `Execute` re-reads the identity (sysfs EDID and bus on Linux, `display list detailed` on macOS) and
    refuses with `identity-changed` if anything moved since enumeration.
 4. **Refuse loudly, write never.** Every refusal path returns a `refusal.Refusal` whose message ends with `No DDC write was performed.`
@@ -129,7 +139,8 @@ Do not weaken any of these. They are the reason the tool exists.
 ## Two rules that keep the blast radius small
 
 **Never add a raw VCP command.** No code path may take a VCP code or value from a flag, a config file, an environment variable, or any
-other input. The only bytes that reach a monitor come from a `catalog.Operation` built by the catalog's package-private constructor from
+other input. `--unsafe-model` does not weaken this: it selects a compiled-in entry by name and cannot invent one, so the bytes
+still come from the catalog, and no configuration key can arm it. The only bytes that reach a monitor come from a `catalog.Operation` built by the catalog's package-private constructor from
 a compiled-in table entry with graded evidence. Adding an input or a model means editing `internal/catalog/models.yaml`, supplying
 the evidence, and running `make go-generate` to re-render `models_gen.go` — commit both — see
 [`docs/adding-a-monitor.md`](docs/adding-a-monitor.md). A new connector *kind* is the one exception: the kinds are a closed list

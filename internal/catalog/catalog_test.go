@@ -648,3 +648,176 @@ func TestAnUnparseableNameLabelsAsItself(t *testing.T) {
 		t.Errorf("Label() = %q, want %q", unparseable.Label(), "scart")
 	}
 }
+
+// --- Find and UnsafeOperation: the two lookups --unsafe-model reaches for ---
+
+func TestFindAcceptsBothSeparatorsInAnyCase(t *testing.T) {
+	t.Parallel()
+
+	// A model name can itself contain a space, so "Vendor Name" has to match on
+	// the whole string rather than on a split.
+	for name, want := range map[string]string{
+		"LG/38WR85QC-W":     "LG 38WR85QC-W",
+		"lg/38wr85qc-w":     "LG 38WR85QC-W",
+		"LG 38WR85QC-W":     "LG 38WR85QC-W",
+		"  lg 38WR85QC-w  ": "LG 38WR85QC-W",
+		"AOC/Q27P1B":        "AOC Q27P1B",
+		"aoc q27p1b":        "AOC Q27P1B",
+		"hp/Z27n G2":        "HP Z27n G2",
+		"HP z27N g2":        "HP Z27n G2",
+	} {
+		model, ok := catalog.Find(name)
+		if !ok {
+			t.Errorf("Find(%q) found nothing", name)
+
+			continue
+		}
+
+		if model.FullName() != want {
+			t.Errorf("Find(%q) returned %s, want %s", name, model.FullName(), want)
+		}
+	}
+}
+
+func TestFindRefusesWhatIsNotAModelName(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{
+		"",
+		"   ",
+		"LG",
+		"38WR85QC-W",
+		"LG/",
+		"LG/38WR85QC-W ULTRA",
+		"LG-38WR85QC-W",
+	} {
+		model, ok := catalog.Find(name)
+		if ok {
+			t.Errorf("Find(%q) returned %s", name, model.FullName())
+		}
+	}
+}
+
+// Find is a lookup on a name a user typed, so two entries sharing one name would
+// make it silently pick whichever was written first.
+func TestModelNamesAreUniqueAcrossTheCatalog(t *testing.T) {
+	t.Parallel()
+
+	seen := map[string]bool{}
+
+	for _, model := range catalog.Models() {
+		key := strings.ToLower(model.Vendor + "/" + model.Name)
+		if seen[key] {
+			t.Errorf("%s is in the catalog twice", model.FullName())
+		}
+
+		seen[key] = true
+	}
+}
+
+func TestFoundModelsCannotMutateTheCatalog(t *testing.T) {
+	t.Parallel()
+
+	found, ok := catalog.Find("LG/38WR85QC-W")
+	if !ok {
+		t.Fatal("the tested model is not in the catalog")
+	}
+
+	found.Identities[0] = catalog.Identity{Manufacturer: "XXX", ProductCode: 0x1234}
+
+	again, ok := catalog.Find("LG/38WR85QC-W")
+	if !ok {
+		t.Fatal("the tested model is not in the catalog")
+	}
+
+	if again.Identities[0].Manufacturer != "GSM" {
+		t.Errorf("mutating a found model changed the catalog: %s", again.Identities[0])
+	}
+}
+
+// The whole point of UnsafeOperation: it answers where Operation refuses,
+// because the model is recorded but not write-enabled.
+func TestUnsafeOperationAnswersWhereOperationRefuses(t *testing.T) {
+	t.Parallel()
+
+	model, ok := catalog.Find("AOC/Q27P1B")
+	if !ok {
+		t.Fatal("AOC/Q27P1B is not in the catalog")
+	}
+
+	if model.WriteEnabled {
+		t.Fatal("AOC/Q27P1B is write-enabled; this test needs an entry that is not")
+	}
+
+	_, enabled := model.Operation("hdmi")
+	if enabled {
+		t.Error("Operation returned an operation for a model that is not write-enabled")
+	}
+
+	operation, unsafe := model.UnsafeOperation("hdmi")
+	if !unsafe {
+		t.Fatal("UnsafeOperation returned nothing for a recorded input")
+	}
+
+	if !operation.Valid() {
+		t.Error("UnsafeOperation returned an invalid operation")
+	}
+
+	if operation.Mechanism() != catalog.MechanismInputSource || operation.Value() != 0x11 {
+		t.Errorf("UnsafeOperation returned %s", operation)
+	}
+}
+
+func TestUnsafeOperationRefusesAnInputTheModelDoesNotRecord(t *testing.T) {
+	t.Parallel()
+
+	model, ok := catalog.Find("AOC/Q27P1B")
+	if !ok {
+		t.Fatal("AOC/Q27P1B is not in the catalog")
+	}
+
+	if slices.Contains(model.RecordedInputs(), catalog.Input("usb-c")) {
+		t.Fatal("AOC/Q27P1B records usb-c; this test needs an input it does not record")
+	}
+
+	operation, unsafe := model.UnsafeOperation("usb-c")
+	if unsafe {
+		t.Errorf("UnsafeOperation invented %s for an input the model does not record", operation)
+	}
+
+	if operation.Valid() {
+		t.Error("UnsafeOperation returned a valid operation for an unrecorded input")
+	}
+}
+
+// A write-enabled model is unchanged by the override: it already answers, and it
+// answers the same thing.
+func TestUnsafeOperationMatchesOperationOnAWriteEnabledModel(t *testing.T) {
+	t.Parallel()
+
+	model, ok := catalog.Find("LG/38WR85QC-W")
+	if !ok {
+		t.Fatal("the tested model is not in the catalog")
+	}
+
+	for _, input := range model.RecordedInputs() {
+		enabled, ok := model.Operation(input)
+		if !ok {
+			t.Fatalf("Operation refused %s on a write-enabled model", input)
+		}
+
+		unsafe, ok := model.UnsafeOperation(input)
+		if !ok {
+			t.Fatalf("UnsafeOperation refused %s", input)
+		}
+
+		if unsafe != enabled {
+			t.Errorf(
+				"%s: UnsafeOperation returned %s, Operation returned %s",
+				input,
+				unsafe,
+				enabled,
+			)
+		}
+	}
+}

@@ -23,7 +23,8 @@ reaches the generated catalog that the file did not spell out. `catalog.Operatio
 not in the catalog can exist as an operation at all; the zero value is invalid and every backend rejects it. The CLI accepts
 symbolic inputs only — a connector kind such as `dp` or `hdmi`, optionally numbered such as `hdmi2` — and has no flag that takes
 a VCP code or a raw value (requirement 9.5).
-An input nobody has tested on a model is not enabled for it, and asking for it is refused.
+An input nobody has tested on a model is not enabled for it, and asking for it is refused. The one documented way past that
+gate is `--unsafe-model`, below, which still takes its value from the same compiled-in entry.
 
 ### Stale identity, and a bus that moved
 
@@ -62,10 +63,52 @@ The tool path is resolved once during preflight and executed directly, with no `
 **Risk.** A configuration file is user data that a program acts on. If it could enable a monitor, enable an input, choose a
 mechanism or pick a backend, then editing a YAML file would be enough to write anything anywhere.
 
-**Mitigation.** It cannot do any of those things. The file has three keys — a serial to pin to, and the two tool paths. The
+**Mitigation.** It cannot do any of those things. The file has three keys — a serial to pin to, and the two tool paths. The one
+override that does weaken the write rules, `--unsafe-model`, has no key on purpose and can only be typed on a command line. The
 catalog is compiled in, and `models.yaml` is a build input that a running monmux never opens; the backend is chosen by the
 operating system with no override. An unknown key is an error rather than
 something ignored, so a typo cannot silently disable a pin the user believes is protecting them.
+
+### The `--unsafe-model` override
+
+**What it is.** `monmux switch <input> --unsafe-model VENDOR/MODEL` treats the attached display as that catalog entry instead
+of identifying it from its EDID, and skips the write-enabled gate. Seventy of the seventy-one entries are recorded from
+somebody else's report and are refused without it; this is how the person who owns one of those monitors produces the evidence
+that would enable it, and it is why it exists at all.
+
+**What it deliberately weakens**, stated plainly rather than buried:
+
+- *Identification.* The EDID is not consulted. The user asserts the model; nothing proves it. That is the whole point, and it
+  is why the flag says `unsafe` in its name.
+- *The write-enabled gate.* An input whose evidence is merely `reported` becomes writable, through
+  `Model.UnsafeOperation` — the one function in the catalog that ignores `write_enabled`, named so it cannot be called by
+  accident.
+
+**What it does not weaken**, which is everything else:
+
+- *No raw VCP.* The value still comes from a `catalog.Operation` built by the catalog's package-private constructor from a
+  compiled-in entry. The flag selects an existing entry by name; it cannot invent one, and there is still no flag, key or
+  environment variable that carries a code or a value.
+- *An input still has to be recorded.* An input the named entry does not record has no value at all, and is refused with
+  `input-not-enabled`.
+- *One display, or none.* More than one writable display is refused with `multiple-candidates`; the override never picks for
+  you, because picking would mean sending an unverified value to whichever monitor was listed first. Pin with `--serial`.
+- *Re-verify at the last moment.* `Execute` still re-reads the identity and refuses `identity-changed` if the display moved.
+  That check compares against what enumeration saw, not against the catalog, so the override does not touch it.
+- *Refuse loudly.* Every refusal on this path is still a refusal, still ends with `No DDC write was performed.`, and still
+  exits 2.
+- *No arming from a file.* There is no configuration key, and there will not be one: a weakening that persists is a weakening
+  you stop noticing. It is a flag, on the one command you typed.
+
+**What it is guarded by.** A warning on stderr, printed once the display has been selected and before anything is planned or
+written — in a dry run too — naming the display, the assumed model with its evidence grade, and the value about to be sent. A
+switch whose warning could not be printed does not happen. There is no interactive prompt: the flag's name and the banner are
+the guard, and a prompt would break the scripting the flag exists to allow. The result line then says the identification was
+bypassed, so scrollback shows it later.
+
+Seventy of the seventy-one entries use `vcp-input-source`, which has never reached a monitor. The first `--unsafe-model` run
+against one of them is the first hardware run of that mechanism, and belongs with the checklist in
+[testing.md](testing.md), with `--dry-run` first and the monitor's OSD within reach.
 
 ### Serial and UUID leakage
 
@@ -93,7 +136,8 @@ puts on the wire once it is invoked, and what a driver does with it, is outside 
 
 ## What monmux never does
 
-- Never writes to a monitor it has not positively identified as a catalog model, or for an input that model does not enable.
+- Never writes to a monitor it has not positively identified as a catalog model, or for an input that model does not enable —
+  unless `--unsafe-model` was typed on that command line, which is the one documented exception and is described above.
 - Never exposes a raw VCP code or value to the user (9.5).
 - Never probes: no trying values to see what happens, no scanning VCP codes, no brute-forcing source addresses. All discovery
   is read-only (9.6).
@@ -109,9 +153,10 @@ puts on the wire once it is invoked, and what a driver does with it, is outside 
 command that writes to a monitor.** Only a human runs a writing command, by hand, deliberately.
 
 For agents this means: no `ddcutil setvcp`, no `ddcutil` invocation with `--i2c-source-addr`, no `m1ddc … set …`, no
-`monmux switch` without `--dry-run`, no `i2cset`, no `i2ctransfer`, no writes to `/dev/i2c-*`, and no test or script that
-executes the real `ddcutil` or `m1ddc` binary at all. Read-only work is fine: reading `/sys/class/drm`, `ddcutil --version`,
-`ddcutil detect`, `monmux info`, `monmux doctor`, `monmux switch … --dry-run`.
+`monmux switch` without `--dry-run` — `--unsafe-model` included, since bypassing identification makes it more of a write and
+not less — no `i2cset`, no `i2ctransfer`, no writes to `/dev/i2c-*`, and no test or script that executes the real `ddcutil` or
+`m1ddc` binary at all. Read-only work is fine: reading `/sys/class/drm`, `ddcutil --version`, `ddcutil detect`, `monmux info`,
+`monmux doctor`, `monmux catalog list`, `monmux catalog show …`, `monmux switch … --dry-run`, `--unsafe-model` included.
 
 The rule is enforced in code as well as written down. The real runner refuses to start any process while a test binary is
 running or when `MONMUX_NO_EXEC=1` is set, and a repository test fails the build if any test file imports `os/exec` or so much

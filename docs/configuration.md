@@ -61,16 +61,38 @@ This is a trust boundary, not a mitigated threat — see [security.md](security.
 
 ## Flags
 
-| Flag            | Command  | Effect                                                                   |
-| --------------- | -------- | ------------------------------------------------------------------------ |
-| `--serial <s>`  | `switch` | Pin this invocation to one unit, with the semantics above.               |
-| `--dry-run`     | `switch` | Print the exact command that would run, and run nothing.                 |
-| `--json`        | `info`   | Print the report as JSON.                                                |
-| `--show-serial` | all      | Print serials, display UUIDs and raw EDID hex instead of redacting them. |
+| Flag                 | Command                                | Effect                                                                        |
+| -------------------- | -------------------------------------- | ----------------------------------------------------------------------------- |
+| `--serial <s>`       | `switch`                               | Pin this invocation to one unit, with the semantics above.                    |
+| `--dry-run`          | `switch`                               | Print the exact command that would run, and run nothing.                      |
+| `--unsafe-model <m>` | `switch`                               | Treat the display as this catalog entry instead of identifying it. See below. |
+| `--verbose`          | `catalog list`                         | Add the value and the evidence grade of every recorded input.                 |
+| `--json`             | `info`, `catalog list`, `catalog show` | Print the report or the catalog as JSON.                                      |
+| `--show-serial`      | all                                    | Print serials, display UUIDs and raw EDID hex instead of redacting them.      |
+
+## `--unsafe-model`, and why it has no key
+
+`--unsafe-model VENDOR/MODEL` treats the attached display as that catalog entry rather than identifying it from its EDID, and
+skips the write-enabled gate. It is the one flag that makes monmux write where it would otherwise refuse, and it is
+**flag-only, every invocation, on purpose**: there is no configuration key for it and there will not be one.
+
+The reason is the one this whole file opens with. A standing preference is the wrong shape for a weakening: a key in a file
+would arm the override for every later `monmux switch`, including the ones you did not think about, and a typo in that key
+would be an error you never see. Typing the flag is the point at which you decide to bypass identification, and it applies to
+that one command.
+
+What it does not weaken: the value still comes from the compiled-in catalog, so there is still no way to pass a VCP code or a
+value; an input the named entry does not record is refused; more than one writable display is refused rather than chosen
+between, so pin with `--serial`; and the identity is still re-verified immediately before the write. A name that is not a
+catalog entry is a usage error, exit code 1 — `monmux catalog list` prints the names it accepts.
+
+See [security.md](security.md) for what the override moves across the trust boundary, and
+[adding-a-monitor.md](adding-a-monitor.md) for what it is for.
 
 ## Precedence
 
 `--serial` overrides `serial:` in the file. The file is a standing preference; the flag is what you are asking for right now.
-There is no flag for the tool paths: a path that changes per invocation is a scripting problem, not a configuration one.
+There is no flag for the tool paths: a path that changes per invocation is a scripting problem, not a configuration one, and
+there is no key for `--unsafe-model`, for the opposite reason — see above.
 
 Nothing else has a precedence question. The backend comes from the operating system, and the catalog comes from the binary.

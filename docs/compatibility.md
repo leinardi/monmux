@@ -9,8 +9,10 @@ is written by hand. Three tests check the result, so the page and the catalog ca
 it against the compiled catalog, which is the copy the binary actually uses.
 
 One model is verified so far. Everything else in the table is a report somebody else published: recorded because it is useful
-to a contributor who owns that monitor, disabled, and without an EDID fingerprint, so it can never match a display and can
-never be written to. A model is listed here whether or not monmux will write to it, because "we know about this monitor and
+to a contributor who owns that monitor, disabled, and without an EDID fingerprint, so it can never match a display, and
+`monmux switch` will not write to it. The one way to send a recorded value is `--unsafe-model`, where the user names the entry
+to assume instead of the EDID identifying it — that is what a contributor with the monitor uses to turn a report into evidence,
+and it is described in [adding-a-monitor.md](adding-a-monitor.md) and [security.md](security.md). A model is listed here whether or not monmux will write to it, because "we know about this monitor and
 deliberately will not touch it" is information a reader needs.
 
 monmux implements two mechanisms. `lg-alt-input` is the LG side channel, and every model recorded with it is an LG;
@@ -24,7 +26,8 @@ per-model facts with per-input evidence, and the values recorded under it range 
 
 - **Identities** — the EDID fingerprints, as `manufacturer/product code`, that match this model. A model can have several: the
   tested LG reports a different product code depending on which input it is currently displaying. A model with no identity
-  recorded can never match a display, and so can never be written to. A fingerprint may also pin the EDID model name, written
+  recorded can never match a display, so `monmux switch` reaches it only when `--unsafe-model` names it and identification is
+  bypassed altogether. A fingerprint may also pin the EDID model name, written
   after the code as `GSM/0x7707 "LG HDR 4K"`; that is only used where two models share a reused product code, and no entry
   needs it today.
 - **Input** — the symbolic input, as typed on the command line: a connector kind (`dp`, `hdmi`, `usb-c`, `dvi`, `vga`,
@@ -45,6 +48,24 @@ per-model facts with per-input evidence, and the values recorded under it range 
 
 The table is ordered the way the catalog file is written: the models monmux will write to first, then by vendor, then by model
 name. The generator enforces that order on the file, so the two cannot drift apart.
+
+## The same table, offline
+
+`monmux catalog` prints this catalog from the binary itself, which is the copy that decides what a switch does. It is the
+answer to "what does *this* build know?", where this page is the answer for whatever revision you happen to be reading:
+
+```sh
+monmux catalog list              # every entry, in the order of the table below
+monmux catalog list aoc          # filter by vendor, model name, or vendor/name
+monmux catalog list --verbose    # add the value and evidence grade of every input
+monmux catalog show AOC/Q27P1B   # one entry in full: identities, evidence, notes, sources
+monmux catalog list --json       # the same, for scripts
+```
+
+Neither subcommand opens a backend, reads the configuration file or touches a monitor. The `INPUTS` column lists what an entry
+*records*, not what it enables, which is the point: a recorded input that `monmux switch` refuses is exactly what a
+contributor with that monitor is looking for, and `--unsafe-model` is how they try it — see
+[adding-a-monitor.md](adding-a-monitor.md).
 
 <!-- BEGIN GENERATED: edit internal/catalog/models.yaml, then run make go-generate -->
 

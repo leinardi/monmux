@@ -21,7 +21,10 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -662,5 +665,445 @@ func TestCompletionIsAvailable(t *testing.T) {
 
 	if !strings.Contains(stdout, "monmux") {
 		t.Error("the completion script does not mention monmux")
+	}
+}
+
+// --- catalog ---
+
+// catalogRows returns the model rows of `monmux catalog list`, without the
+// header, the blank line or the summary, plus the summary itself.
+func catalogRows(t *testing.T, stdout string) (rows []string, summary string) {
+	t.Helper()
+
+	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("catalog list printed only:\n%s", stdout)
+	}
+
+	if !strings.HasPrefix(lines[0], "VENDOR") {
+		t.Errorf("the first line is not the header: %q", lines[0])
+	}
+
+	if lines[len(lines)-2] != "" {
+		t.Errorf("the summary is not preceded by a blank line: %q", lines[len(lines)-2])
+	}
+
+	return lines[1 : len(lines)-2], lines[len(lines)-1]
+}
+
+// writeEnabledCount is how many catalog entries monmux may write to.
+func writeEnabledCount(entries []catalog.Model) int {
+	count := 0
+
+	for index := range entries {
+		if entries[index].WriteEnabled {
+			count++
+		}
+	}
+
+	return count
+}
+
+func TestCatalogListIsInCatalogOrder(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, stderr, code := world.run("catalog", "list")
+	if code != exitSent || stderr != "" {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	entries := catalog.Models()
+
+	rows, summary := catalogRows(t, stdout)
+	if len(rows) != len(entries) {
+		t.Fatalf("catalog list printed %d models, want %d", len(rows), len(entries))
+	}
+
+	for index := range entries {
+		entry := &entries[index]
+
+		if !strings.HasPrefix(rows[index], entry.Vendor) ||
+			!strings.Contains(rows[index], entry.Name) {
+			t.Fatalf("row %d is %q, want %s %s", index, rows[index], entry.Vendor, entry.Name)
+		}
+	}
+
+	want := fmt.Sprintf("%d models, %d write-enabled.", len(entries), writeEnabledCount(entries))
+	equal(t, "the summary", summary, want)
+
+	if world.wrote() {
+		t.Error("catalog list wrote to a monitor")
+	}
+}
+
+func TestCatalogListFiltersCaseInsensitively(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, _, code := world.run("catalog", "list", "aOc")
+	if code != exitSent {
+		t.Fatalf("exit = %d", code)
+	}
+
+	wanted := 0
+
+	for _, entry := range catalog.Models() {
+		if strings.EqualFold(entry.Vendor, "AOC") {
+			wanted++
+		}
+	}
+
+	rows, _ := catalogRows(t, stdout)
+	if len(rows) != wanted {
+		t.Fatalf("the filter kept %d models, want %d:\n%s", len(rows), wanted, stdout)
+	}
+
+	for _, row := range rows {
+		if !strings.HasPrefix(row, "AOC") {
+			t.Errorf("the filter kept %q", row)
+		}
+	}
+}
+
+func TestCatalogListVerboseCarriesValueAndGrade(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, _, code := world.run("catalog", "list", "Q27P1B", "--verbose")
+	if code != exitSent {
+		t.Fatalf("exit = %d", code)
+	}
+
+	rows, _ := catalogRows(t, stdout)
+	if len(rows) != 1 {
+		t.Fatalf("the filter kept %d models, want 1:\n%s", len(rows), stdout)
+	}
+
+	if !strings.Contains(rows[0], "dp 0x0F reported") ||
+		!strings.Contains(rows[0], "vga 0x01 reported") {
+		t.Errorf("--verbose printed %q", rows[0])
+	}
+}
+
+func TestCatalogListJSONDecodes(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, _, code := world.run("catalog", "list", "--json")
+	if code != exitSent {
+		t.Fatalf("exit = %d", code)
+	}
+
+	var document struct {
+		Models []struct {
+			Vendor       string   `json:"vendor"`
+			Name         string   `json:"name"`
+			FullName     string   `json:"fullName"`
+			WriteEnabled bool     `json:"writeEnabled"`
+			Identities   []string `json:"identities"`
+			Mechanisms   []string `json:"mechanisms"`
+			Inputs       []struct {
+				Name      string `json:"name"`
+				Mechanism string `json:"mechanism"`
+				Value     uint16 `json:"value"`
+				ValueHex  string `json:"valueHex"`
+				Grade     string `json:"grade"`
+				Evidence  string `json:"evidence"`
+			} `json:"inputs"`
+		} `json:"models"`
+		Count        int `json:"count"`
+		WriteEnabled int `json:"writeEnabled"`
+	}
+
+	err := json.Unmarshal([]byte(stdout), &document)
+	if err != nil {
+		t.Fatalf("catalog list --json did not decode: %v", err)
+	}
+
+	entries := catalog.Models()
+	if document.Count != len(entries) || len(document.Models) != len(entries) {
+		t.Fatalf(
+			"count = %d, models = %d, want %d",
+			document.Count,
+			len(document.Models),
+			len(entries),
+		)
+	}
+
+	if document.WriteEnabled != writeEnabledCount(entries) {
+		t.Errorf("writeEnabled = %d, want %d", document.WriteEnabled, writeEnabledCount(entries))
+	}
+
+	first := document.Models[0]
+	if first.Vendor != entries[0].Vendor || first.Name != entries[0].Name ||
+		first.FullName != entries[0].FullName() || !first.WriteEnabled {
+		t.Errorf("the first entry decoded as %+v", first)
+	}
+
+	if len(first.Inputs) == 0 || first.Inputs[0].ValueHex != "0xD0" ||
+		first.Inputs[0].Grade != "verified" {
+		t.Errorf("the first entry's inputs decoded as %+v", first.Inputs)
+	}
+}
+
+func TestCatalogShowPrintsAWriteEnabledEntry(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, stderr, code := world.run("catalog", "show", "lg/38WR85QC-W")
+	if code != exitSent || stderr != "" {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	for _, wanted := range []string{
+		"LG 38WR85QC-W\n",
+		"  Write-enabled: yes\n",
+		"  Identities:    GSM/0x77D3, GSM/0x77D4\n",
+		"    dp     lg-alt-input  0xD0  verified  Direct test on the unit",
+		"    usb-c  lg-alt-input  0xD1  verified  Direct test on the unit",
+		"  Notes:\n",
+		"  Sources:\n",
+	} {
+		if !strings.Contains(stdout, wanted) {
+			t.Errorf("catalog show did not print %q:\n%s", wanted, stdout)
+		}
+	}
+
+	if strings.Contains(stdout, "--unsafe-model") {
+		t.Error("a write-enabled entry pointed at the override")
+	}
+
+	if world.wrote() {
+		t.Error("catalog show wrote to a monitor")
+	}
+}
+
+func TestCatalogShowPointsARecordedOnlyEntryAtTheOverride(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, _, code := world.run("catalog", "show", "AOC Q27P1B")
+	if code != exitSent {
+		t.Fatalf("exit = %d", code)
+	}
+
+	for _, wanted := range []string{
+		"AOC Q27P1B\n",
+		"  Write-enabled: no\n",
+		"  Identities:    none (can never match a display)\n",
+		"    vga   vcp-input-source  0x01  reported  Reported working",
+		"--unsafe-model AOC/Q27P1B",
+		"docs/adding-a-monitor.md",
+	} {
+		if !strings.Contains(stdout, wanted) {
+			t.Errorf("catalog show did not print %q:\n%s", wanted, stdout)
+		}
+	}
+}
+
+func TestCatalogShowOfAnUnknownNameIsAnError(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, stderr, code := world.run("catalog", "show", "Acme/Nothing")
+	if code != exitToolError {
+		t.Fatalf("exit = %d, want %d", code, exitToolError)
+	}
+
+	if stdout != "" {
+		t.Errorf("an unknown model printed %q", stdout)
+	}
+
+	if !strings.Contains(stderr, "monmux catalog list") {
+		t.Errorf("the error does not point at the listing: %q", stderr)
+	}
+
+	if strings.Contains(stderr, "No DDC write was performed") {
+		t.Errorf("a read-only command talked about writes: %q", stderr)
+	}
+}
+
+// --- switch --unsafe-model ---
+
+// strange is a writable display no catalog entry claims: the case the override
+// exists for.
+func strange() backend.Display {
+	return backend.Display{
+		Identity: edid.Identity{Manufacturer: "XXX", ProductCode: 0x2701},
+		Handle:   "card1-HDMI-A-1",
+		Label:    "card1-HDMI-A-1",
+		Writable: true,
+		Status:   backend.StatusOK,
+	}
+}
+
+// The same setup without the flag is the control: identification is what the
+// override bypasses, and it refuses on its own.
+func TestSwitchRefusesAnUnidentifiedDisplayWithoutTheOverride(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(strange())
+
+	_, stderr, code := world.run("switch", "hdmi", "--dry-run")
+	if code != exitRefused {
+		t.Fatalf("exit = %d, want %d", code, exitRefused)
+	}
+
+	if !strings.Contains(stderr, "No supported-model catalog entry matches this identity.") {
+		t.Errorf("the refusal is not unknown-monitor: %q", stderr)
+	}
+
+	if !strings.Contains(stderr, "No DDC write was performed.") {
+		t.Errorf("the refusal does not promise nothing was written: %q", stderr)
+	}
+
+	if world.wrote() {
+		t.Error("a refused switch wrote to a monitor")
+	}
+}
+
+func TestSwitchWithUnsafeModelWarnsOnStderrAndDryRuns(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(strange())
+
+	stdout, stderr, code := world.run(
+		"switch", "hdmi", "--unsafe-model", "AOC/Q27P1B", "--dry-run",
+	)
+	if code != exitSent {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	for _, wanted := range []string{
+		"WARNING: identification bypassed by --unsafe-model.",
+		"Display: card1-HDMI-A-1 (XXX 0x2701)",
+		"Assumed: AOC Q27P1B (write-enabled: no, evidence: reported)",
+		"Input:   HDMI (0x11, vcp-input-source)",
+		"never verified",
+		"OSD",
+	} {
+		if !strings.Contains(stderr, wanted) {
+			t.Errorf("the warning does not say %q:\n%s", wanted, stderr)
+		}
+	}
+
+	if !strings.Contains(stdout, "Input:   HDMI (0x11)") {
+		t.Errorf("the dry run does not carry the recorded value:\n%s", stdout)
+	}
+
+	if !strings.Contains(stdout, "Display: card1-HDMI-A-1 (AOC Q27P1B) (identification bypassed)") {
+		t.Errorf("the dry run does not say the display was never identified:\n%s", stdout)
+	}
+
+	if !strings.Contains(stdout, "No DDC write was performed.") {
+		t.Errorf("the dry run does not promise nothing was written:\n%s", stdout)
+	}
+
+	if world.wrote() {
+		t.Error("a dry run wrote to a monitor")
+	}
+}
+
+func TestSwitchWithUnsafeModelSaysSoOnTheSuccessLine(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(strange())
+
+	stdout, stderr, code := world.run("switch", "hdmi", "--unsafe-model", "aoc q27p1b")
+	if code != exitSent {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	if !strings.Contains(stderr, "WARNING: identification bypassed") {
+		t.Errorf("a real run printed no warning:\n%s", stderr)
+	}
+
+	// The banner has to name the monitor that is about to be written to, and a
+	// real run has no dry-run block to say it instead.
+	if !strings.Contains(stderr, "Display: card1-HDMI-A-1 (XXX 0x2701)") {
+		t.Errorf("the warning does not name the display:\n%s", stderr)
+	}
+
+	want := "Input-switch command sent (HDMI, 0x11) to AOC Q27P1B via ddcutil " +
+		"(identification bypassed). Switch not independently confirmed.\n"
+	equal(t, "switch --unsafe-model", stdout, want)
+
+	executed := world.driver.Executed()
+	if len(executed) != 1 {
+		t.Fatalf("the backend executed %d operations, want 1", len(executed))
+	}
+
+	if executed[0].Value() != 0x11 || executed[0].Mechanism() != catalog.MechanismInputSource {
+		t.Errorf("the backend was handed %s", executed[0])
+	}
+}
+
+// A normal switch must keep reading as one: the note belongs to the override.
+func TestAnIdentifiedSwitchSaysNothingAboutBypassing(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, stderr, code := world.run("switch", "usb-c")
+	if code != exitSent {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	if strings.Contains(stdout, "identification bypassed") || stderr != "" {
+		t.Errorf("an identified switch mentioned the override:\n%s\n%s", stdout, stderr)
+	}
+}
+
+func TestSwitchWithAnUnknownUnsafeModelIsAnArgumentError(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(strange())
+
+	stdout, stderr, code := world.run(
+		"switch", "hdmi", "--unsafe-model", "Acme/Nothing", "--dry-run",
+	)
+	if code != exitToolError {
+		t.Fatalf("exit = %d, want %d", code, exitToolError)
+	}
+
+	if stdout != "" {
+		t.Errorf("an unknown model printed %q", stdout)
+	}
+
+	if !strings.Contains(stderr, "monmux catalog list") {
+		t.Errorf("the error does not point at the listing: %q", stderr)
+	}
+
+	if strings.Contains(stderr, "WARNING: identification bypassed") {
+		t.Errorf("the warning was printed for a name that is not a model: %q", stderr)
+	}
+
+	if world.driver.Calls() != nil {
+		t.Errorf("an argument error still reached the backend: %v", world.driver.Calls())
+	}
+
+	if world.wrote() {
+		t.Error("an argument error wrote to a monitor")
+	}
+}
+
+// The override is a flag, every invocation: no configuration key arms it.
+func TestTheConfigurationFileCannotArmTheOverride(t *testing.T) {
+	t.Parallel()
+
+	fields := reflect.VisibleFields(reflect.TypeFor[config.Config]())
+	for _, field := range fields {
+		if strings.Contains(strings.ToLower(field.Name), "unsafe") ||
+			strings.Contains(strings.ToLower(field.Name), "model") {
+			t.Errorf("config.Config carries %q, which could arm the override", field.Name)
+		}
 	}
 }
