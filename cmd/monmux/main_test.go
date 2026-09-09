@@ -926,8 +926,56 @@ func TestCatalogShowOfAnUnknownNameIsAnError(t *testing.T) {
 		t.Errorf("the error does not point at the listing: %q", stderr)
 	}
 
+	if !strings.Contains(stderr, "VENDOR/MODEL") {
+		t.Errorf("the error does not say what a name looks like: %q", stderr)
+	}
+
 	if strings.Contains(stderr, "No DDC write was performed") {
 		t.Errorf("a read-only command talked about writes: %q", stderr)
+	}
+}
+
+// The model name alone is the obvious thing to type and is not a name, so the
+// error has to say which name to type instead.
+func TestCatalogShowOfAModelNameSuggestsTheFullName(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	_, stderr, code := world.run("catalog", "show", "38WR85QC-W")
+	if code != exitToolError {
+		t.Fatalf("exit = %d, want %d", code, exitToolError)
+	}
+
+	for _, wanted := range []string{
+		`no catalog entry is named "38WR85QC-W"`,
+		`did you mean "LG/38WR85QC-W"?`,
+	} {
+		if !strings.Contains(stderr, wanted) {
+			t.Errorf("the error does not say %q: %q", wanted, stderr)
+		}
+	}
+}
+
+// A name that resembles nothing gets the rule and an example instead of a guess.
+func TestCatalogShowOfANameLikeNothingExplainsTheForm(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	_, stderr, code := world.run("catalog", "show", "nothing-like-a-model")
+	if code != exitToolError {
+		t.Fatalf("exit = %d, want %d", code, exitToolError)
+	}
+
+	if strings.Contains(stderr, "did you mean") {
+		t.Errorf("a name matching nothing was guessed at: %q", stderr)
+	}
+
+	for _, wanted := range []string{"VENDOR/MODEL", "LG/38WR85QC-W", "monmux catalog list"} {
+		if !strings.Contains(stderr, wanted) {
+			t.Errorf("the error does not say %q: %q", wanted, stderr)
+		}
 	}
 }
 
@@ -1088,6 +1136,27 @@ func TestSwitchWithAnUnknownUnsafeModelIsAnArgumentError(t *testing.T) {
 
 	if world.driver.Calls() != nil {
 		t.Errorf("an argument error still reached the backend: %v", world.driver.Calls())
+	}
+
+	if world.wrote() {
+		t.Error("an argument error wrote to a monitor")
+	}
+}
+
+// The override takes the same names as "catalog show", and mistyping one is the
+// same usage error with the same suggestion.
+func TestSwitchWithAModelNameSuggestsTheFullName(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(strange())
+
+	_, stderr, code := world.run("switch", "hdmi", "--unsafe-model", "Q27P1B", "--dry-run")
+	if code != exitToolError {
+		t.Fatalf("exit = %d, want %d", code, exitToolError)
+	}
+
+	if !strings.Contains(stderr, `did you mean "AOC/Q27P1B"?`) {
+		t.Errorf("the error does not suggest the full name: %q", stderr)
 	}
 
 	if world.wrote() {

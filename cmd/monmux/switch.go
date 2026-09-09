@@ -51,8 +51,10 @@ func newSwitchCmd(state *cli) *cobra.Command {
 			"are attached; it matches the alphanumeric serial only.\n\n" +
 			"--unsafe-model is the one way past that. It treats the attached display as\n" +
 			"the catalog entry you name, without identifying it and without the\n" +
-			"write-enabled gate, and it sends a value nobody verified on your unit. Run it\n" +
-			"with --dry-run first, and have the monitor's OSD within reach.",
+			"write-enabled gate, and it sends a value nobody verified on your unit. The\n" +
+			"entry is named VENDOR/MODEL, as \"monmux catalog list\" prints it, e.g.\n" +
+			exampleModelName + ". Run it with --dry-run first, and have the monitor's OSD\n" +
+			"within reach.",
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: inputNames(),
 		RunE: func(command *cobra.Command, args []string) error {
@@ -76,9 +78,9 @@ func newSwitchCmd(state *cli) *cobra.Command {
 		&unsafeModel,
 		"unsafe-model",
 		"",
-		"DANGEROUS: treat the display as this catalog model instead of identifying "+
-			"it, bypassing EDID matching and the write-enabled gate; see "+
-			"\"monmux catalog list\"",
+		"DANGEROUS: treat the display as this catalog model, named VENDOR/MODEL as "+
+			"\"monmux catalog list\" prints it, instead of identifying it; bypasses EDID "+
+			"matching and the write-enabled gate",
 	)
 
 	// Completion offers every catalog entry, write-enabled or not: what the flag
@@ -122,11 +124,7 @@ func (c *cli) switchInput(
 	if unsafeModel != "" {
 		_, known := catalog.Find(unsafeModel)
 		if !known {
-			return fmt.Errorf(
-				"%w %q (run \"monmux catalog list\" to see every entry)",
-				errUnknownModel,
-				unsafeModel,
-			)
+			return unknownModel(unsafeModel)
 		}
 	}
 
