@@ -34,6 +34,7 @@ func newSwitchCmd(state *cli) *cobra.Command {
 		serial      string
 		unsafeModel string
 		dryRun      bool
+		asJSON      bool
 	)
 
 	command := &cobra.Command{
@@ -58,7 +59,7 @@ func newSwitchCmd(state *cli) *cobra.Command {
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: inputNames(),
 		RunE: func(command *cobra.Command, args []string) error {
-			return state.switchInput(command, args[0], serial, unsafeModel, dryRun)
+			return state.switchInput(command, args[0], serial, unsafeModel, dryRun, asJSON)
 		},
 	}
 
@@ -73,6 +74,12 @@ func newSwitchCmd(state *cli) *cobra.Command {
 		"dry-run",
 		false,
 		"print the command that would run, and run nothing",
+	)
+	command.Flags().BoolVar(
+		&asJSON,
+		"json",
+		false,
+		"print the outcome as JSON, whatever it is; the exit code is unchanged",
 	)
 	command.Flags().StringVar(
 		&unsafeModel,
@@ -96,21 +103,65 @@ func newSwitchCmd(state *cli) *cobra.Command {
 	return command
 }
 
-// switchInput performs one switch.
+// switchInput performs one switch and reports it, as prose or as JSON.
+//
+// With --json exactly one document is printed on stdout for every outcome, and
+// the exit code is unchanged: the code stays the authority for "the write status
+// is unknown", and the document is the authority for telling a dry run from a
+// send, which the code cannot. Nothing is printed twice - a failure that has
+// been reported as a document is not also rendered as prose on stderr.
+func (c *cli) switchInput(
+	command *cobra.Command,
+	name, serial, unsafeModel string,
+	dryRun, asJSON bool,
+) error {
+	outcome, backendName, err := c.performSwitch(command, name, serial, unsafeModel, dryRun)
+
+	if !asJSON {
+		if err != nil {
+			return err
+		}
+
+		return renderOutcome(command.OutOrStdout(), &outcome, c.showSerial)
+	}
+
+	document := asJSONSwitch(&outcome, backendName, err, c.showSerial)
+
+	writeErr := writeJSON(command.OutOrStdout(), document, "outcome")
+	if writeErr != nil {
+		return writeErr
+	}
+
+	if err != nil {
+		// The document is the whole report, so the message must not be printed
+		// a second time as prose on stderr. Only the exit code survives, and it
+		// is the one the text path would have used: a refusal still exits 2.
+		return &renderedError{code: exitCode(err)}
+	}
+
+	return nil
+}
+
+// performSwitch does the switch itself and reports what came of it, printing
+// nothing but the --unsafe-model warning. Its caller decides how the result is
+// rendered, so the text and JSON renderings cannot disagree about what happened.
 //
 // The input is parsed before anything else happens: an argument that is not a
 // well-formed connector name is a mistake in the request rather than something
 // for the backend to discover, and nothing should be started for it. A name that
 // is well formed but not enabled for the matched model is a different thing, and
 // it is refused later, by the policy, with nothing written.
-func (c *cli) switchInput(
+//
+// The returned backend name is the backend that handled the request, and is
+// empty when the failure happened before one could be opened.
+func (c *cli) performSwitch(
 	command *cobra.Command,
 	name, serial, unsafeModel string,
 	dryRun bool,
-) error {
+) (app.Outcome, string, error) {
 	input, err := catalog.ParseInput(name)
 	if err != nil {
-		return fmt.Errorf(
+		return app.Outcome{}, "", fmt.Errorf(
 			"%w (a connector kind - %s - optionally followed by a port number, e.g. hdmi2; "+
 				"run \"monmux info\" to see the inputs of the attached monitor)",
 			err,
@@ -124,13 +175,13 @@ func (c *cli) switchInput(
 	if unsafeModel != "" {
 		_, known := catalog.Find(unsafeModel)
 		if !known {
-			return unknownModel(unsafeModel)
+			return app.Outcome{}, "", unknownModel(unsafeModel)
 		}
 	}
 
 	driver, configured, err := c.open()
 	if err != nil {
-		return err
+		return app.Outcome{}, "", err
 	}
 
 	// The flag wins over the file: the file is a standing preference, and the
@@ -145,6 +196,13 @@ func (c *cli) switchInput(
 	// monitor that is about to receive an unverified value. A dry run prints it
 	// too. Note what is not consulted anywhere here: the configuration file has
 	// no key for the override, so only this invocation's flag can have armed it.
+	// bypassed records that the policy actually assumed a model, which is what
+	// the callback firing means. It is not the same as the flag being set: a
+	// request that never got that far bypassed no identification, and a request
+	// that got past it did - including when the write then failed, which is the
+	// one outcome where an unverified value may have reached the monitor.
+	bypassed := false
+
 	opts := app.Options{DryRun: dryRun}
 	if unsafeModel != "" {
 		opts.OnAssumed = func(
@@ -152,9 +210,13 @@ func (c *cli) switchInput(
 			model *catalog.Model,
 			name catalog.Input,
 		) error {
+			bypassed = true
+
 			return renderUnsafeWarning(command.ErrOrStderr(), display, model, name)
 		}
 	}
+
+	backendName := driver.Name()
 
 	outcome, err := app.Switch(
 		command.Context(),
@@ -163,9 +225,11 @@ func (c *cli) switchInput(
 		opts,
 	)
 	if err != nil {
+		// app.Switch zeroes the outcome on every error path, so what the run is
+		// still known to have done is put back here.
 		//nolint:wrapcheck // a refusal is passed through unchanged; wrapping would corrupt its message
-		return err
+		return app.Outcome{Assumed: bypassed}, backendName, err
 	}
 
-	return renderOutcome(command.OutOrStdout(), &outcome, c.showSerial)
+	return outcome, backendName, nil
 }

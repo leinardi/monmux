@@ -145,9 +145,30 @@ func run(args []string, stdout, stderr io.Writer, deps dependencies) int {
 		return exitSent
 	}
 
-	_, _ = fmt.Fprintln(stderr, message(err, state.showSerial))
+	// A failure that has already been reported in full - as the JSON document
+	// --json promises - has nothing left to say here, and repeating it as prose
+	// would put a second report on stderr for the same run.
+	rendered := message(err, state.showSerial)
+	if rendered != "" {
+		_, _ = fmt.Fprintln(stderr, rendered)
+	}
 
 	return exitCode(err)
+}
+
+// renderedError is a failure whose report has already been written, as the one
+// JSON document `monmux switch --json` prints for every outcome. It carries
+// nothing but the exit code the failure would otherwise have produced, so the
+// codes stay exactly what the text path uses - a refusal is still 2 - while the
+// message is not printed a second time.
+type renderedError struct {
+	// code is the exit status the reported failure maps to.
+	code int
+}
+
+// Error is empty: the report is the message, and it has already been printed.
+func (*renderedError) Error() string {
+	return ""
 }
 
 // readOnlyError marks a failure raised by a command that never intended to
@@ -176,6 +197,12 @@ func (f *readOnlyError) Unwrap() error {
 // promise that no DDC write was performed. Its identities are redacted unless
 // the user asked for them.
 func message(err error, showSerial bool) string {
+	// A failure whose report has already been written renders as nothing: the
+	// report was the message, and printing anything here would repeat it.
+	if _, ok := errors.AsType[*renderedError](err); ok {
+		return ""
+	}
+
 	if readOnly, ok := errors.AsType[*readOnlyError](err); ok {
 		return diagnostic(readOnly.Err)
 	}
@@ -206,6 +233,13 @@ func diagnostic(err error) string {
 
 // exitCode maps a failure onto the process's exit status.
 func exitCode(err error) int {
+	// An already-reported failure carries the code the reporting decided on,
+	// which is the code this function gave the underlying failure: the mapping
+	// is not duplicated, only remembered.
+	if rendered, ok := errors.AsType[*renderedError](err); ok {
+		return rendered.code
+	}
+
 	if _, ok := errors.AsType[*refusal.Refusal](err); ok {
 		return exitRefused
 	}
