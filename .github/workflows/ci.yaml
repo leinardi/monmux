@@ -16,6 +16,8 @@ env:
   # The same pin the release workflow uses, so `goreleaser check` here validates
   # against the binary that will actually build the release.
   GORELEASER_VERSION: v2.18.1
+  # Pinned by hand: dependabot does not track a `go install` argument.
+  GOVULNCHECK_VERSION: v1.8.0
 
 concurrency:
   group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
@@ -136,11 +138,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Scan the module for known vulnerabilities
-        uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
+      # Not golang/govulncheck-action: it always forwards its own
+      # go-version-input (default "stable") to setup-go, where it wins over
+      # go-version-file, so go.mod was ignored and the scan ran on a toolchain
+      # that is not the one the release builds with. Its standard-library findings
+      # then describe a binary nobody ships. These two steps are all the action
+      # did, minus that.
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          go-package: ./...
+          cache: true
+
+      - name: Scan the module for known vulnerabilities
+        # Pinning the scanner does not pin what it knows: the vulnerability
+        # database is fetched at run time.
+        run: |
+          go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+          govulncheck ./...
 
   release-config:
     # The release configuration is checked on every run rather than only when
