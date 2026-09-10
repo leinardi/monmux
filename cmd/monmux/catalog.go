@@ -540,7 +540,11 @@ type (
 
 	// jsonCatalogInput is one recorded input of one entry, with its evidence.
 	jsonCatalogInput struct {
-		Name      string `json:"name"`
+		Name string `json:"name"`
+		// Label is the human name monmux itself prints for this input, in
+		// success and refusal messages alike. It is here so a client can show
+		// what monmux shows without inventing a spelling of its own.
+		Label     string `json:"label"`
 		Mechanism string `json:"mechanism"`
 		// Value is the recorded value; ValueHex is the same value as the
 		// documentation writes it.
@@ -610,6 +614,7 @@ func asJSONCatalogModel(entry *catalog.Model) jsonCatalogModel {
 
 		document.Inputs = append(document.Inputs, jsonCatalogInput{
 			Name:      input.String(),
+			Label:     input.Label(),
 			Mechanism: mechanism.String(),
 			Value:     value,
 			ValueHex:  fmt.Sprintf("0x%02X", value),

@@ -856,6 +856,7 @@ func TestCatalogListJSONDecodes(t *testing.T) {
 			Mechanisms   []string `json:"mechanisms"`
 			Inputs       []struct {
 				Name      string `json:"name"`
+				Label     string `json:"label"`
 				Mechanism string `json:"mechanism"`
 				Value     uint16 `json:"value"`
 				ValueHex  string `json:"valueHex"`
@@ -893,9 +894,84 @@ func TestCatalogListJSONDecodes(t *testing.T) {
 	}
 
 	if len(first.Inputs) == 0 || first.Inputs[0].ValueHex != "0xD0" ||
-		first.Inputs[0].Grade != "verified" {
+		first.Inputs[0].Grade != "verified" || first.Inputs[0].Label != "DisplayPort" {
 		t.Errorf("the first entry's inputs decoded as %+v", first.Inputs)
 	}
+}
+
+// The label is the one human string a client may show without inventing a
+// spelling of its own, so it has to be exactly what monmux prints itself.
+func TestCatalogJSONCarriesTheInputLabelMonmuxPrints(t *testing.T) {
+	t.Parallel()
+
+	for _, args := range [][]string{
+		{"catalog", "list", "--json"},
+		{"catalog", "show", "lg/38WR85QC-W", "--json"},
+	} {
+		world := newWorld()
+
+		stdout, _, code := world.run(args...)
+		if code != exitSent {
+			t.Fatalf("%v exit = %d", args, code)
+		}
+
+		counted := 0
+
+		for _, entry := range decodeCatalogInputs(t, args, stdout) {
+			input, err := catalog.ParseInput(entry.Name)
+			if err != nil {
+				t.Fatalf("%v printed the unparsable input name %q", args, entry.Name)
+			}
+
+			if entry.Label != input.Label() {
+				t.Errorf(
+					"%v: %s carries the label %q, want %q",
+					args,
+					entry.Name,
+					entry.Label,
+					input.Label(),
+				)
+			}
+
+			counted++
+		}
+
+		if counted == 0 {
+			t.Errorf("%v recorded no inputs at all", args)
+		}
+	}
+}
+
+// catalogInput is the name and the label of one recorded input, as a client
+// reads them.
+type catalogInput struct {
+	Name  string `json:"name"`
+	Label string `json:"label"`
+}
+
+// decodeCatalogInputs collects every recorded input of every entry in a catalog
+// document, whether it is the listing or one entry.
+func decodeCatalogInputs(t *testing.T, args []string, stdout string) []catalogInput {
+	t.Helper()
+
+	var listing struct {
+		Models []struct {
+			Inputs []catalogInput `json:"inputs"`
+		} `json:"models"`
+		Inputs []catalogInput `json:"inputs"`
+	}
+
+	err := json.Unmarshal([]byte(stdout), &listing)
+	if err != nil {
+		t.Fatalf("%v did not decode: %v\n%s", args, err, stdout)
+	}
+
+	found := listing.Inputs
+	for _, entry := range listing.Models {
+		found = append(found, entry.Inputs...)
+	}
+
+	return found
 }
 
 func TestCatalogShowPrintsAWriteEnabledEntry(t *testing.T) {
