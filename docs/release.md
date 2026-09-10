@@ -189,8 +189,14 @@ against the binary that will actually build the release. Like `SVU_VERSION`, it 
 mutable pointer: `@v7` resolves to whatever that tag points at on the day the job runs, and an action that moves — or whose
 repository is compromised — would execute inside the release job, which holds `contents: write`, an OIDC identity good for
 Cloudsmith, and the tap token. A SHA cannot be moved. Dependabot updates the pins and rewrites the comment, so this costs nothing
-to maintain. `svu` is pinned the same way, as a version in `SVU_VERSION`, because dependabot cannot see a `go install` argument;
-that one is a human's job to bump.
+to maintain. `svu` and `govulncheck` are pinned the same way, as versions in `SVU_VERSION` and `GOVULNCHECK_VERSION`, because
+dependabot cannot see a `go install` argument; those two are a human's job to bump. Pinning the scanner does not pin what it
+knows about: govulncheck fetches the vulnerability database at run time.
+
+**The vulnerability scan runs on the toolchain the release builds with.** Both workflows call `setup-go` with
+`go-version-file: go.mod` and then `govulncheck` directly, rather than using `golang/govulncheck-action`. That action always
+forwards its own `go-version-input`, which defaults to `stable`, and `setup-go` prefers it over `go-version-file` — so go.mod was
+ignored and the standard-library half of the report described a binary nobody ships.
 
 **Verification pins the signing identity, not just the repository.** The keyless cosign certificate carries the workflow that
 produced it, so the documented command checks

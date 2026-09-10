@@ -12,11 +12,17 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
+      # Left empty, the version comes from the Conventional Commits since the last
+      # tag. An explicit one is checked for shape and for being higher than every
+      # released version, and is how a recovery re-run names the version it failed
+      # on. Either way the catalog rule may raise it.
       version:
-        description: "Version to release (e.g. 0.1.0 or v0.1.0). Leave empty to derive it from the Conventional Commits since the last tag."
+        description: "Version, e.g. 0.1.0 (empty: derive from the commits)"
         required: false
+      # Resolves the version, writes the release notes, builds and signs, and stops
+      # there: no tag is pushed, no release, cask or package is published.
       dry_run:
-        description: "Resolve, build and sign everything, print the release notes, and stop before the tag is pushed."
+        description: "Dry run: build and sign, stop before the tag is pushed"
         type: boolean
         default: false
 
@@ -37,6 +43,7 @@ env:
   # Pinned by hand: dependabot does not track a `go install` argument. Bump them
   # together with the rest of the toolchain.
   SVU_VERSION: v3.4.1
+  GOVULNCHECK_VERSION: v1.8.0
   # Exact, not "~> v2": a recovery re-run of a tagged commit has to rebuild the
   # same artifacts, and a goreleaser released in the meantime could change them.
   GORELEASER_VERSION: v2.18.1
@@ -141,11 +148,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Scan the module for known vulnerabilities
-        uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
+      # Not golang/govulncheck-action: it always forwards its own
+      # go-version-input (default "stable") to setup-go, where it wins over
+      # go-version-file, so go.mod was ignored and the scan ran on a toolchain
+      # that is not the one goreleaser builds with. Its standard-library findings
+      # then describe a binary nobody ships. These two steps are all the action
+      # did, minus that.
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          go-package: ./...
+          cache: true
+
+      - name: Scan the module for known vulnerabilities
+        # Pinning the scanner does not pin what it knows: the vulnerability
+        # database is fetched at run time.
+        run: |
+          go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+          govulncheck ./...
 
   release:
     needs:
