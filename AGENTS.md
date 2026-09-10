@@ -29,6 +29,8 @@ pre-commit `go-test-repo-mod` hook, and IDE runs) or when `MONMUX_NO_EXEC=1` is 
 
 Hardware validation is a checklist the human runs; agents prepare the commands and wait.
 
+CI runs no monmux command at all; a workflow that did would be a monitor write by automation.
+
 ## What this is
 
 `monmux` is a cross-platform Go CLI that switches **supported monitors** between video inputs, with a fail-closed policy: a write happens
@@ -54,7 +56,7 @@ Documentation, and what each page is for:
 | [`docs/security.md`](docs/security.md)                 | Threat model, mitigations, trust boundaries, what monmux never does.     |
 | [`docs/testing.md`](docs/testing.md)                   | How the no-exec rule is enforced, and the human hardware checklist.      |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md)   | Every refusal reason and its fix.                                        |
-| [`docs/release.md`](docs/release.md)                   | The release pipeline, as a design. Not implemented.                      |
+| [`docs/release.md`](docs/release.md)                   | What a release produces, how one runs, and how to recover a failed one.  |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md)                   | Prerequisites, workflow, and the catalog evidence rule.                  |
 
 A change to the catalog is a change to `internal/catalog/models.yaml` followed by `make go-generate`, which re-renders both
@@ -96,7 +98,9 @@ Repo-local make targets live in `.mk/cross.mk`.
   `models.yaml` and rendered into the committed `models_gen.go` by `make go-generate`; a test fails the build if the two
   disagree. `internal/catalog/internal/generate` is that
   renderer, and it deliberately does not import `internal/catalog`, so a deleted or corrupt `models_gen.go` can still be
-  regenerated.
+  regenerated. `internal/catalog/internal/generate/cmd/relnotes` sits in the same tree and on the same rule: it compares two
+  `models.yaml` files and prints the catalog section of the release notes, plus the `enabled=` line the release workflow turns
+  into the "a catalog enabling is never a patch" rule — [`docs/release.md`](docs/release.md).
 - `internal/catalog/internal/input` — the grammar of an input name: the closed list of connector kinds, the parser, the labels
   and the ordering. A shared leaf, imported by both `internal/catalog` and the generator, so the two agree on what a name is
   without the generator importing the package whose source it writes.

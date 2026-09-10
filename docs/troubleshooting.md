@@ -35,7 +35,8 @@ The external tool is missing, too old, missing an option monmux needs, untrusted
 
 - **Not found on `PATH`** — install `ddcutil` (Linux) or `m1ddc` (macOS), or set `ddcutil_path` / `m1ddc_path` in the
   configuration to an absolute path. See [configuration.md](configuration.md).
-- **Older than 2.2** — `ddcutil` needs to be at least 2.2; `--i2c-source-addr` does not exist before it. Upgrade.
+- **Older than 2.2** — `ddcutil` needs to be at least 2.2. `--i2c-source-addr` arrived in 2.1.0, but 2.2.5 is what monmux was
+  verified against and no 2.1.x has ever been tested with it. Upgrade.
 - **Does not support `--edid`, `--i2c-source-addr`, `--noverify`** — an unusual build. Install a stock `ddcutil` 2.2+.
 - **Group- or world-writable, or in a writable directory** — monmux will not run a binary that somebody else can rewrite. Fix
   the permissions, or point at a different copy.

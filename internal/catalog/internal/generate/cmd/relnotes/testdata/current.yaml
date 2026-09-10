@@ -1,0 +1,64 @@
+# The same synthetic catalog, one release later: one model enabled, one input
+# added to a model that was already enabled, one value moved, one entry gone
+# and one entry newly recorded.
+models:
+  - name: MX100
+    vendor: Testco
+    identities:
+      - manufacturer: TST
+        product_code: 0x1000
+      - manufacturer: TST
+        product_code: 0x1001
+        model_name: MX100 REV B
+    write_enabled: true
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD1
+        evidence:
+          grade: verified
+          date: "2026-02-03"
+          tool: "ddcutil 2.2.5"
+          note: "switched on the unit"
+      usb-c:
+        mechanism: lg-alt-input
+        value: 0xD2
+        evidence:
+          grade: verified
+          date: "2026-02-03"
+          tool: "ddcutil 2.2.5"
+          note: "switched on the unit"
+    sources:
+      - https://example.invalid/mx100
+  - name: RX200
+    vendor: Testco
+    identities:
+      - manufacturer: TST
+        product_code: 0x2000
+    write_enabled: true
+    inputs:
+      hdmi:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: verified
+          date: "2026-02-04"
+          tool: "ddcutil 2.2.5"
+          note: "switched on the unit"
+    sources:
+      - https://example.invalid/rx200
+  - name: AB10
+    vendor: Newco
+    identities: []
+    write_enabled: false
+    inputs:
+      hdmi2:
+        mechanism: vcp-input-source
+        value: 0x12
+        evidence:
+          grade: quoted
+          by: "somebody"
+          tool: "ddcutil"
+          url: https://example.invalid/ab10
+    sources:
+      - https://example.invalid/ab10

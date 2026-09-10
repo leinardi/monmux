@@ -23,9 +23,10 @@ a mitigated threat: monmux cannot tell a genuine tool from a correctly-permissio
 
 ### ddcutil requirements
 
-`ddcutil` **2.2 or newer**. That floor is concrete rather than cautious: 2.2.5 is the version monmux was verified against, and
-`--i2c-source-addr`, which the LG mechanism needs, does not exist in older releases. Preflight reads `ddcutil --version` and
-refuses anything older.
+`ddcutil` **2.2 or newer**. That floor is concrete rather than cautious: 2.2.5 is the version monmux was verified against.
+`--i2c-source-addr`, which the LG mechanism needs, arrived in 2.1.0 and does not exist before it, so 2.1 is where the option
+starts and 2.2 is where the evidence starts — nobody has run monmux against a 2.1.x, and "the option exists" is not evidence in
+this project. Preflight reads `ddcutil --version` and refuses anything older.
 
 Preflight then reads `ddcutil --help` and requires it to list `--edid`, `--i2c-source-addr` and `--noverify`. It is a capability
 probe that costs nothing and touches no monitor: a build without those options fails here rather than in the middle of a write.

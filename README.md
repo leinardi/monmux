@@ -1,5 +1,10 @@
 # monmux
 
+[![CI](https://github.com/leinardi/monmux/actions/workflows/ci.yaml/badge.svg)](https://github.com/leinardi/monmux/actions/workflows/ci.yaml)
+[![Release](https://img.shields.io/github/v/release/leinardi/monmux)](https://github.com/leinardi/monmux/releases/latest)
+[![Hosted By: Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith)](https://cloudsmith.com)
+[![Licence](https://img.shields.io/github/license/leinardi/monmux)](LICENSE)
+
 Switch supported monitors between video inputs, from the command line, on Linux and macOS.
 
 `monmux` is fail-closed by design. It writes to a monitor only when that monitor is positively identified, from its EDID, as a
@@ -25,20 +30,87 @@ be the first hardware run of that path.
 
 ## Install
 
-Download a binary from the [releases page](https://github.com/leinardi/monmux/releases), or build from source:
+### macOS
+
+```sh
+brew install --cask leinardi/tap/monmux
+```
+
+The cask depends on the `m1ddc` formula, so Homebrew installs it for you. The binaries are not signed with an Apple Developer
+ID, so the cask strips the download quarantine on install; what that means, and how to install without it, is in
+[docs/security.md](docs/security.md#the-install-path).
+
+### Linux, apt
+
+```sh
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL 'https://dl.cloudsmith.io/public/leinardi/monmux/gpg.D5A5560F8D6A68B5.key' \
+  | gpg --dearmor \
+  | sudo tee /etc/apt/keyrings/leinardi-monmux.gpg > /dev/null
+echo 'deb [signed-by=/etc/apt/keyrings/leinardi-monmux.gpg] https://dl.cloudsmith.io/public/leinardi/monmux/deb/any-distro any-version main' \
+  | sudo tee /etc/apt/sources.list.d/leinardi-monmux.list
+sudo apt update && sudo apt install monmux
+```
+
+`D5A5560F8D6A68B5` is the long key ID of the repository's signing key, fingerprint
+`7F28 A3C9 6319 1586 0980 5131 D5A5 560F 8D6A 68B5` — check it with `gpg --show-keys` on the downloaded file, or against the
+[repository's setup page](https://cloudsmith.io/~leinardi/repos/monmux/setup/). Cloudsmith also offers a `curl | sudo bash`
+setup script; the lines above are what it does.
+
+### Linux, rpm
+
+```sh
+sudo tee /etc/yum.repos.d/leinardi-monmux.repo > /dev/null <<'EOF'
+[leinardi-monmux]
+name=leinardi/monmux
+baseurl=https://dl.cloudsmith.io/public/leinardi/monmux/rpm/any-distro/any-version/$basearch
+gpgkey=https://dl.cloudsmith.io/public/leinardi/monmux/gpg.D5A5560F8D6A68B5.key
+repo_gpgcheck=1
+gpgcheck=1
+enabled=1
+EOF
+sudo dnf install monmux
+```
+
+Package repository hosting is graciously provided by [Cloudsmith](https://cloudsmith.com). Cloudsmith is the only fully hosted,
+cloud-native, universal package management solution, that enables your organization to create, store and share packages in any
+format, to any place, with total confidence.
+
+A Linux package install trusts Cloudsmith in addition to GitHub — [docs/security.md](docs/security.md#the-install-path) says
+what that means and how to verify a package against the GitHub release instead.
+
+### A tarball
+
+Download one from the [releases page](https://github.com/leinardi/monmux/releases/latest), then verify it:
+
+```sh
+sha256sum --check --ignore-missing checksums.txt
+cosign verify-blob checksums.txt \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity 'https://github.com/leinardi/monmux/.github/workflows/release.yaml@refs/heads/main' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+gh attestation verify monmux_*_linux_amd64.tar.gz \
+  --repo leinardi/monmux \
+  --signer-workflow leinardi/monmux/.github/workflows/release.yaml \
+  --source-ref refs/heads/main
+```
+
+### From source
 
 ```sh
 go install github.com/leinardi/monmux/cmd/monmux@latest
 ```
 
-A Homebrew formula will arrive together with the release pipeline.
-
 ### Prerequisites
 
 **Linux** — `ddcutil` 2.2 or newer (2.2.5 is the version monmux was verified against; the `--i2c-source-addr` option it needs
-does not exist in older releases), and permission to open the monitor's `/dev/i2c-N` for reading and writing. On most
-distributions that means installing `ddcutil`, loading the `i2c-dev` module, and adding yourself to the `i2c` group or
-installing the udev rule that ships with `ddcutil`. Log in again afterwards.
+arrived in 2.1.0, and 2.2 is the floor because nobody has run monmux against 2.1), and permission to open the monitor's
+`/dev/i2c-N` for reading and writing. On most distributions that means installing `ddcutil`, loading the `i2c-dev` module, and
+adding yourself to the `i2c` group or installing the udev rule that ships with `ddcutil`. Log in again afterwards.
+
+Debian 12 and Ubuntu 24.04 ship `ddcutil` 1.4. The monmux package installs there — its dependency is unversioned on purpose, see
+[docs/release.md](docs/release.md) — but every command that needs the tool refuses until a `ddcutil` 2.2 is present, naming the
+version it found.
 
 **macOS** — [`m1ddc`](https://github.com/waydabber/m1ddc), which requires Apple Silicon:
 
@@ -123,7 +195,7 @@ Only exit `2` carries the promise that nothing was written.
 - [Adding a monitor](docs/adding-a-monitor.md) — the procedure for enabling a model or an input.
 - [Security](docs/security.md) — threat model, mitigations, trust boundaries, and what monmux never does.
 - [Testing](docs/testing.md) — why no test ever runs an external binary, and the human hardware checklist.
-- [Release](docs/release.md) — the release pipeline, as a design. Not implemented yet.
+- [Release](docs/release.md) — what a release produces, how one runs, and how to recover a failed one.
 - [Requirements](docs/requirements.md) — the source document this project was built from.
 - [Contributing](CONTRIBUTING.md) — prerequisites, workflow, and the catalog evidence rule.
 - [AGENTS.md](AGENTS.md) — repository conventions, including the rule that no AI agent may write to a monitor.

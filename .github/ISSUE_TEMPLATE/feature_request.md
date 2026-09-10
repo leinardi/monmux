@@ -9,6 +9,12 @@ assignees: []
 
 * [ ] I have checked the existing issues to confirm this feature has not already been requested.
 * [ ] I believe this feature fits the scope and goals of this project.
+* [ ] This is **not** a request for a raw VCP flag, for a fallback to `VCP 0x60` when a mechanism fails, or for
+  write-enabling a model without hardware evidence. Those three are refused by design —
+  [AGENTS.md](https://github.com/leinardi/monmux/blob/main/AGENTS.md#two-rules-that-keep-the-blast-radius-small),
+  [docs/architecture.md](https://github.com/leinardi/monmux/blob/main/docs/architecture.md).
+* [ ] If this is about a monitor, I am filing a **Monitor report** instead —
+  [docs/adding-a-monitor.md](https://github.com/leinardi/monmux/blob/main/docs/adding-a-monitor.md).
 
 ---
 

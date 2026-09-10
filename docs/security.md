@@ -134,6 +134,46 @@ known-good value is the user's job, not monmux's.
 **The kernel and the tool's own behaviour.** monmux does not open `/dev/i2c-*` and does not speak DDC. What the external tool
 puts on the wire once it is invoked, and what a driver does with it, is outside monmux's control.
 
+### The install path
+
+Where the binary came from is its own trust boundary, and it is not the same one on every platform.
+
+**Everything is signed at the source.** Every release attaches `checksums.txt`, covering every artifact including the `.deb` and
+the `.rpm`, and `checksums.txt.sigstore.json`: a keyless [cosign](https://docs.sigstore.dev/) signature made with the release
+workflow's own GitHub OIDC identity. There is no private signing key anywhere, so there is none to steal. The archives, the
+packages and the checksum file also carry a build provenance attestation. What that proves is which workflow, on which commit,
+in which repository, produced those exact bytes — not that the bytes are correct. Verify with:
+
+```sh
+cosign verify-blob checksums.txt \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity 'https://github.com/leinardi/monmux/.github/workflows/release.yaml@refs/heads/main' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+gh attestation verify <file> \
+  --repo leinardi/monmux \
+  --signer-workflow leinardi/monmux/.github/workflows/release.yaml \
+  --source-ref refs/heads/main
+```
+
+**A Linux package install trusts Cloudsmith as well as GitHub.** The apt and rpm repositories are hosted by Cloudsmith, and the
+repository metadata is signed with **Cloudsmith's** key, not with a key monmux controls — that is what `gpgkey=` in the setup
+instructions points at. So `apt install monmux` trusts Cloudsmith to serve the package that was uploaded to it. The packages
+themselves are byte-for-byte the ones attached to the GitHub release, and `checksums.txt` there covers them, so anyone who wants
+to trust only GitHub can download the `.deb` or `.rpm` from the release page, verify it against the signed checksum file, and
+install it directly with `dpkg -i` or `rpm -i`.
+
+**The macOS cask strips the download quarantine.** monmux's binaries carry no Apple Developer ID signature, and Homebrew
+quarantines everything a cask downloads, so Gatekeeper would refuse to run the binary at all. The cask therefore runs
+`xattr -dr com.apple.quarantine` on the installed binary in a `postflight` hook. That is a real bypass, stated plainly: it
+removes the attribute that would otherwise make Gatekeeper refuse an unsigned, unnotarized binary, and it does so because the
+alternative is a cask that never runs. It reaches the same result as installing with `brew install --cask --no-quarantine`,
+except that it happens whether or not the flag is passed — a `--no-quarantine` install of this cask is not more restrictive, it
+is the same thing said twice.
+
+The trust it replaces is the one you extended by tapping the repository. If you would rather Gatekeeper had its say, do not
+install the cask: download the `darwin_arm64` tarball from the release page, verify it against the signed `checksums.txt` above,
+and place the binary yourself. Signing with an Apple Developer ID would remove the question entirely; it is out of scope today.
+
 ## What monmux never does
 
 - Never writes to a monitor it has not positively identified as a catalog model, or for an input that model does not enable —

@@ -1,0 +1,246 @@
+# The release build. Everything here is driven by .github/workflows/release.yaml;
+# nothing in it runs monmux, and nothing in it touches a monitor.
+#
+# Verify a change to this file locally with:
+#
+#   goreleaser check
+#   goreleaser release --snapshot --clean --skip=publish,sign
+#
+# (`sign` is skipped because cosign signs keyless, through the workflow's OIDC
+# identity, which a laptop does not have.)
+version: 2
+
+project_name: monmux
+
+# One build per OS, so that the packages and the cask can each name the one
+# they belong to: nfpm takes the Linux archives and the Homebrew cask takes the
+# macOS one, instead of a single archive that would put Linux URLs in a cask
+# nobody can use them from.
+#
+# .Tag rather than .Version in the ldflags, so `monmux version` prints `v1.2.3`
+# exactly as a `make go-build` binary does - that one takes it from
+# `git describe`. .CommitDate rather than .Date: the release job builds twice,
+# once to check and once to publish, and an invocation timestamp would make the
+# two differ for no reason. Everything stamped into the binary now comes from the
+# commit, so the same commit builds the same bytes.
+builds:
+  - id: monmux-linux
+    main: ./cmd/monmux
+    binary: monmux
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Tag }} -X main.commit={{ .FullCommit }} -X main.date={{ .CommitDate }}
+
+  - id: monmux-darwin
+    main: ./cmd/monmux
+    binary: monmux
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos:
+      - darwin
+    # arm64 only: the macOS backend wraps m1ddc, which requires Apple Silicon.
+    # An Intel binary that can never work would be a promise monmux cannot keep.
+    goarch:
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Tag }} -X main.commit={{ .FullCommit }} -X main.date={{ .CommitDate }}
+
+archives:
+  - id: monmux-linux
+    ids:
+      - monmux-linux
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+  - id: monmux-darwin
+    ids:
+      - monmux-darwin
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# The checksum file is signed, so one signature covers every artifact: verify
+# the bundle, then verify a download against the file it signs. Keyless, through
+# the release workflow's OIDC identity - there is no private key anywhere.
+signs:
+  - id: checksums
+    cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    output: true
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+
+nfpms:
+  - id: monmux
+    ids:
+      - monmux-linux
+    package_name: monmux
+    vendor: Roberto Leinardi
+    homepage: https://github.com/leinardi/monmux
+    maintainer: Roberto Leinardi <leinardi@gmail.com>
+    license: Apache-2.0
+    section: utils
+    bindir: /usr/bin
+    formats:
+      - deb
+      - rpm
+    # Unversioned on purpose. monmux needs ddcutil 2.2, but Debian 12 and
+    # Ubuntu 24.04 ship 1.4, and a versioned dependency would make the package
+    # refuse to install there - including for somebody who built 2.2 into
+    # /usr/local, which dpkg cannot see. The floor is enforced where it can be
+    # checked properly: preflight refuses with backend-not-ready and names the
+    # version it found, and `monmux doctor` says what is needed. See
+    # docs/release.md.
+    dependencies:
+      - ddcutil
+    description: |-
+      Switch supported monitors between video inputs.
+      monmux is fail-closed: it writes to a monitor only when that monitor is positively
+      identified from its EDID as a model in its built-in catalog, and the requested input
+      is enabled for that model with evidence from real hardware.
+      It drives ddcutil, which must be version 2.2 or newer; `monmux doctor` reports
+      whether the one installed is usable.
+    file_name_template: "{{ .ConventionalFileName }}"
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/monmux/copyright
+        type: license
+      - src: README.md
+        dst: /usr/share/doc/monmux/README.md
+        type: readme
+
+# macOS only, which a cask is by nature, and which is what monmux supports:
+# m1ddc requires Apple Silicon.
+homebrew_casks:
+  - name: monmux
+    ids:
+      - monmux-darwin
+    binaries:
+      - monmux
+    directory: Casks
+    homepage: https://github.com/leinardi/monmux
+    description: Switch supported monitors between video inputs
+    license: Apache-2.0
+    # A prerelease tag never reaches the tap.
+    skip_upload: auto
+    dependencies:
+      - formula: m1ddc
+    repository:
+      owner: leinardi
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    commit_author:
+      name: github-actions[bot]
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    commit_msg_template: "chore(cask): monmux {{ .Tag }}"
+    hooks:
+      post:
+        # The binaries carry no Apple Developer ID signature, and Homebrew
+        # quarantines everything it downloads, so without this Gatekeeper
+        # refuses to run the binary at all. What stripping the attribute
+        # bypasses, and how to install without it, is spelled out in
+        # docs/security.md.
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/monmux"]
+          end
+
+changelog:
+  # `git`, not `github`: the workflow builds before the tag is pushed, and the
+  # GitHub compare API cannot see a tag that exists only locally.
+  use: git
+  sort: asc
+  groups:
+    # A catalog change decides which bytes reach which monitor, so it is read
+    # first. The release header, generated from models.yaml itself, says what
+    # actually changed; this only groups the commits.
+    - title: Catalog
+      regexp: '^.*?(feat|fix)\(catalog\)!?:.+$'
+      order: 0
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Bug fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Other changes
+      order: 999
+  filters:
+    exclude:
+      - "^docs"
+      - "^chore"
+      - "^ci"
+      - "^test"
+      - "^style"
+      - "^Merge branch"
+      - "^Merge pull request"
+
+release:
+  github:
+    owner: leinardi
+    name: monmux
+  draft: false
+  prerelease: auto
+  make_latest: true
+  # A re-run of a failed publish refreshes the release rather than adding a
+  # second copy of every asset. Tags are immutable in this repository, so a
+  # recovery run is the only way back - see docs/release.md.
+  mode: replace
+  replace_existing_artifacts: true
+  target_commitish: "{{ .FullCommit }}"
+  footer: |
+    ## Install
+
+    macOS:
+
+    ```sh
+    brew install --cask leinardi/tap/monmux
+    ```
+
+    Linux: the apt and rpm repositories are set up in the
+    [README](https://github.com/leinardi/monmux#install), or download a tarball below.
+
+    ## Verify a download
+
+    ```sh
+    sha256sum --check --ignore-missing checksums.txt
+    cosign verify-blob checksums.txt \
+      --bundle checksums.txt.sigstore.json \
+      --certificate-identity 'https://github.com/leinardi/monmux/.github/workflows/release.yaml@refs/heads/main' \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com
+    gh attestation verify monmux_{{ trimprefix .Tag "v" }}_linux_amd64.tar.gz \
+      --repo leinardi/monmux \
+      --signer-workflow leinardi/monmux/.github/workflows/release.yaml \
+      --source-ref refs/heads/main
+    ```
+
+    `checksums.txt` covers every artifact here, the packages included, so a package installed
+    from Cloudsmith can be checked against this release.

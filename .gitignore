@@ -6,6 +6,8 @@
 
 # --- Go build outputs ---
 /dist/
+# The release notes the release workflow generates from models.yaml
+/dist-notes/
 /bin/
 /build/
 /coverage.out
