@@ -148,7 +148,7 @@ func (r *Refusal) Render(showSerial bool) string {
 		}
 	}
 
-	lines = append(lines, "", r.explanation())
+	lines = append(lines, "", r.Explanation())
 
 	if r.Detail != "" {
 		lines = append(lines, r.Detail)
@@ -159,8 +159,11 @@ func (r *Refusal) Render(showSerial bool) string {
 	return strings.Join(lines, "\n")
 }
 
-// explanation returns the sentence for this refusal's reason.
-func (r *Refusal) explanation() string {
+// Explanation returns the sentence for this refusal's reason, the same one the
+// rendered message carries. It is exported so a machine-readable rendering can
+// pair the reason code with the sentence a human would have been shown, instead
+// of keeping a second copy of the wording.
+func (r *Refusal) Explanation() string {
 	explanation, ok := explanations[r.Reason]
 	if !ok {
 		return unknownReason

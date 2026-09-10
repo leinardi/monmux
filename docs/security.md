@@ -115,8 +115,9 @@ against one of them is the first hardware run of that mechanism, and belongs wit
 **Risk.** Diagnostic output ends up in bug reports and pastebins, and a monitor's serial number and a Mac's display UUID are
 identifying data.
 
-**Mitigation.** Every output redacts them by default: `info`, `info --json`, `doctor`, refusal messages, and the command printed
-by `--dry-run`, whose EDID hex identifies a physical unit just as precisely as a serial does. `--show-serial` prints them
+**Mitigation.** Every output redacts them by default: `info`, `info --json`, `doctor`, refusal messages, `switch --json` -
+whose `command`, `display.handle` and `refusal.detected` go through the same masking - and the command printed by `--dry-run`,
+whose EDID hex identifies a physical unit just as precisely as a serial does. `--show-serial` prints them
 verbatim, and is the only way to see them. Test fixtures carry synthetic identifiers only, and a test fails the build if any
 other value appears in one.
 

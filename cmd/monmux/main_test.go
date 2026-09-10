@@ -653,6 +653,53 @@ func TestVersionPrintsTheBuildMetadata(t *testing.T) {
 	}
 }
 
+func TestVersionJSONDecodes(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, stderr, code := world.run("version", "--json")
+	if code != exitSent {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	var document struct {
+		Version string `json:"version"`
+		Commit  string `json:"commit"`
+		Date    string `json:"date"`
+	}
+
+	err := json.Unmarshal([]byte(stdout), &document)
+	if err != nil {
+		t.Fatalf("version --json did not decode: %v", err)
+	}
+
+	if document.Version != version || document.Commit != commit || document.Date != date {
+		t.Errorf(
+			"version --json = %+v, want %q/%q/%q",
+			document,
+			version,
+			commit,
+			date,
+		)
+	}
+}
+
+func TestVersionJSONReplacesTheProseOutput(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, _, code := world.run("version", "--json")
+	if code != exitSent {
+		t.Fatalf("exit = %d", code)
+	}
+
+	if strings.Contains(stdout, "monmux ") {
+		t.Errorf("version --json printed prose too:\n%s", stdout)
+	}
+}
+
 func TestCompletionIsAvailable(t *testing.T) {
 	t.Parallel()
 
@@ -809,6 +856,7 @@ func TestCatalogListJSONDecodes(t *testing.T) {
 			Mechanisms   []string `json:"mechanisms"`
 			Inputs       []struct {
 				Name      string `json:"name"`
+				Label     string `json:"label"`
 				Mechanism string `json:"mechanism"`
 				Value     uint16 `json:"value"`
 				ValueHex  string `json:"valueHex"`
@@ -846,9 +894,84 @@ func TestCatalogListJSONDecodes(t *testing.T) {
 	}
 
 	if len(first.Inputs) == 0 || first.Inputs[0].ValueHex != "0xD0" ||
-		first.Inputs[0].Grade != "verified" {
+		first.Inputs[0].Grade != "verified" || first.Inputs[0].Label != "DisplayPort" {
 		t.Errorf("the first entry's inputs decoded as %+v", first.Inputs)
 	}
+}
+
+// The label is the one human string a client may show without inventing a
+// spelling of its own, so it has to be exactly what monmux prints itself.
+func TestCatalogJSONCarriesTheInputLabelMonmuxPrints(t *testing.T) {
+	t.Parallel()
+
+	for _, args := range [][]string{
+		{"catalog", "list", "--json"},
+		{"catalog", "show", "lg/38WR85QC-W", "--json"},
+	} {
+		world := newWorld()
+
+		stdout, _, code := world.run(args...)
+		if code != exitSent {
+			t.Fatalf("%v exit = %d", args, code)
+		}
+
+		counted := 0
+
+		for _, entry := range decodeCatalogInputs(t, args, stdout) {
+			input, err := catalog.ParseInput(entry.Name)
+			if err != nil {
+				t.Fatalf("%v printed the unparsable input name %q", args, entry.Name)
+			}
+
+			if entry.Label != input.Label() {
+				t.Errorf(
+					"%v: %s carries the label %q, want %q",
+					args,
+					entry.Name,
+					entry.Label,
+					input.Label(),
+				)
+			}
+
+			counted++
+		}
+
+		if counted == 0 {
+			t.Errorf("%v recorded no inputs at all", args)
+		}
+	}
+}
+
+// catalogInput is the name and the label of one recorded input, as a client
+// reads them.
+type catalogInput struct {
+	Name  string `json:"name"`
+	Label string `json:"label"`
+}
+
+// decodeCatalogInputs collects every recorded input of every entry in a catalog
+// document, whether it is the listing or one entry.
+func decodeCatalogInputs(t *testing.T, args []string, stdout string) []catalogInput {
+	t.Helper()
+
+	var listing struct {
+		Models []struct {
+			Inputs []catalogInput `json:"inputs"`
+		} `json:"models"`
+		Inputs []catalogInput `json:"inputs"`
+	}
+
+	err := json.Unmarshal([]byte(stdout), &listing)
+	if err != nil {
+		t.Fatalf("%v did not decode: %v\n%s", args, err, stdout)
+	}
+
+	found := listing.Inputs
+	for _, entry := range listing.Models {
+		found = append(found, entry.Inputs...)
+	}
+
+	return found
 }
 
 func TestCatalogShowPrintsAWriteEnabledEntry(t *testing.T) {
@@ -1174,5 +1297,349 @@ func TestTheConfigurationFileCannotArmTheOverride(t *testing.T) {
 			strings.Contains(strings.ToLower(field.Name), "model") {
 			t.Errorf("config.Config carries %q, which could arm the override", field.Name)
 		}
+	}
+}
+
+// --- switch --json ---
+
+// switchDocument is `monmux switch --json` as a client reads it. The pointers
+// are the fields the contract says are present only sometimes, so a test can
+// tell "absent" from "empty".
+type switchDocument struct {
+	Outcome     string `json:"outcome"`
+	WriteStatus string `json:"writeStatus"`
+	Backend     string `json:"backend"`
+	Display     *struct {
+		Label  string `json:"label"`
+		Handle string `json:"handle"`
+	} `json:"display"`
+	Model      string `json:"model"`
+	Input      string `json:"input"`
+	InputLabel string `json:"inputLabel"`
+	Operation  *struct {
+		Mechanism string `json:"mechanism"`
+		Value     uint16 `json:"value"`
+		ValueHex  string `json:"valueHex"`
+	} `json:"operation"`
+	Command string `json:"command"`
+	Assumed bool   `json:"assumed"`
+	Refusal *struct {
+		Reason      string          `json:"reason"`
+		Explanation string          `json:"explanation"`
+		Detail      string          `json:"detail"`
+		Detected    []edid.Identity `json:"detected"`
+	} `json:"refusal"`
+	Error string `json:"error"`
+}
+
+// decodeSwitch reads the one document a --json run prints.
+func decodeSwitch(t *testing.T, stdout string) switchDocument {
+	t.Helper()
+
+	var document switchDocument
+
+	err := json.Unmarshal([]byte(stdout), &document)
+	if err != nil {
+		t.Fatalf("switch --json did not decode: %v\n%s", err, stdout)
+	}
+
+	return document
+}
+
+// pair checks the one thing the whole contract rests on: the outcome, the write
+// status and the exit code always agree.
+func pair(t *testing.T, document *switchDocument, code int, outcome, writeStatus string, want int) {
+	t.Helper()
+
+	if document.Outcome != outcome || document.WriteStatus != writeStatus {
+		t.Errorf(
+			"outcome/writeStatus = %s/%s, want %s/%s",
+			document.Outcome,
+			document.WriteStatus,
+			outcome,
+			writeStatus,
+		)
+	}
+
+	if code != want {
+		t.Errorf("exit = %d, want %d", code, want)
+	}
+}
+
+// checkDecision asserts the fields a document carries once a display, a model
+// and an operation have been settled on. They are the same for a send and for a
+// dry run of the same request.
+func checkDecision(t *testing.T, document *switchDocument) {
+	t.Helper()
+
+	if document.Backend != "ddcutil" || document.Model != "LG 38WR85QC-W" {
+		t.Errorf("backend = %q, model = %q", document.Backend, document.Model)
+	}
+
+	if document.Input != "usb-c" || document.InputLabel != "USB-C" {
+		t.Errorf("input = %q, inputLabel = %q", document.Input, document.InputLabel)
+	}
+
+	if document.Display == nil || document.Display.Label != "card1-DP-1" {
+		t.Errorf("display = %+v", document.Display)
+	}
+
+	if document.Operation == nil || document.Operation.Value != 0xD1 ||
+		document.Operation.ValueHex != "0xD1" ||
+		document.Operation.Mechanism != catalog.MechanismLGAltInput.String() {
+		t.Errorf("operation = %+v", document.Operation)
+	}
+}
+
+func TestSwitchJSONReportsSent(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, stderr, code := world.run("switch", "usb-c", "--json")
+	if stderr != "" {
+		t.Errorf("a sent switch printed to stderr:\n%s", stderr)
+	}
+
+	document := decodeSwitch(t, stdout)
+	pair(t, &document, code, "sent", "sent", exitSent)
+	checkDecision(t, &document)
+
+	if document.Assumed || document.Refusal != nil || document.Error != "" {
+		t.Errorf("a plain send carried %+v", document)
+	}
+
+	if !world.wrote() {
+		t.Error("nothing was sent")
+	}
+}
+
+// The document is the only thing that can tell a dry run from a send: both exit
+// 0, and only one of them promises that nothing was written.
+func TestSwitchJSONDryRunIsNeverReportedAsSent(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, _, code := world.run("switch", "usb-c", "--dry-run", "--json")
+
+	document := decodeSwitch(t, stdout)
+	pair(t, &document, code, "dry-run", "none", exitSent)
+	checkDecision(t, &document)
+
+	if !strings.Contains(document.Command, refusal.RedactionMask) {
+		t.Errorf("the command was not redacted by default: %q", document.Command)
+	}
+
+	if strings.Contains(document.Command, "00ffffffffffff") {
+		t.Errorf("the command leaked the raw EDID: %q", document.Command)
+	}
+
+	if world.wrote() {
+		t.Error("a dry run wrote to a monitor")
+	}
+}
+
+func TestSwitchJSONDryRunPrintsTheCommandVerbatimWhenAsked(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, _, code := world.run("switch", "usb-c", "--dry-run", "--json", "--show-serial")
+
+	document := decodeSwitch(t, stdout)
+	pair(t, &document, code, "dry-run", "none", exitSent)
+
+	want := "/usr/bin/ddcutil --edid 00ffffffffffff001e6dd4770102030401230103 setvcp 0xF4 0xD1 " +
+		"--i2c-source-addr=0x50 --noverify"
+
+	equal(t, "switch --dry-run --json --show-serial command", document.Command, want)
+}
+
+func TestSwitchJSONRefusalCarriesTheReasonAndExitsTwo(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(unknown())
+
+	stdout, stderr, code := world.run("switch", "usb-c", "--json")
+
+	document := decodeSwitch(t, stdout)
+	pair(t, &document, code, "refused", "none", exitRefused)
+
+	// The document is the whole report: the prose refusal must not be printed
+	// a second time next to it.
+	if stderr != "" {
+		t.Errorf("a refused --json switch also printed prose:\n%s", stderr)
+	}
+
+	if document.Refusal == nil {
+		t.Fatalf("the refusal is missing: %s", stdout)
+	}
+
+	if document.Refusal.Reason != refusal.UnknownMonitor.String() {
+		t.Errorf("reason = %q", document.Refusal.Reason)
+	}
+
+	if document.Refusal.Explanation == "" || len(document.Refusal.Detected) != 1 {
+		t.Errorf("refusal = %+v", document.Refusal)
+	}
+
+	// No decision was reached, so nothing may claim one was.
+	if document.Display != nil || document.Operation != nil || document.Model != "" {
+		t.Errorf("a refusal carried a decision: %+v", document)
+	}
+
+	if world.wrote() {
+		t.Error("a refused switch wrote to a monitor")
+	}
+}
+
+func TestSwitchJSONRefusalRedactsSerialsUnlessAsked(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(supported(), supported())
+
+	stdout, _, _ := world.run("switch", "usb-c", "--json")
+	if strings.Contains(stdout, "TESTSERIAL01") {
+		t.Errorf("a refusal document leaked a serial:\n%s", stdout)
+	}
+
+	verbose, _, _ := world.run("switch", "usb-c", "--json", "--show-serial")
+	if !strings.Contains(verbose, "TESTSERIAL01") {
+		t.Errorf("--show-serial did not print the serial:\n%s", verbose)
+	}
+}
+
+// The tool ran, so what reached the monitor is unknown. The document must say
+// exactly that, and must not carry the promise a refusal makes.
+func TestSwitchJSONToolFailureIsUnknown(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+	world.driver.ExecuteErr = errTool
+
+	stdout, stderr, code := world.run("switch", "usb-c", "--json")
+
+	document := decodeSwitch(t, stdout)
+	pair(t, &document, code, "failed", "unknown", exitToolError)
+
+	if stderr != "" {
+		t.Errorf("a failed --json switch also printed prose:\n%s", stderr)
+	}
+
+	if document.Error == "" {
+		t.Error("the failure carries no error text")
+	}
+
+	if document.Refusal != nil || strings.Contains(stdout, "No DDC write was performed") {
+		t.Errorf("a tool failure claimed nothing was written:\n%s", stdout)
+	}
+}
+
+// An argument the handler itself rejects still gets a document: it reached the
+// handler, so the guarantee applies to it.
+func TestSwitchJSONHandlerArgumentErrorsAreFailedDocuments(t *testing.T) {
+	t.Parallel()
+
+	for _, args := range [][]string{
+		{"switch", "scart", "--json"},
+		{"switch", "usb-c", "--json", "--unsafe-model", "nothing-like-a-model"},
+	} {
+		world := newWorld()
+
+		stdout, stderr, code := world.run(args...)
+
+		document := decodeSwitch(t, stdout)
+		pair(t, &document, code, "failed", "unknown", exitToolError)
+
+		if stderr != "" {
+			t.Errorf("%v also printed prose:\n%s", args, stderr)
+		}
+
+		if document.Error == "" {
+			t.Errorf("%v carries no error text", args)
+		}
+
+		// Nothing was identified and nothing was bypassed: naming an entry the
+		// catalog does not carry is not the same as having assumed one.
+		if document.Assumed {
+			t.Errorf("%v claims identification was bypassed", args)
+		}
+
+		if world.wrote() {
+			t.Errorf("%v wrote to a monitor", args)
+		}
+	}
+}
+
+// The guarantee stops where the handler starts. Cobra rejects a malformed
+// command line before --json has been parsed, so those stay prose on stderr and
+// a client reads "exit 1 with nothing parsable on stdout" as a failure.
+func TestSwitchJSONDoesNotCoverCobraErrors(t *testing.T) {
+	t.Parallel()
+
+	for _, args := range [][]string{
+		{"switch", "--json"},
+		{"switch", "usb-c", "hdmi", "--json"},
+		{"switch", "usb-c", "--json", "--nonesuch"},
+	} {
+		world := newWorld()
+
+		stdout, stderr, code := world.run(args...)
+		if code != exitToolError {
+			t.Errorf("%v exit = %d, want %d", args, code, exitToolError)
+		}
+
+		if stdout != "" {
+			t.Errorf("%v printed to stdout:\n%s", args, stdout)
+		}
+
+		if stderr == "" {
+			t.Errorf("%v printed no error", args)
+		}
+	}
+}
+
+// The unknown write status and the bypass together are the worst case: an
+// unverified value may have reached a monitor nobody identified. The document
+// has to say both.
+func TestSwitchJSONSaysBypassedWhenTheToolThenFailed(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(strange())
+	world.driver.ExecuteErr = errTool
+
+	stdout, _, code := world.run("switch", "hdmi", "--json", "--unsafe-model", "aoc q27p1b")
+
+	document := decodeSwitch(t, stdout)
+	pair(t, &document, code, "failed", "unknown", exitToolError)
+
+	if !document.Assumed {
+		t.Errorf("a bypassed write of unknown status does not say it was bypassed: %s", stdout)
+	}
+}
+
+// The one field that says identification was bypassed has to be true exactly
+// when it was.
+func TestSwitchJSONSaysWhenIdentificationWasBypassed(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(strange())
+
+	stdout, stderr, code := world.run(
+		"switch", "hdmi", "--dry-run", "--json", "--unsafe-model", "aoc q27p1b",
+	)
+
+	document := decodeSwitch(t, stdout)
+	pair(t, &document, code, "dry-run", "none", exitSent)
+
+	if !document.Assumed {
+		t.Errorf("a bypassed switch does not say so: %+v", document)
+	}
+
+	// The warning is the guard on this path, and it belongs on stderr whatever
+	// the output format is.
+	if !strings.Contains(stderr, "WARNING: identification bypassed") {
+		t.Errorf("a --json run printed no warning:\n%s", stderr)
 	}
 }

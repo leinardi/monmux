@@ -24,6 +24,10 @@ load-bearing: monmux never prints it about a run that reached the tool.
 
 Every refusal names a reason. They are listed here in roughly the order the steps of a switch happen in.
 
+With `--json`, the same reason is the `refusal.reason` field of the document `monmux switch --json` prints, spelled exactly as
+the section headings below are — so a script can look a refusal up here without parsing any prose. See
+[json.md](json.md).
+
 ### `backend-unavailable`
 
 monmux has no backend for this operating system. It supports Linux (`ddcutil`) and macOS (`m1ddc`); anywhere else it refuses

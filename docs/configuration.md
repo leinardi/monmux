@@ -61,14 +61,14 @@ This is a trust boundary, not a mitigated threat — see [security.md](security.
 
 ## Flags
 
-| Flag                 | Command                                | Effect                                                                        |
-| -------------------- | -------------------------------------- | ----------------------------------------------------------------------------- |
-| `--serial <s>`       | `switch`                               | Pin this invocation to one unit, with the semantics above.                    |
-| `--dry-run`          | `switch`                               | Print the exact command that would run, and run nothing.                      |
-| `--unsafe-model <m>` | `switch`                               | Treat the display as this catalog entry instead of identifying it. See below. |
-| `--verbose`          | `catalog list`                         | Add the value and the evidence grade of every recorded input.                 |
-| `--json`             | `info`, `catalog list`, `catalog show` | Print the report or the catalog as JSON.                                      |
-| `--show-serial`      | all                                    | Print serials, display UUIDs and raw EDID hex instead of redacting them.      |
+| Flag                 | Command                                                     | Effect                                                                        |
+| -------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `--serial <s>`       | `switch`                                                    | Pin this invocation to one unit, with the semantics above.                    |
+| `--dry-run`          | `switch`                                                    | Print the exact command that would run, and run nothing.                      |
+| `--unsafe-model <m>` | `switch`                                                    | Treat the display as this catalog entry instead of identifying it. See below. |
+| `--verbose`          | `catalog list`                                              | Add the value and the evidence grade of every recorded input.                 |
+| `--json`             | `switch`, `info`, `catalog list`, `catalog show`, `version` | Print the report as JSON. See [json.md](json.md).                             |
+| `--show-serial`      | all                                                         | Print serials, display UUIDs and raw EDID hex instead of redacting them.      |
 
 ## `--unsafe-model`, and why it has no key
 

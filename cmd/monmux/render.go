@@ -17,6 +17,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -327,4 +328,186 @@ func kindNames() []string {
 	}
 
 	return names
+}
+
+// The switch outcomes, as `monmux switch --json` names them. They are part of
+// the output contract, and each one is paired with exactly one write status.
+const (
+	// outcomeSent means the command was sent. The switch itself is not
+	// independently confirmed: nothing here reads back what the monitor does.
+	outcomeSent = "sent"
+	// outcomeDryRun means the command was built and not executed.
+	outcomeDryRun = "dry-run"
+	// outcomeRefused means monmux declined, and nothing was written.
+	outcomeRefused = "refused"
+	// outcomeFailed means the request could not be made, or the tool ran and
+	// failed.
+	outcomeFailed = "failed"
+)
+
+// The write statuses. Only these three exist, and "none" is a promise: it is
+// made for a refusal and for a dry run, the two cases where monmux knows
+// nothing left the process.
+const (
+	writeStatusSent    = "sent"
+	writeStatusNone    = "none"
+	writeStatusUnknown = "unknown"
+)
+
+// degradedOutcome is the error text for a switch that reported neither a send
+// nor a dry run. It cannot happen through app.Switch; if it ever does, the
+// document says the write status is unknown rather than promising anything.
+const degradedOutcome = "the switch reported neither a send nor a dry run"
+
+// The JSON shapes below are `monmux switch --json`'s output contract, kept
+// separate from the internal types on purpose: a field renamed inside monmux
+// must not silently rename itself in somebody's script.
+type (
+	// jsonSwitch is the whole of one `monmux switch --json` run. Exactly one
+	// document is printed for every run that reaches the handler, whatever the
+	// outcome and whatever the exit code.
+	jsonSwitch struct {
+		// Outcome and WriteStatus are always present, and always paired:
+		// sent/sent, dry-run/none, refused/none, failed/unknown.
+		Outcome     string `json:"outcome"`
+		WriteStatus string `json:"writeStatus"`
+		// Backend is the backend that handled the request, absent when the
+		// failure happened before one could be opened.
+		Backend string `json:"backend,omitempty"`
+		// Display, Model, Input, InputLabel and Operation are present only when
+		// a decision was reached, which is to say for sent and dry-run.
+		Display    *jsonSwitchDisplay `json:"display,omitempty"`
+		Model      string             `json:"model,omitempty"`
+		Input      string             `json:"input,omitempty"`
+		InputLabel string             `json:"inputLabel,omitempty"`
+		Operation  *jsonOperation     `json:"operation,omitempty"`
+		// Command is the invocation, redacted unless --show-serial.
+		Command string `json:"command,omitempty"`
+		// Assumed reports that identification was bypassed with --unsafe-model.
+		Assumed bool `json:"assumed"`
+		// Refusal is present only when Outcome is refused.
+		Refusal *jsonRefusal `json:"refusal,omitempty"`
+		// Error is present only when Outcome is failed.
+		Error string `json:"error,omitempty"`
+	}
+
+	// jsonSwitchDisplay is the display that was written to, or would have been.
+	jsonSwitchDisplay struct {
+		Label string `json:"label"`
+		// Handle is masked when it is private data, unless --show-serial.
+		Handle string `json:"handle"`
+	}
+
+	// jsonOperation is the mechanism and the value the catalog recorded.
+	jsonOperation struct {
+		Mechanism string `json:"mechanism"`
+		// Value is the recorded value; ValueHex is the same value as the
+		// documentation writes it.
+		Value    uint16 `json:"value"`
+		ValueHex string `json:"valueHex"`
+	}
+
+	// jsonRefusal is why monmux declined, with the identities it saw.
+	jsonRefusal struct {
+		Reason      string `json:"reason"`
+		Explanation string `json:"explanation"`
+		Detail      string `json:"detail"`
+		// Detected are the identities the decision was made about, redacted
+		// unless --show-serial.
+		Detected []edid.Identity `json:"detected"`
+	}
+)
+
+// asJSONSwitch converts one switch into the output contract.
+//
+// The pair it writes is the whole point of the document: the exit code cannot
+// tell a dry run from a real send, and this can, so the pair is derived from
+// what the outcome positively reports rather than from the absence of an error.
+// A state app.Switch cannot produce degrades to failed/unknown, because
+// "unknown" is the one write status that promises nothing.
+func asJSONSwitch(
+	outcome *app.Outcome,
+	backendName string,
+	err error,
+	showSerial bool,
+) jsonSwitch {
+	document := jsonSwitch{
+		Backend: backendName,
+		// Assumed is what happened, not what was asked for: a run that failed
+		// before the policy chose a display bypassed no identification, whatever
+		// --unsafe-model was set to.
+		Assumed: outcome.Assumed,
+		Outcome: outcomeFailed,
+		// A failure that reached here may have written: only a refusal, and a
+		// dry run that never executed anything, may say otherwise.
+		WriteStatus: writeStatusUnknown,
+	}
+
+	declined, refused := errors.AsType[*refusal.Refusal](err)
+
+	switch {
+	case err != nil && refused:
+		document.Outcome = outcomeRefused
+		document.WriteStatus = writeStatusNone
+		document.Refusal = asJSONRefusal(declined, showSerial)
+	case err != nil:
+		document.Error = err.Error()
+	case outcome.Sent:
+		document.Outcome = outcomeSent
+		document.WriteStatus = writeStatusSent
+
+		fillJSONDecision(&document, outcome, showSerial)
+	case outcome.DryRun:
+		document.Outcome = outcomeDryRun
+		document.WriteStatus = writeStatusNone
+
+		fillJSONDecision(&document, outcome, showSerial)
+	default:
+		// Unreachable through app.Switch, which reports one or the other. The
+		// document still has to be well formed, and a failed one carries its
+		// text in error.
+		document.Error = degradedOutcome
+	}
+
+	return document
+}
+
+// fillJSONDecision adds the fields that exist only once a display, a model and
+// an operation have been settled on.
+func fillJSONDecision(document *jsonSwitch, outcome *app.Outcome, showSerial bool) {
+	document.Display = &jsonSwitchDisplay{
+		Label:  outcome.Display.Label,
+		Handle: handle(&outcome.Display, showSerial),
+	}
+	document.Model = outcome.Model.FullName()
+	document.Input = outcome.Input.String()
+	document.InputLabel = outcome.Input.Label()
+	document.Operation = &jsonOperation{
+		Mechanism: outcome.Operation.Mechanism().String(),
+		Value:     outcome.Operation.Value(),
+		ValueHex:  fmt.Sprintf("0x%02X", outcome.Operation.Value()),
+	}
+	document.Command = outcome.Command.Render(showSerial)
+}
+
+// asJSONRefusal converts a refusal into the output contract, carrying the same
+// sentence the rendered message would have shown and redacting the identities
+// unless the user asked for them.
+func asJSONRefusal(declined *refusal.Refusal, showSerial bool) *jsonRefusal {
+	document := &jsonRefusal{
+		Reason:      declined.Reason.String(),
+		Explanation: declined.Explanation(),
+		Detail:      declined.Detail,
+		Detected:    make([]edid.Identity, 0, len(declined.Detected)),
+	}
+
+	for _, identity := range declined.Detected {
+		if !showSerial {
+			identity = identity.Redacted()
+		}
+
+		document.Detected = append(document.Detected, identity)
+	}
+
+	return document
 }

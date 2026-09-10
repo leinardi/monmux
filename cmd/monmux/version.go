@@ -35,13 +35,23 @@ var (
 // newVersionCmd returns the `version` subcommand, which reports the build metadata
 // baked in by GO_LDFLAGS.
 func newVersionCmd() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+
+	command := &cobra.Command{
 		Use:   "version",
 		Short: "Print the monmux version and build metadata",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(command *cobra.Command, _ []string) error {
+			if asJSON {
+				return writeJSON(command.OutOrStdout(), jsonVersion{
+					Version: version,
+					Commit:  commit,
+					Date:    date,
+				}, "version")
+			}
+
 			_, err := fmt.Fprintf(
-				cmd.OutOrStdout(),
+				command.OutOrStdout(),
 				"monmux %s (commit %s, built %s)\n",
 				version,
 				commit,
@@ -54,4 +64,21 @@ func newVersionCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	command.Flags().BoolVar(&asJSON, "json", false, "print the version as JSON")
+
+	return command
+}
+
+// jsonVersion is the whole of `monmux version --json`. It is the output
+// contract, kept separate from the build variables on purpose: a variable
+// renamed inside monmux must not silently rename itself in somebody's script.
+//
+// Every field is a plain string, whatever the build put there: an unreleased
+// build reports "dev", "none" and "unknown", so a client can tell a development
+// binary from a released one without the document changing shape.
+type jsonVersion struct {
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+	Date    string `json:"date"`
 }

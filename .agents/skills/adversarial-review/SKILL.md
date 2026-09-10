@@ -77,7 +77,7 @@ changed paths:
 | `internal/edid` | `docs/architecture.md`, `docs/security.md` | parser bounds, no raw EDID bytes retained, malformed input handling |
 | `internal/refusal` | `docs/troubleshooting.md` | every reason has a sentence and a documented fix, message ends with the footer |
 | `internal/config`, `cmd/monmux` flags | `docs/configuration.md` | three keys only, unknown keys are an error, flag-over-file precedence |
-| `cmd/monmux` output, exit codes | `README.md`, `docs/troubleshooting.md` | redaction by default, exit-code contract, read-only commands worded as diagnostics |
+| `cmd/monmux` output, exit codes | `README.md`, `docs/troubleshooting.md`, `docs/json.md` | redaction by default, exit-code contract, read-only commands worded as diagnostics, JSON fields and the outcome/writeStatus pair |
 | tests or test infrastructure | `docs/testing.md` | no-exec enforcement, fake runner only, synthetic serials |
 | release, packaging, CI | `docs/release.md`, `.github/`, `.mk/` | documented-but-unimplemented versus accidentally changed |
 
@@ -194,7 +194,7 @@ Do not skim for style. Run each pass with "how can this fail?" framing:
   `select_other.go` wrong?
 - **Contract drift:** compare the implementation with `README.md`, CLI help,
   `docs/architecture.md`, `docs/configuration.md`, `docs/troubleshooting.md`,
-  `docs/compatibility.md`, and the commit or PR intent. Flag any undocumented
+  `docs/compatibility.md`, `docs/json.md`, and the commit or PR intent. Flag any undocumented
   flag, output, refusal reason, config key, exit code, or catalog change.
 - **Tests:** require behaviour-focused regression coverage for changed
   behaviour. Reject tests that pass against the old code, assert on the fake's
