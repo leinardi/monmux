@@ -215,6 +215,15 @@ Only exit `2` carries the promise that nothing was written.
 - [Contributing](CONTRIBUTING.md) — prerequisites, workflow, and the catalog evidence rule.
 - [AGENTS.md](AGENTS.md) — repository conventions, including the rule that no AI agent may write to a monitor.
 
+## How this was built
+
+monmux is written largely with agentic AI coding tools, under human review: every change is read before it lands, and the claims
+that matter are checked rather than taken on trust. The catalog is where that matters most, and it is the part an agent has the
+least say in — a value becomes writable only after a human ran it against the monitor in question and recorded what happened, per
+[Contributing](CONTRIBUTING.md) and [Adding a monitor](docs/adding-a-monitor.md). No AI agent may write to a monitor at all, during
+development or review; [AGENTS.md](AGENTS.md) states that rule and [Testing](docs/testing.md) describes how the test suite enforces
+it.
+
 ## Licence
 
 Apache License 2.0 — see [LICENSE](LICENSE).
