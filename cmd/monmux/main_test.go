@@ -653,6 +653,53 @@ func TestVersionPrintsTheBuildMetadata(t *testing.T) {
 	}
 }
 
+func TestVersionJSONDecodes(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, stderr, code := world.run("version", "--json")
+	if code != exitSent {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	var document struct {
+		Version string `json:"version"`
+		Commit  string `json:"commit"`
+		Date    string `json:"date"`
+	}
+
+	err := json.Unmarshal([]byte(stdout), &document)
+	if err != nil {
+		t.Fatalf("version --json did not decode: %v", err)
+	}
+
+	if document.Version != version || document.Commit != commit || document.Date != date {
+		t.Errorf(
+			"version --json = %+v, want %q/%q/%q",
+			document,
+			version,
+			commit,
+			date,
+		)
+	}
+}
+
+func TestVersionJSONReplacesTheProseOutput(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld()
+
+	stdout, _, code := world.run("version", "--json")
+	if code != exitSent {
+		t.Fatalf("exit = %d", code)
+	}
+
+	if strings.Contains(stdout, "monmux ") {
+		t.Errorf("version --json printed prose too:\n%s", stdout)
+	}
+}
+
 func TestCompletionIsAvailable(t *testing.T) {
 	t.Parallel()
 

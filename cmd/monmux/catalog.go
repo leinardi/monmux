@@ -17,7 +17,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -234,7 +233,7 @@ func listCatalog(out io.Writer, filter string, verbose, asJSON bool) error {
 	found := filterModels(catalog.Models(), filter)
 
 	if asJSON {
-		return encodeJSON(out, asJSONCatalog(found))
+		return writeJSON(out, asJSONCatalog(found), "catalog")
 	}
 
 	return renderCatalogList(out, found, verbose)
@@ -251,7 +250,7 @@ func showCatalog(out io.Writer, name string, asJSON bool) error {
 	}
 
 	if asJSON {
-		return encodeJSON(out, asJSONCatalogModel(&entry))
+		return writeJSON(out, asJSONCatalogModel(&entry), "catalog entry")
 	}
 
 	return renderCatalogModel(out, &entry)
@@ -620,22 +619,4 @@ func asJSONCatalogModel(entry *catalog.Model) jsonCatalogModel {
 	}
 
 	return document
-}
-
-// encodeJSON prints a document.
-//
-// HTML escaping is turned off for the same reason `monmux info --json` turns it
-// off: this output goes to a terminal or to jq, and escaping mangles the very
-// strings a reader is looking at.
-func encodeJSON(out io.Writer, document any) error {
-	encoder := json.NewEncoder(out)
-	encoder.SetEscapeHTML(false)
-	encoder.SetIndent("", "  ")
-
-	err := encoder.Encode(document)
-	if err != nil {
-		return fmt.Errorf("writing the catalog as JSON: %w", err)
-	}
-
-	return nil
 }

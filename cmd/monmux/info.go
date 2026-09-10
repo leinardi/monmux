@@ -67,7 +67,7 @@ func (c *cli) info(command *cobra.Command, asJSON bool) error {
 	report, infoErr := app.Info(command.Context(), driver)
 
 	if asJSON {
-		err = writeJSON(command.OutOrStdout(), &report, c.showSerial)
+		err = writeJSON(command.OutOrStdout(), asJSONReport(&report, c.showSerial), "report")
 	} else {
 		err = renderReport(command.OutOrStdout(), &report, c.showSerial)
 	}
@@ -116,20 +116,21 @@ type (
 	}
 )
 
-// writeJSON prints the report as JSON.
+// writeJSON prints one output document as JSON. The subject names what is being
+// written, so a failure says which command's output could not be produced.
 //
 // HTML escaping is turned off: this output goes to a terminal or to jq, and
 // nothing here is going into a web page. Left on, it would turn the redaction
 // mask into "\u003credacted…\u003e", which is unreadable for the one field a
 // user is most likely to be looking at.
-func writeJSON(out io.Writer, report *app.Report, showSerial bool) error {
+func writeJSON(out io.Writer, document any, subject string) error {
 	encoder := json.NewEncoder(out)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 
-	err := encoder.Encode(asJSONReport(report, showSerial))
+	err := encoder.Encode(document)
 	if err != nil {
-		return fmt.Errorf("writing the report as JSON: %w", err)
+		return fmt.Errorf("writing the %s as JSON: %w", subject, err)
 	}
 
 	return nil
