@@ -40,12 +40,18 @@ assignees: []
 
 ## 4. Environment (if relevant)
 
-<!-- Fill in what makes sense for your question, or remove fields that don't apply. -->
+<!--
+Fill in what makes sense for your question, or remove fields that don't apply.
+`monmux info` and `monmux doctor` redact serial numbers, raw EDID hex and macOS
+display UUIDs by default, so they are safe to paste. Do not paste
+`--show-serial` output.
+-->
 
-* Project version / commit SHA: `?`
+* `monmux version`: `?`
 * Operating system and version: `?`
-* Runtime and version (e.g., Go): `?`
-* Any relevant tooling / dependencies and versions: `?`
+* Linux: `ddcutil --version`: `?` — macOS: `brew info m1ddc` (the installed version): `?`
+* Installed from (Homebrew cask, apt, rpm, tarball, `go install`, source): `?`
+* `monmux doctor` output, if it is relevant: `?`
 
 ---
 

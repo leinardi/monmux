@@ -20,4 +20,8 @@ deliberately never does are documented in [docs/security.md](docs/security.md). 
 
 ## Supported versions
 
-monmux has not had a release yet. Until it does, only the `main` branch is supported.
+The latest release only. A fix ships as a new release; there are no patch releases for older versions, and no version is
+supported once a newer one exists. `main` is development, not a supported version.
+
+If you are running monmux from a distribution package or a Homebrew cask, that is the latest release as long as
+`monmux version` matches the [latest tag](https://github.com/leinardi/monmux/releases/latest).

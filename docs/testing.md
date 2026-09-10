@@ -115,8 +115,8 @@ nowhere. v2.12.2, built with go1.26.5, does exactly that against a Go 1.27 toolc
 
 If the target fails inside `GOROOT` rather than inside monmux, your linter is older than your toolchain: update
 `.pre-commit-config.yaml`, or skip the target for now. **Never silence that typecheck error with a path exclusion.** It does not
-restore the analysis, it only hides the abort, and the run then goes green having checked nothing. Running the linter natively
-on each OS in CI is still the durable answer — [release.md](release.md).
+restore the analysis, it only hides the abort, and the run then goes green having checked nothing. CI runs the linter natively
+on both OSes for exactly this reason — [release.md](release.md).
 
 ## Fixtures
 

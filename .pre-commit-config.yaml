@@ -1,3 +1,9 @@
+# commit-msg as well as pre-commit, so that `make pre-commit-install` installs
+# the conventional-commit check too: the release version is derived from the
+# commit types, so a message that cannot be classified is caught at commit time
+# rather than at release time.
+default_install_hook_types: [pre-commit, commit-msg]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -92,6 +98,15 @@ repos:
         name: "yamllint (parsable output)"
         args: ["--format", "parsable"]
         stages: [manual]
+  # The release version is derived from the commit types since the last tag, so
+  # a message nobody can classify is a release nobody can version. No
+  # --force-scope, unlike the sibling repositories: this history writes `docs:`
+  # and `build:` without one, and CONTRIBUTING.md allows that.
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
   - repo: https://github.com/golangci/golangci-lint
     rev: v2.13.2
     hooks:

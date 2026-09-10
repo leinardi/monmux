@@ -1,0 +1,50 @@
+# The catalog as an earlier release recorded it. Synthetic throughout: no
+# vendor here exists, and nothing in this file is evidence of anything.
+models:
+  - name: MX100
+    vendor: Testco
+    identities:
+      - manufacturer: TST
+        product_code: 0x1000
+    write_enabled: true
+    inputs:
+      dp:
+        mechanism: lg-alt-input
+        value: 0xD0
+        evidence:
+          grade: verified
+          date: "2026-01-02"
+          tool: "ddcutil 2.2.5"
+          note: "switched on the unit"
+    sources:
+      - https://example.invalid/mx100
+  - name: RX200
+    vendor: Testco
+    identities: []
+    write_enabled: false
+    inputs:
+      hdmi:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: reported
+          by: "somebody"
+          tool: "ddcutil"
+          url: https://example.invalid/rx200
+    sources:
+      - https://example.invalid/rx200
+  - name: ZZ900
+    vendor: Otherco
+    identities: []
+    write_enabled: false
+    inputs:
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: quoted
+          by: "somebody else"
+          tool: "ddcutil"
+          url: https://example.invalid/zz900
+    sources:
+      - https://example.invalid/zz900

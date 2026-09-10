@@ -1,0 +1,320 @@
+name: CI
+
+# No job here runs monmux against hardware. There is no monitor in CI, and the
+# rule that no automation writes to a monitor is not suspended because the
+# automation is called a workflow - AGENTS.md, docs/testing.md. The test suite
+# refuses to start a process by construction, so a runner needs neither ddcutil
+# nor m1ddc installed.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  # The same pin the release workflow uses, so `goreleaser check` here validates
+  # against the binary that will actually build the release.
+  GORELEASER_VERSION: v2.18.1
+
+concurrency:
+  group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # Both OSes, because a backend's build-tagged tests only ever compile on
+    # their own. The macOS runner needs no m1ddc: nothing here executes it.
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run the test suite
+        run: make go-test
+
+  cross:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Read the golangci-lint version from .pre-commit-config.yaml
+        id: linter
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -A1 'repo: https://github.com/golangci/golangci-lint$' .pre-commit-config.yaml \
+            | grep 'rev:' \
+            | sed 's/.*rev:[[:space:]]*//')
+          if [ -z "$VERSION" ]; then
+            echo "No golangci-lint rev found in .pre-commit-config.yaml" >&2
+            exit 1
+          fi
+          echo "Using golangci-lint $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ steps.linter.outputs.version }}
+          install-only: true
+
+      - name: Compile-check both OS backends
+        run: make go-build-cross
+
+      - name: Vet both OS backends
+        run: make go-vet-cross
+
+      # If this fails inside GOROOT rather than inside this repository, the
+      # linter is older than the toolchain - .mk/cross.mk says what to do.
+      - name: Lint both OS backends
+        run: make go-lint-cross
+
+  lint-macos:
+    # The only native look at internal/backend/m1ddc, which is behind
+    # //go:build darwin and therefore invisible to a linter running on Linux.
+    # `cross` narrows that gap from the Linux side; this closes it.
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Read the golangci-lint version from .pre-commit-config.yaml
+        id: linter
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -A1 'repo: https://github.com/golangci/golangci-lint$' .pre-commit-config.yaml \
+            | grep 'rev:' \
+            | sed 's/.*rev:[[:space:]]*//')
+          if [ -z "$VERSION" ]; then
+            echo "No golangci-lint rev found in .pre-commit-config.yaml" >&2
+            exit 1
+          fi
+          echo "Using golangci-lint $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Lint the macOS backend natively
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ steps.linter.outputs.version }}
+          args: ./...
+
+  govulncheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Scan the module for known vulnerabilities
+        uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
+        with:
+          go-version-file: go.mod
+          go-package: ./...
+
+  release-config:
+    # The release configuration is checked on every run rather than only when
+    # .goreleaser.yaml changes: the build ids it names live in the Makefile and
+    # in cmd/, so a change elsewhere can invalidate it, and the check costs
+    # seconds.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check .goreleaser.yaml
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: ${{ env.GORELEASER_VERSION }}
+          args: check
+
+  actionlint:
+    # Reports inline PR review comments over a diff range; a push or a manual
+    # dispatch has neither a pull request to comment on nor a base ref to diff
+    # against.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Run actionlint via pre-commit + reviewdog
+        uses: leinardi/gha-pre-commit-reviewdog-actions/actionlint@969e0363ec9fc1de66f65ca3d37c8dd871ac3c19 # v1.0.0
+        with:
+          from-ref: ${{ github.event.pull_request.base.sha }}
+          to-ref: ${{ github.event.pull_request.head.sha }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  pre-commit-hooks:
+    # Reports inline PR review comments over a diff range; a push or a manual
+    # dispatch has neither a pull request to comment on nor a base ref to diff
+    # against.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # go-generate-catalog and the golangci-lint hooks run the Go toolchain,
+      # and it has to be the one go.mod asks for. The composite action installs
+      # pre-commit but no Go.
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # go-test-repo-mod is deliberately absent: `test` above is the real thing
+      # and runs on both OSes. go-generate-catalog is deliberately present: a
+      # pull request that edits models.yaml without regenerating what is built
+      # from it gets the diff posted as a review comment.
+      - name: Run pre-commit hooks + reviewdog diff
+        uses: leinardi/gha-pre-commit-reviewdog-actions/pre-commit-hooks@969e0363ec9fc1de66f65ca3d37c8dd871ac3c19 # v1.0.0
+        with:
+          from-ref: ${{ github.event.pull_request.base.sha }}
+          to-ref: ${{ github.event.pull_request.head.sha }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          hooks: |
+            check-merge-conflict
+            end-of-file-fixer
+            trailing-whitespace
+            check-yaml
+            check-json
+            check-toml
+            check-added-large-files
+            checkmake
+            go-generate-catalog
+            prettier-yaml
+            golangci-lint-config-verify
+            golangci-lint-fmt
+            golangci-lint-full
+
+  markdownlint:
+    # Reports inline PR review comments over a diff range; a push or a manual
+    # dispatch has neither a pull request to comment on nor a base ref to diff
+    # against.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Run markdownlint-cli2 via pre-commit + reviewdog
+        uses: leinardi/gha-pre-commit-reviewdog-actions/markdownlint-cli2@969e0363ec9fc1de66f65ca3d37c8dd871ac3c19 # v1.0.0
+        with:
+          from-ref: ${{ github.event.pull_request.base.sha }}
+          to-ref: ${{ github.event.pull_request.head.sha }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  shellcheck:
+    # Reports inline PR review comments over a diff range; a push or a manual
+    # dispatch has neither a pull request to comment on nor a base ref to diff
+    # against.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Run shellcheck via pre-commit + reviewdog
+        uses: leinardi/gha-pre-commit-reviewdog-actions/shellcheck@969e0363ec9fc1de66f65ca3d37c8dd871ac3c19 # v1.0.0
+        with:
+          from-ref: ${{ github.event.pull_request.base.sha }}
+          to-ref: ${{ github.event.pull_request.head.sha }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  yamllint:
+    # Reports inline PR review comments over a diff range; a push or a manual
+    # dispatch has neither a pull request to comment on nor a base ref to diff
+    # against.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Run yamllint via pre-commit + reviewdog
+        uses: leinardi/gha-pre-commit-reviewdog-actions/yamllint@969e0363ec9fc1de66f65ca3d37c8dd871ac3c19 # v1.0.0
+        with:
+          from-ref: ${{ github.event.pull_request.base.sha }}
+          to-ref: ${{ github.event.pull_request.head.sha }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  conventional-commits:
+    # The release version is derived from the commit types since the last tag,
+    # so a commit nobody can classify is a release nobody can version.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Validate the commit messages
+        uses: leinardi/gha-pre-commit-reviewdog-actions/conventional-commits@969e0363ec9fc1de66f65ca3d37c8dd871ac3c19 # v1.0.0
+        with:
+          from-ref: ${{ github.event.pull_request.base.sha }}
+          to-ref: ${{ github.event.pull_request.head.sha }}

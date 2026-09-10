@@ -10,8 +10,9 @@ absolute — read [The rule](#the-rule-no-ai-agent-writes-to-a-monitor) first.
 - For running monmux against real hardware: `ddcutil` 2.2+ on Linux, or `m1ddc` on macOS. Neither is needed to build or test.
 
 Development works from either operating system. `make go-build-cross` and `make go-vet-cross` compile-check and vet both OS
-backends whichever host you are on, and everything that is not a backend is tag-free and tested on both. Note that the linter
-only ever sees your host's backend — see [docs/testing.md](docs/testing.md).
+backends whichever host you are on, and everything that is not a backend is tag-free and tested on both. Note that your local
+linter only ever sees your host's backend — see [docs/testing.md](docs/testing.md). CI closes that gap: it runs the tests on a
+Linux and a macOS runner, and lints both backends natively, one job per OS — [docs/release.md](docs/release.md).
 
 ## The rule: no AI agent writes to a monitor
 
@@ -102,7 +103,12 @@ Go style is enforced by `.golangci.yaml` (golangci-lint v2, `default: all`). The
 
 - Branch names: `feat/<short-description>`, `fix/<short-description>`, `chore/<short-description>`.
 - Commit messages start with a conventional-commit type — `feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:` — followed by
-  a short imperative subject. If the change affects what reaches a monitor, say so in the body, explicitly.
+  a short imperative subject. A scope is optional. If the change affects what reaches a monitor, say so in the body, explicitly.
+  The `conventional-pre-commit` hook checks this at commit time (`make pre-commit-install` wires up the `commit-msg` stage), and
+  a CI job checks every commit in a pull request.
+- **Commit types decide the next version.** The release workflow derives it from the commits since the last tag: `feat` is a
+  minor, `fix` is a patch, `!` or a `BREAKING CHANGE:` footer is a major. A release that enables a model or an input is never
+  less than a minor, whatever the commits say — [docs/release.md](docs/release.md).
 - Keep pull requests focused: one logical change each.
 - All checks must pass before merge.
 

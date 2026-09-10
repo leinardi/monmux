@@ -1,0 +1,525 @@
+name: Release
+
+# Fully automatic from one dispatch: it resolves the version, writes the catalog
+# section of the release notes, tags, builds, signs, publishes the GitHub
+# release, pushes the Homebrew cask and uploads the packages to Cloudsmith.
+#
+# No step runs monmux and no step touches a monitor. The order of the release
+# job is deliberate: everything that can fail does so before the tag exists,
+# because tags in this repository are immutable and cannot be cleaned up after a
+# failure. docs/release.md is the prose version of that, with the recovery
+# procedure.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.1.0 or v0.1.0). Leave empty to derive it from the Conventional Commits since the last tag."
+        required: false
+      dry_run:
+        description: "Resolve, build and sign everything, print the release notes, and stop before the tag is pushed."
+        type: boolean
+        default: false
+
+# One release at a time, and never cancelled. Two dispatches in flight together
+# would each check "higher than every released version" against the same latest
+# tag, both pass, and then publish in whatever order they happened to finish - a
+# lower version landing last would take `latest` with it. A second dispatch waits
+# for the first instead of racing it, and a run that has started is never killed
+# part-way through publishing.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Pinned by hand: dependabot does not track a `go install` argument. Bump them
+  # together with the rest of the toolchain.
+  SVU_VERSION: v3.4.1
+  # Exact, not "~> v2": a recovery re-run of a tagged commit has to rebuild the
+  # same artifacts, and a goreleaser released in the meantime could change them.
+  GORELEASER_VERSION: v2.18.1
+
+jobs:
+  # workflow_dispatch lets the caller pick any branch, and the release job holds
+  # contents: write, an OIDC identity and the tap token. Dispatched from a side
+  # branch it would tag that branch's tree, publish it as a release and push a
+  # cask for it. This fails rather than skips, so such a run is red and not a
+  # green no-op, and every other job waits on it.
+  #
+  # The ruleset cannot express this: tag protection stops a tag moving, not a tag
+  # being created from the wrong commit. The second line of defence is the
+  # `release` environment, whose deployment branch rule is configured by hand -
+  # docs/release.md.
+  guard:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Refuse to release anything but main
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "A release runs from main only (got $REF). Nothing was tagged or published." >&2
+            exit 1
+          fi
+
+  # The verify jobs are repeated from ci.yaml rather than referenced, so that a
+  # release never depends on which pull request last ran CI.
+  test:
+    needs: guard
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run the test suite
+        run: make go-test
+
+  cross:
+    needs: guard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Read the golangci-lint version from .pre-commit-config.yaml
+        id: linter
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -A1 'repo: https://github.com/golangci/golangci-lint$' .pre-commit-config.yaml \
+            | grep 'rev:' \
+            | sed 's/.*rev:[[:space:]]*//')
+          if [ -z "$VERSION" ]; then
+            echo "No golangci-lint rev found in .pre-commit-config.yaml" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ steps.linter.outputs.version }}
+          install-only: true
+
+      - name: Compile-check both OS backends
+        run: make go-build-cross
+
+      - name: Vet both OS backends
+        run: make go-vet-cross
+
+      - name: Lint both OS backends
+        run: make go-lint-cross
+
+  govulncheck:
+    needs: guard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Scan the module for known vulnerabilities
+        uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
+        with:
+          go-version-file: go.mod
+          go-package: ./...
+
+  release:
+    needs:
+      - guard
+      - test
+      - cross
+      - govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Created on first run with no protection rules, which changes nothing by
+    # itself. Add a deployment branch rule limiting it to `main`, and required
+    # reviewers if a release should need a second pair of eyes - docs/release.md.
+    environment: release
+    permissions:
+      contents: write # create the tag and the release
+      id-token: write # cosign keyless signing, provenance, Cloudsmith OIDC
+      attestations: write # provenance attestation upload
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # svu reads the tags to work out the current version, and goreleaser
+          # needs the whole history for the changelog.
+          fetch-depth: 0
+          fetch-tags: true
+
+      # Everything the publishing half needs, checked before anything is built
+      # and long before the tag is pushed. Without this, a missing tap token or
+      # an unset Cloudsmith slug fails after the point of no return, which is
+      # recoverable but pointless.
+      - name: Check the publishing credentials
+        if: ${{ !inputs.dry_run }}
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          CLOUDSMITH_SERVICE_SLUG: ${{ vars.CLOUDSMITH_SERVICE_SLUG }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "$HOMEBREW_TAP_TOKEN" ] || missing="$missing HOMEBREW_TAP_TOKEN(secret)"
+          [ -n "$CLOUDSMITH_SERVICE_SLUG" ] || missing="$missing CLOUDSMITH_SERVICE_SLUG(variable)"
+          if [ -n "$missing" ]; then
+            echo "Not configured:$missing. See docs/release.md, 'Before the first release'." >&2
+            exit 1
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install svu
+        run: go install "github.com/caarlos0/svu/v3@${SVU_VERSION}"
+
+      - name: Resolve the version to release
+        id: version
+        env:
+          RAW: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          # Only vX.Y.Z tags are releases. `latest` exists as a separate pointer,
+          # and anything else somebody tags is not a version, so every lookup
+          # below matches the release shape rather than "the nearest tag".
+          RELEASE_TAGS='v[0-9]*.[0-9]*.[0-9]*'
+
+          if [ -n "$RAW" ]; then
+            VERSION="v${RAW#v}"
+            if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Version must look like X.Y.Z or vX.Y.Z (got '$RAW')" >&2
+              exit 1
+            fi
+            EXPLICIT=true
+          else
+            # svu prints the current version unchanged, and exits 0, when no
+            # feat/fix/breaking commit exists since the last tag. That is not a
+            # release: say so rather than tagging the same tree twice.
+            CURRENT=$(svu current)
+            VERSION=$(svu next)
+            if [ "$VERSION" = "$CURRENT" ]; then
+              echo "No feat/fix or breaking-change commit since ${CURRENT}, so there is nothing to bump. Re-run with an explicit version to force one." >&2
+              exit 1
+            fi
+            EXPLICIT=false
+          fi
+
+          # A recovery re-run is this exact version already sitting on HEAD -
+          # nothing wider. Treating "HEAD carries some tag" as recovery would
+          # misread a release cut from a commit that is already tagged with the
+          # *previous* version, and compare the catalog against the release before
+          # that one.
+          RECOVERY=false
+          if git tag --points-at HEAD --list "$RELEASE_TAGS" | grep -qxF "$VERSION"; then
+            RECOVERY=true
+          fi
+
+          # The baseline for the release notes. On a recovery the tag being
+          # released is on HEAD already, so describing from HEAD would answer with
+          # that tag and the catalog would be compared against itself - "No
+          # catalog change" for a release that changed plenty.
+          if [ "$RECOVERY" = "true" ]; then
+            PREVIOUS=$(git describe --tags --abbrev=0 --match "$RELEASE_TAGS" "HEAD^" 2>/dev/null || true)
+          else
+            PREVIOUS=$(git describe --tags --abbrev=0 --match "$RELEASE_TAGS" 2>/dev/null || true)
+          fi
+
+          # A version must be higher than every version already released.
+          # Without this, an explicit v1.1.1 typed after v1.2.0 would create a
+          # lower immutable tag and, with make_latest, hand every user of the
+          # "latest" URL an older binary. The one exception is the recovery
+          # re-run, which reuses the version it failed on.
+          LATEST=$(git tag --list "$RELEASE_TAGS" --sort=-v:refname | head -n1)
+          if [ -n "$LATEST" ]; then
+            if [ "$VERSION" = "$LATEST" ]; then
+              if [ "$RECOVERY" != "true" ]; then
+                echo "$VERSION is already released and does not point at this commit. Release a higher version." >&2
+                exit 1
+              fi
+              echo "Re-running the release of $VERSION, which already points at this commit."
+            else
+              HIGHEST=$(printf '%s\n%s\n' "$VERSION" "$LATEST" | sort -V | tail -n1)
+              if [ "$HIGHEST" != "$VERSION" ]; then
+                echo "$VERSION is lower than the latest release $LATEST. Tags here are immutable and the release is marked latest, so only a higher version may be published." >&2
+                exit 1
+              fi
+            fi
+          fi
+
+          echo "Resolved $VERSION (previous: ${PREVIOUS:-none}, explicit: $EXPLICIT)"
+          {
+            echo "version=$VERSION"
+            echo "previous=$PREVIOUS"
+            echo "explicit=$EXPLICIT"
+          } >> "$GITHUB_OUTPUT"
+
+      # The catalog section of the release notes, generated from models.yaml
+      # itself: generated commit notes cannot know that a release writes
+      # something the previous one refused. The tool also reports enabled=,
+      # which the next step turns into the version rule.
+      - name: Write the catalog release notes
+        id: catalog
+        env:
+          PREVIOUS: ${{ steps.version.outputs.previous }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist-notes
+
+          if [ -n "$PREVIOUS" ]; then
+            git show "$PREVIOUS:internal/catalog/models.yaml" > dist-notes/previous.yaml
+          else
+            # No previous tag: the first release compares against an empty
+            # catalog, so everything in it is new.
+            : > dist-notes/previous.yaml
+          fi
+
+          go run ./internal/catalog/internal/generate/cmd/relnotes \
+            -previous "${PREVIOUS:-the previous release}" \
+            -status "$GITHUB_OUTPUT" \
+            dist-notes/previous.yaml internal/catalog/models.yaml > dist-notes/header.md
+
+          cat dist-notes/header.md
+
+      # "Any change to models.yaml that adds or moves a byte monmux can send is
+      # at least a minor release." Recording an entry counts: --unsafe-model
+      # reaches it through catalog.Model.UnsafeOperation, which ignores
+      # write_enabled. A derived patch bump is raised to a minor and said so; an
+      # explicit patch is refused, because the rule outranks the input.
+      - name: Apply the catalog version rule
+        id: final
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PREVIOUS: ${{ steps.version.outputs.previous }}
+          EXPLICIT: ${{ steps.version.outputs.explicit }}
+          ENABLED: ${{ steps.catalog.outputs.enabled }}
+        run: |
+          set -euo pipefail
+
+          if [ "$ENABLED" = "true" ] && [ -n "$PREVIOUS" ] && [ "${VERSION%.*}" = "${PREVIOUS%.*}" ]; then
+            if [ "$EXPLICIT" = "true" ]; then
+              MINOR=$(svu minor)
+              echo "This release adds or moves bytes monmux can send to a monitor, which is never a patch. Re-run with $MINOR or later." >&2
+              exit 1
+            fi
+            VERSION=$(svu minor)
+            echo "::notice::This release adds or moves bytes monmux can send to a monitor, so the patch bump was raised to $VERSION."
+          fi
+
+          echo "Releasing $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # A tag that already exists is either a re-run recovering a failed publish
+      # - it points at this commit, and the run continues without pushing it
+      # again - or a different commit, which nothing here may overwrite: tags in
+      # this repository are immutable, on purpose.
+      - name: Check the tag
+        id: tag
+        env:
+          VERSION: ${{ steps.final.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          HEAD_SHA=$(git rev-parse HEAD)
+          REMOTE=$(git ls-remote origin "refs/tags/$VERSION^{}" "refs/tags/$VERSION" | head -n1 | awk '{print $1}')
+
+          if [ -n "$REMOTE" ]; then
+            PEELED=$(git ls-remote origin "refs/tags/$VERSION^{}" | awk '{print $1}')
+            POINTS_AT="${PEELED:-$REMOTE}"
+            if [ "$POINTS_AT" != "$HEAD_SHA" ]; then
+              echo "$VERSION already exists and points at $POINTS_AT, not at $HEAD_SHA. Tags here are immutable: release a new version instead." >&2
+              exit 1
+            fi
+            echo "$VERSION already exists on this commit: recovering a failed publish."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            LOCAL=$(git rev-list -n1 "$VERSION")
+            if [ "$LOCAL" != "$HEAD_SHA" ]; then
+              echo "The local tag $VERSION points at $LOCAL, not at $HEAD_SHA." >&2
+              exit 1
+            fi
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$VERSION" -m "monmux $VERSION"
+          fi
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Check .goreleaser.yaml
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: ${{ env.GORELEASER_VERSION }}
+          args: check
+
+      # Builds, archives, packages, checksums and signs, with nothing published.
+      # A configuration error, a build error or a cosign error stops the run
+      # here, with no tag on the remote.
+      - name: Build and sign everything, publish nothing
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: ${{ env.GORELEASER_VERSION }}
+          args: release --clean --skip=publish --release-header=dist-notes/header.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Report what a real run would publish
+        if: inputs.dry_run
+        env:
+          VERSION: ${{ steps.final.outputs.version }}
+          PREVIOUS: ${{ steps.version.outputs.previous }}
+          ENABLED: ${{ steps.catalog.outputs.enabled }}
+        run: |
+          set -euo pipefail
+          {
+            echo "# Dry run: $VERSION"
+            echo
+            echo "Previous tag: ${PREVIOUS:-none}. Catalog enables something: $ENABLED."
+            echo
+            echo "No tag was created and nothing was published."
+            echo
+            cat dist-notes/header.md
+            echo
+            if [ -f dist/CHANGELOG.md ]; then
+              cat dist/CHANGELOG.md
+            fi
+            echo
+            echo '## Artifacts'
+            echo
+            echo '```text'
+            ls -1 dist
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the unpublished artifacts for inspection
+        if: inputs.dry_run
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dry-run-${{ steps.final.outputs.version }}
+          path: dist
+
+      # The point of no return. Everything after it is idempotent, so a re-run
+      # with the same explicit version recovers a failed publish.
+      # The last look before the point of no return. Concurrency serializes the
+      # workflow, but a tag can also arrive from outside it, and the monotonicity
+      # check ran before several minutes of building. This asks the remote, not
+      # the local clone, and it asks now.
+      - name: Push the tag
+        if: ${{ !inputs.dry_run && steps.tag.outputs.exists != 'true' }}
+        env:
+          VERSION: ${{ steps.final.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          HIGHEST_REMOTE=$(git ls-remote --tags --refs origin 'v*' \
+            | awk -F/ '{print $NF}' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V \
+            | tail -n1 || true)
+
+          if [ -n "$HIGHEST_REMOTE" ] && [ "$HIGHEST_REMOTE" != "$VERSION" ]; then
+            HIGHEST=$(printf '%s\n%s\n' "$VERSION" "$HIGHEST_REMOTE" | sort -V | tail -n1)
+            if [ "$HIGHEST" != "$VERSION" ]; then
+              echo "$HIGHEST_REMOTE was published while this run was building, so $VERSION would be a lower tag marked latest. Nothing was pushed; release a higher version." >&2
+              exit 1
+            fi
+          fi
+
+          git push origin "$VERSION"
+
+      - name: Publish the release, the packages and the cask
+        if: ${{ !inputs.dry_run }}
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: ${{ env.GORELEASER_VERSION }}
+          args: release --clean --release-header=dist-notes/header.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Attest the build provenance
+        if: ${{ !inputs.dry_run }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
+            dist/checksums.txt
+
+      - name: Set up the Cloudsmith CLI
+        if: ${{ !inputs.dry_run }}
+        uses: cloudsmith-io/cloudsmith-cli-action@ad73fafb92e3e29a5166c529464c2df7658a608e # v3.1.0
+        with:
+          oidc-namespace: leinardi
+          oidc-service-slug: ${{ vars.CLOUDSMITH_SERVICE_SLUG }}
+          verify-auth: "true"
+
+      # --republish so that a re-run overwrites the same version rather than
+      # failing on it. The packages are the ones the release carries, and
+      # checksums.txt covers them, so a user can verify a Cloudsmith download
+      # against GitHub.
+      - name: Upload the packages to Cloudsmith
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          for package in dist/*.deb; do
+            cloudsmith push deb leinardi/monmux/any-distro/any-version "$package" --republish
+          done
+          for package in dist/*.rpm; do
+            cloudsmith push rpm leinardi/monmux/any-distro/any-version "$package" --republish
+          done
+
+      - name: Summarize the release
+        if: ${{ !inputs.dry_run }}
+        env:
+          VERSION: ${{ steps.final.outputs.version }}
+          PREVIOUS: ${{ steps.version.outputs.previous }}
+          ENABLED: ${{ steps.catalog.outputs.enabled }}
+        run: |
+          set -euo pipefail
+          {
+            echo "# Released $VERSION"
+            echo
+            echo "Previous tag: ${PREVIOUS:-none}. Catalog enables something: $ENABLED."
+            echo
+            echo "- [Release](https://github.com/leinardi/monmux/releases/tag/$VERSION)"
+            echo "- [Packages](https://cloudsmith.io/~leinardi/repos/monmux/packages/)"
+            echo "- [Cask](https://github.com/leinardi/homebrew-tap/blob/main/Casks/monmux.rb)"
+            echo
+            cat dist-notes/header.md
+          } >> "$GITHUB_STEP_SUMMARY"
