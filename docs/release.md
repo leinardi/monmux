@@ -116,9 +116,12 @@ happens before the tag exists, and everything after it is idempotent.
    check in step 3 ran several minutes of building ago. A version that is no longer the highest fails here, with nothing pushed.
 10. **`goreleaser release --clean`** again: it rebuilds and publishes — creating the GitHub release with
     `target_commitish: {{ .FullCommit }}`, uploading every artifact and pushing the cask to the tap. Rebuilding is safe because
-    the build is reproducible: everything stamped into a binary comes from the commit (`.Tag`, `.FullCommit`, `.CommitDate`,
-    `mod_timestamp: {{ .CommitTimestamp }}`) rather than from the clock, so the second build produces the same bytes as the one
-    the dry run inspected. Verified by building the same commit twice and comparing SHA-256.
+    the build is reproducible: everything stamped into an artifact comes from the commit rather than from the clock — `.Tag`,
+    `.FullCommit`, `.CommitDate` and `mod_timestamp: {{ .CommitTimestamp }}` for the binaries, `nfpms.mtime` and a
+    `file_info.mtime` per declared content for the packages — so the second build produces the same bytes as the one the dry run
+    inspected. Verified by building the same commit twice and comparing SHA-256. The package half of that was not true for
+    v0.5.0, whose deb and rpm carried the build clock and so differed between the two builds of the one release run; the archives
+    always matched.
 11. **Attest** the archives, packages and checksum file.
 12. **`cloudsmith push deb|rpm ... --republish`** for each package.
 

@@ -45,12 +45,27 @@ ID, so the cask strips the download quarantine on install; what that means, and 
 ```sh
 sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL 'https://dl.cloudsmith.io/public/leinardi/monmux/gpg.D5A5560F8D6A68B5.key' \
-  | gpg --dearmor \
-  | sudo tee /etc/apt/keyrings/leinardi-monmux.gpg > /dev/null
-echo 'deb [signed-by=/etc/apt/keyrings/leinardi-monmux.gpg] https://dl.cloudsmith.io/public/leinardi/monmux/deb/any-distro any-version main' \
-  | sudo tee /etc/apt/sources.list.d/leinardi-monmux.list
+  | sudo tee /etc/apt/keyrings/leinardi-monmux.asc > /dev/null
+. /etc/os-release
+sudo tee /etc/apt/sources.list.d/leinardi-monmux.sources > /dev/null <<EOF
+Types: deb
+URIs: https://dl.cloudsmith.io/public/leinardi/monmux/deb/$ID
+Suites: $VERSION_CODENAME
+Components: main
+Architectures: amd64 arm64
+Signed-By: /etc/apt/keyrings/leinardi-monmux.asc
+EOF
 sudo apt update && sudo apt install monmux
 ```
+
+The key stays armored, as `.asc`, because apt reads that directly. `Architectures` names the two the repository actually holds, so
+apt does not ask it for anything else on a multi-arch system. The one-line `deb [signed-by=…] …` form in a `.list` file works just
+as well if you prefer it.
+
+The packages are uploaded once, not per distribution — one build per architecture, no distribution-specific anything — and Cloudsmith
+serves them through every distribution index it knows. So the source line names a distribution only because `apt` requires one. On a
+derivative whose `$ID` Cloudsmith does not recognise (Mint, Pop!\_OS, Raspberry Pi OS), name the distribution it is built on instead —
+`URIs: …/deb/ubuntu` with `Suites: noble`, say: the package you get is the same one.
 
 `D5A5560F8D6A68B5` is the long key ID of the repository's signing key, fingerprint
 `7F28 A3C9 6319 1586 0980 5131 D5A5 560F 8D6A 68B5` — check it with `gpg --show-keys` on the downloaded file, or against the
@@ -199,6 +214,15 @@ Only exit `2` carries the promise that nothing was written.
 - [Requirements](docs/requirements.md) — the source document this project was built from.
 - [Contributing](CONTRIBUTING.md) — prerequisites, workflow, and the catalog evidence rule.
 - [AGENTS.md](AGENTS.md) — repository conventions, including the rule that no AI agent may write to a monitor.
+
+## How this was built
+
+monmux is written largely with agentic AI coding tools, under human review: every change is read before it lands, and the claims
+that matter are checked rather than taken on trust. The catalog is where that matters most, and it is the part an agent has the
+least say in — a value becomes writable only after a human ran it against the monitor in question and recorded what happened, per
+[Contributing](CONTRIBUTING.md) and [Adding a monitor](docs/adding-a-monitor.md). No AI agent may write to a monitor at all, during
+development or review; [AGENTS.md](AGENTS.md) states that rule and [Testing](docs/testing.md) describes how the test suite enforces
+it.
 
 ## Licence
 
