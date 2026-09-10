@@ -53,6 +53,7 @@ Documentation, and what each page is for:
 | [`docs/compatibility.md`](docs/compatibility.md)       | The catalog, in prose. Its table and notes are generated from the YAML.  |
 | [`docs/adding-a-monitor.md`](docs/adding-a-monitor.md) | The procedure for enabling a model or an input.                          |
 | [`docs/configuration.md`](docs/configuration.md)       | The configuration file, the flags, and which wins.                       |
+| [`docs/json.md`](docs/json.md)                         | The `--json` contract: every field, what is stable, what is redacted.    |
 | [`docs/security.md`](docs/security.md)                 | Threat model, mitigations, trust boundaries, what monmux never does.     |
 | [`docs/testing.md`](docs/testing.md)                   | How the no-exec rule is enforced, and the human hardware checklist.      |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md)   | Every refusal reason and its fix.                                        |

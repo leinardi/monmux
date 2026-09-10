@@ -150,7 +150,15 @@ monmux catalog list             # every model in this binary's catalog
 monmux catalog list aoc         # filter by vendor, model, or vendor/name
 monmux catalog list --verbose   # with the value and evidence grade of every input
 monmux catalog show AOC/Q27P1B  # one entry in full, evidence included
+
+monmux switch usb-c --dry-run --json   # one JSON document, whatever the outcome
+monmux version --json                  # {"version": …, "commit": …, "date": …}
 ```
+
+`--json` works on `switch`, `info`, `catalog list`, `catalog show` and `version`, and never changes the exit code.
+`monmux switch --json` prints one document on stdout for every outcome — sent, dry run, refusal or failure — and the pair of
+`outcome` and `writeStatus` in it is what tells a script a dry run from a real send, which the exit code alone cannot. The
+whole contract, field by field, is in [docs/json.md](docs/json.md).
 
 `monmux catalog` reads nothing outside the binary: no backend, no configuration file, no monitor. It is the offline view of
 [docs/compatibility.md](docs/compatibility.md), for the build you are actually running.
@@ -206,6 +214,7 @@ Only exit `2` carries the promise that nothing was written.
 - [Compatibility](docs/compatibility.md) — the catalog, with the evidence for every value.
 - [Configuration](docs/configuration.md) — the configuration file, the flags, and which wins.
 - [Troubleshooting](docs/troubleshooting.md) — every refusal reason, and what to do about it.
+- [JSON output](docs/json.md) — the `--json` contract: every field, what is stable, and what is redacted.
 - [Backends](docs/backends.md) — `ddcutil` and `m1ddc` specifics: versions, permissions, quirks.
 - [Adding a monitor](docs/adding-a-monitor.md) — the procedure for enabling a model or an input.
 - [Security](docs/security.md) — threat model, mitigations, trust boundaries, and what monmux never does.
