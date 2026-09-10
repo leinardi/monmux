@@ -111,6 +111,13 @@ nfpms:
     formats:
       - deb
       - rpm
+    # Without this, nfpm stamps the package and every file in it with the clock,
+    # so two builds of one commit produce different bytes - which they did on
+    # v0.5.0, where the dry-run packages and the published ones differed while
+    # the archives matched. mod_timestamp covers the binary only. The recovery
+    # procedure rebuilds a tagged commit and expects the same artifacts, so the
+    # packages have to come from the commit too.
+    mtime: "{{ .CommitDate }}"
     # Unversioned on purpose. monmux needs ddcutil 2.2, but Debian 12 and
     # Ubuntu 24.04 ship 1.4, and a versioned dependency would make the package
     # refuse to install there - including for somebody who built 2.2 into
@@ -128,13 +135,38 @@ nfpms:
       It drives ddcutil, which must be version 2.2 or newer; `monmux doctor` reports
       whether the one installed is usable.
     file_name_template: "{{ .ConventionalFileName }}"
+    # Each file twice, once per packager, because `type: license` and
+    # `type: readme` are rpm markers (%license, %doc) and nfpm drops an entry
+    # carrying one from the deb without saying so - which is how the v0.5.0 deb
+    # shipped with nothing but /usr/bin/monmux, no copyright file, against
+    # Debian policy. The rpm keeps its markers; the deb gets plain files.
+    #
+    # file_info.mtime as well as the package mtime above: a declared entry keeps
+    # the mtime of the file on the runner, the checkout time, unless told
+    # otherwise, and that would undo the reproducibility the mtime above buys.
     contents:
       - src: LICENSE
         dst: /usr/share/doc/monmux/copyright
         type: license
+        packager: rpm
+        file_info:
+          mtime: "{{ .CommitDate }}"
+      - src: LICENSE
+        dst: /usr/share/doc/monmux/copyright
+        packager: deb
+        file_info:
+          mtime: "{{ .CommitDate }}"
       - src: README.md
         dst: /usr/share/doc/monmux/README.md
         type: readme
+        packager: rpm
+        file_info:
+          mtime: "{{ .CommitDate }}"
+      - src: README.md
+        dst: /usr/share/doc/monmux/README.md
+        packager: deb
+        file_info:
+          mtime: "{{ .CommitDate }}"
 
 # macOS only, which a cask is by nature, and which is what monmux supports:
 # m1ddc requires Apple Silicon.
