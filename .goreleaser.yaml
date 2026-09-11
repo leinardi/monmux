@@ -201,9 +201,13 @@ homebrew_casks:
     # A custom_block, not hooks.post.install: goreleaser renders that as a Ruby
     # `postflight` block, which Homebrew deprecated in favour of the declarative
     # `postflight_steps`, and every brew command touching the cask warned about
-    # it. Move this to hooks.post.install_steps once a goreleaser release carries
-    # it (goreleaser/goreleaser#6873). The whole cask is rendered as a template,
-    # so Homebrew's own `{{staged_path}}` token has to be escaped.
+    # it. The whole cask is rendered as a template, so Homebrew's own
+    # `{{staged_path}}` token has to be escaped.
+    #
+    # Workaround for https://github.com/goreleaser/goreleaser/issues/6870, fixed
+    # by https://github.com/goreleaser/goreleaser/pull/6873. Once a goreleaser
+    # release carries hooks.post.install_steps: bump GORELEASER_VERSION in both
+    # workflows, move this block there, and drop the stanza-order note below.
     #
     # custom_block lands right after `cask "monmux" do`, ahead of the artifact
     # stanzas. `brew style` flags that order; installing does not care. The move
