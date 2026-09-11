@@ -193,17 +193,38 @@ homebrew_casks:
       name: github-actions[bot]
       email: 41898282+github-actions[bot]@users.noreply.github.com
     commit_msg_template: "chore(cask): monmux {{ .Tag }}"
-    hooks:
-      post:
-        # The binaries carry no Apple Developer ID signature, and Homebrew
-        # quarantines everything it downloads, so without this Gatekeeper
-        # refuses to run the binary at all. What stripping the attribute
-        # bypasses, and how to install without it, is spelled out in
-        # docs/security.md.
-        install: |
-          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/monmux"]
-          end
+    # The binaries carry no Apple Developer ID signature, and Homebrew
+    # quarantines everything it downloads, so without this Gatekeeper refuses to
+    # run the binary at all. What stripping the attribute bypasses, and how to
+    # install without it, is spelled out in docs/security.md.
+    #
+    # A custom_block, not hooks.post.install: goreleaser renders that as a Ruby
+    # `postflight` block, which Homebrew deprecated in favour of the declarative
+    # `postflight_steps`, and every brew command touching the cask warned about
+    # it. The whole cask is rendered as a template, so Homebrew's own
+    # `{{staged_path}}` token has to be escaped.
+    #
+    # Workaround for https://github.com/goreleaser/goreleaser/issues/6870, fixed
+    # by https://github.com/goreleaser/goreleaser/pull/6873. Once a goreleaser
+    # release carries hooks.post.install_steps: bump GORELEASER_VERSION in both
+    # workflows, move this block there, and drop the stanza-order note below.
+    #
+    # custom_block lands right after `cask "monmux" do`, ahead of the artifact
+    # stanzas. `brew style` flags that order; installing does not care. The move
+    # to install_steps puts the stanza back where Homebrew expects it.
+    #
+    # must_succeed: false is what the old system_command did too - it never
+    # raised - and it has to stay: `xattr -d` exits 1 when the attribute is not
+    # there, which would fail the whole install over nothing. stderr stays
+    # visible, so a real failure is still on screen.
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr",
+              args:         ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/monmux"],
+              must_succeed: false
+        end
+      end
 
 changelog:
   # `git`, not `github`: the workflow builds before the tag is pushed, and the

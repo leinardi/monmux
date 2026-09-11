@@ -164,7 +164,8 @@ whole contract, field by field, is in [docs/json.md](docs/json.md).
 [docs/compatibility.md](docs/compatibility.md), for the build you are actually running.
 
 Serial numbers, macOS display UUIDs and raw EDID hex are redacted in every output by default, so what monmux prints is safe to
-paste into a bug report. `--show-serial` prints them verbatim, and is the only way to see them.
+paste into a bug report. `--show-serial` prints them verbatim, and is the only way to see them. That is why `info` masks the
+`Handle:` on macOS, where it is the display UUID, and prints it on Linux, where it is only the connector name.
 
 A successful switch reports exactly what happened:
 

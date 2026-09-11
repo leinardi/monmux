@@ -35,8 +35,9 @@ monmux: a cask is macOS-only by nature, which is the only platform the tap needs
 
 It has one consequence worth stating plainly, because it is a security decision rather than a packaging detail: Homebrew
 quarantines everything a cask downloads, and monmux's binaries carry no Apple Developer ID signature, so without intervention
-Gatekeeper refuses to run them at all. The cask therefore strips `com.apple.quarantine` in a `postflight` hook, which is
-goreleaser's documented answer. What that bypasses, and how to install without it, is in
+Gatekeeper refuses to run them at all. The cask therefore strips `com.apple.quarantine` in a `postflight_steps` block. It is
+written as a `custom_block` because goreleaser's `hooks` still render Homebrew's deprecated Ruby `postflight` block, which makes
+every `brew` command warn. What the strip bypasses, and how to install without it, is in
 [security.md](security.md#the-install-path).
 
 ### The package dependency is unversioned

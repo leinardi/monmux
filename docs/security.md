@@ -165,11 +165,9 @@ install it directly with `dpkg -i` or `rpm -i`.
 
 **The macOS cask strips the download quarantine.** monmux's binaries carry no Apple Developer ID signature, and Homebrew
 quarantines everything a cask downloads, so Gatekeeper would refuse to run the binary at all. The cask therefore runs
-`xattr -dr com.apple.quarantine` on the installed binary in a `postflight` hook. That is a real bypass, stated plainly: it
-removes the attribute that would otherwise make Gatekeeper refuse an unsigned, unnotarized binary, and it does so because the
-alternative is a cask that never runs. It reaches the same result as installing with `brew install --cask --no-quarantine`,
-except that it happens whether or not the flag is passed — a `--no-quarantine` install of this cask is not more restrictive, it
-is the same thing said twice.
+`xattr -dr com.apple.quarantine` on the installed binary in a `postflight_steps` block. That is a real bypass, stated plainly:
+it removes the attribute that would otherwise make Gatekeeper refuse an unsigned, unnotarized binary, and it does so because
+the alternative is a cask that never runs.
 
 The trust it replaces is the one you extended by tapping the repository. If you would rather Gatekeeper had its say, do not
 install the cask: download the `darwin_arm64` tarball from the release page, verify it against the signed `checksums.txt` above,
