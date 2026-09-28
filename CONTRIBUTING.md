@@ -102,13 +102,19 @@ Go style is enforced by `.golangci.yaml` (golangci-lint v2, `default: all`). The
 ## Branches, commits and pull requests
 
 - Branch names: `feat/<short-description>`, `fix/<short-description>`, `chore/<short-description>`.
-- Commit messages start with a conventional-commit type — `feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:` — followed by
-  a short imperative subject. A scope is optional. If the change affects what reaches a monitor, say so in the body, explicitly.
-  The `conventional-pre-commit` hook checks this at commit time (`make pre-commit-install` wires up the `commit-msg` stage), and
-  a CI job checks every commit in a pull request.
+- Commit messages follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) **with a scope**:
+  `<type>(<scope>)[!]: <description>`, e.g. `feat(cli): add switch --json`, `fix(release): emit postflight_steps in the Homebrew
+  cask`, `docs(catalog): ...`. Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`, `style`,
+  `revert`. If the change affects what reaches a monitor, say so in the body, explicitly. The `conventional-pre-commit` hook
+  checks this at commit time (`make pre-commit-install` wires up the `commit-msg` stage), and a CI job checks every commit in a
+  pull request.
 - **Commit types decide the next version.** The release workflow derives it from the commits since the last tag: `feat` is a
-  minor, `fix` is a patch, `!` or a `BREAKING CHANGE:` footer is a major. A release that enables a model or an input is never
-  less than a minor, whatever the commits say — [docs/release.md](docs/release.md).
+  minor, `fix` is a patch, `!` or a `BREAKING CHANGE:` footer is a major; `build`, `chore`, `ci`, `docs`, `perf`, `refactor`,
+  `revert`, `style` and `test` bump nothing. A release that enables a model or an input is never less than a minor, whatever the
+  commits say — [docs/release.md](docs/release.md).
+- Pick the type by whether the change should ship, not by what kind of change it is. A performance improvement, a refactor or a
+  revert that changes the shipped binary and that users should receive is a `fix` (or a `feat`). Use `perf`, `refactor`,
+  `style` and `revert` only when the commit is deliberately not meant to trigger a release on its own.
 - Keep pull requests focused: one logical change each.
 - All checks must pass before merge.
 

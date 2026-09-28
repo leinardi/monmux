@@ -45,20 +45,20 @@ Requirements: [`docs/requirements.md`](docs/requirements.md) — the source docu
 
 Documentation, and what each page is for:
 
-| Page                                                   | What it answers                                                          |
-| ------------------------------------------------------ | ------------------------------------------------------------------------ |
-| [`README.md`](README.md)                               | What monmux is, how to install it, how to run it.                        |
-| [`docs/architecture.md`](docs/architecture.md)         | How a switch is decided, and the five things that make it safe.          |
-| [`docs/backends.md`](docs/backends.md)                 | ddcutil and m1ddc specifics: version floor, probes, permissions, quirks. |
-| [`docs/compatibility.md`](docs/compatibility.md)       | The catalog, in prose. Its table and notes are generated from the YAML.  |
-| [`docs/adding-a-monitor.md`](docs/adding-a-monitor.md) | The procedure for enabling a model or an input.                          |
-| [`docs/configuration.md`](docs/configuration.md)       | The configuration file, the flags, and which wins.                       |
-| [`docs/json.md`](docs/json.md)                         | The `--json` contract: every field, what is stable, what is redacted.    |
-| [`docs/security.md`](docs/security.md)                 | Threat model, mitigations, trust boundaries, what monmux never does.     |
-| [`docs/testing.md`](docs/testing.md)                   | How the no-exec rule is enforced, and the human hardware checklist.      |
-| [`docs/troubleshooting.md`](docs/troubleshooting.md)   | Every refusal reason and its fix.                                        |
-| [`docs/release.md`](docs/release.md)                   | What a release produces, how one runs, and how to recover a failed one.  |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md)                   | Prerequisites, workflow, and the catalog evidence rule.                  |
+| Page | What it answers |
+| --- | --- |
+| [`README.md`](README.md) | What monmux is, how to install it, how to run it. |
+| [`docs/architecture.md`](docs/architecture.md) | How a switch is decided, and the five things that make it safe. |
+| [`docs/backends.md`](docs/backends.md) | ddcutil and m1ddc specifics: version floor, probes, permissions, quirks. |
+| [`docs/compatibility.md`](docs/compatibility.md) | The catalog, in prose. Its table and notes are generated from the YAML. |
+| [`docs/adding-a-monitor.md`](docs/adding-a-monitor.md) | The procedure for enabling a model or an input. |
+| [`docs/configuration.md`](docs/configuration.md) | The configuration file, the flags, and which wins. |
+| [`docs/json.md`](docs/json.md) | The `--json` contract: every field, what is stable, what is redacted. |
+| [`docs/security.md`](docs/security.md) | Threat model, mitigations, trust boundaries, what monmux never does. |
+| [`docs/testing.md`](docs/testing.md) | How the no-exec rule is enforced, and the human hardware checklist. |
+| [`docs/troubleshooting.md`](docs/troubleshooting.md) | Every refusal reason and its fix. |
+| [`docs/release.md`](docs/release.md) | What a release produces, how one runs, and how to recover a failed one. |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Prerequisites, workflow, and the catalog evidence rule. |
 
 A change to the catalog is a change to `internal/catalog/models.yaml` followed by `make go-generate`, which re-renders both
 `models_gen.go` and the marked region of [`docs/compatibility.md`](docs/compatibility.md) — the table and the per-model notes.
@@ -76,6 +76,7 @@ make go-build-cross    # compile-check both OS backends (GOOS=linux and GOOS=dar
 make go-vet-cross      # go vet both, their build-tagged tests included
 make go-lint-cross     # lint both; `make check` only ever lints the host's backend
 make go-tidy           # go mod tidy + go mod verify
+make audit-deps        # govulncheck over every package (network required); also runs in CI and as a pre-commit hook on go.mod/go.sum changes
 make check             # pre-commit on all files
 make check-stage       # pre-commit on the staging area only
 ```
@@ -87,7 +88,7 @@ go test ./internal/edid -run TestParse -v
 ```
 
 The Makefile pulls shared snippets from `leinardi/make-common@v1` into `.mk/` on first run. To refresh: `make mk-common-update`.
-Repo-local make targets live in `.mk/cross.mk`.
+Repo-local make targets live in `.mk/cross.mk` and `.mk/audit-deps.mk`, never as recipes in the Makefile.
 
 ## Package map
 
@@ -179,3 +180,41 @@ run executes, by construction.
   could not be made. Only a refusal may promise that nothing was written.
 - A read-only command that fails is worded as a diagnostic, not as a refused write: `info` and `doctor` print their report and
   then one line naming the check that stopped them.
+
+## Project skills
+
+Skills live in `.agents/skills/` (symlinked as `.claude/skills`). Load them before the work, not after review:
+
+- `go-style-guide` — before any `.go` edit.
+- `adversarial-review` — for any review request ("review my diff", "is this ready to merge").
+
+## Commit messages
+
+All commits MUST be Conventional Commits 1.0.0 **with a scope**: `<type>(<scope>)[!]: <description>`, optional blank-line body and
+footers. Enforced by the `conventional-pre-commit` `commit-msg` hook (`--force-scope`) and by the `conventional-commits` CI job.
+Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`, `style`, `revert`. Breaking changes use `!` before
+`:` or a `BREAKING CHANGE:` footer. goreleaser builds the changelog from these subjects: `feat`/`fix` with the `catalog` scope go
+under "Catalog", other `feat` under "Features", other `fix` under "Bug fixes", and `docs`, `chore`, `ci`, `test` and `style` are
+left out. Examples: `feat(cli): add switch --json`, `fix(release): emit postflight_steps in the Homebrew cask`.
+
+The cask commit goreleaser pushes to `leinardi/homebrew-tap` (`chore(cask): ...` in `.goreleaser.yaml`) must stay conventional and
+scoped too: the tap's history is checked the same way.
+
+Release versions are derived by `svu` from the commits since the last tag, so a wrong type ships a wrong version:
+
+| Release | Commit | Example |
+| --- | --- | --- |
+| major | any type with `!` before the colon, or a `BREAKING CHANGE:` footer | `feat(cli)!: rename the switch flags` |
+| minor | `feat`, and any release that adds or moves a byte monmux can send (the catalog rule) | `feat(catalog): record a model` |
+| patch | `fix` | `fix(release): emit postflight_steps in the Homebrew cask` |
+| none | everything else: `perf`, `refactor`, `build`, `ci`, `chore`, `docs`, `style`, `test`, `revert` | `perf(backend): ...` |
+
+The highest bump among the commits wins; with only "none" commits since the last tag, a release with no version fails with
+"nothing to bump".
+
+**Pick the type by whether the change should ship, not by what kind of change it is.** Anything that changes the shipped binary and
+that users should receive is `fix` (or `feat`), even when it is a performance improvement, a refactor or a revert. Use `perf`,
+`refactor`, `style` and `revert` only when the commit is deliberately not meant to trigger a release on its own. A `revert` of a
+shipped `feat` or `fix` is itself a `fix`. `svu` matches `feat`/`fix` anywhere in the subject (e.g. `prefix:` counts as `fix:`), so
+avoid a word ending in `feat` or `fix` directly before a colon in other subjects. PRs land as merge commits, so every commit counts,
+not just the PR title. See [`docs/release.md`](docs/release.md).
