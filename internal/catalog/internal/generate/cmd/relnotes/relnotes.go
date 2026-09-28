@@ -287,7 +287,7 @@ func (c *changes) inputs(name string, before, after *generate.Model) {
 			continue
 		}
 
-		c.removedInputs = append(c.removedInputs, bullet(name, fmt.Sprintf("`%s`", key)))
+		c.removedInputs = append(c.removedInputs, bullet(name, fmt.Sprintf("%#q", key)))
 	}
 }
 
@@ -312,7 +312,7 @@ func (c *changes) evidence(name string, before, after *generate.Model) {
 		}
 
 		if then.Evidence != now.Evidence {
-			moved = append(moved, fmt.Sprintf("the evidence for `%s`", key))
+			moved = append(moved, fmt.Sprintf("the evidence for %#q", key))
 		}
 	}
 
@@ -373,7 +373,7 @@ func entryName(model *generate.Model) string {
 
 // bullet renders one line of a section.
 func bullet(entry, detail string) string {
-	return fmt.Sprintf("- `%s` — %s", entry, detail)
+	return fmt.Sprintf("- %#q — %s", entry, detail)
 }
 
 // removedDetail says whether the entry that went away could be written to.
@@ -388,7 +388,7 @@ func removedDetail(model *generate.Model) string {
 // changedDetail renders one input whose operation moved.
 func changedDetail(name string, before, after *generate.Input) string {
 	return fmt.Sprintf(
-		"`%s` changed from %s to %s",
+		"%#q changed from %s to %s",
 		name,
 		renderOperation(before),
 		renderOperation(after),
@@ -414,13 +414,13 @@ func renderInputs(model *generate.Model) string {
 
 // renderInput renders one input, its value and its mechanism.
 func renderInput(name string, spec *generate.Input) string {
-	return fmt.Sprintf("`%s` (%s)", name, renderOperation(spec))
+	return fmt.Sprintf("%#q (%s)", name, renderOperation(spec))
 }
 
 // renderOperation names what an input would send. It is prose about the
 // catalog, not an operation: nothing here reaches a monitor.
 func renderOperation(spec *generate.Input) string {
-	return fmt.Sprintf("%s via `%s`", renderValue(spec.Value), spec.Mechanism)
+	return fmt.Sprintf("%s via %#q", renderValue(spec.Value), spec.Mechanism)
 }
 
 // renderValue renders a 16-bit catalog value. A file that never wrote one says
