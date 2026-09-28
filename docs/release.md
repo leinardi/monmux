@@ -83,20 +83,28 @@ happens before the tag exists, and everything after it is idempotent.
    rule limiting it to `main`, and required reviewers if a release should need a second pair of eyes.
 2. **Verify.** `test` on Linux and macOS, `cross`, `govulncheck`. These are copies of the CI jobs rather than a call into
    `ci.yaml`, so that a release never depends on which pull request last ran CI.
-3. **Resolve the version.** An explicit input is validated against `^v[0-9]+\.[0-9]+\.[0-9]+$`. Otherwise `svu next` is compared
-   with `svu current`: `svu` prints the current version unchanged, and exits 0, when nothing since the last tag is a `feat`, a
-   `fix` or a breaking change, so equality is the "nothing to bump" case and it fails with
-   *"No feat/fix or breaking-change commit since `<tag>`, so there is nothing to bump. Re-run with an explicit version to force
-   one."*
+3. **Resolve the version.** Only strict `vMAJOR.MINOR.PATCH` tags are releases: `RELEASE_TAG_REGEX` in the workflow,
+   `^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`, with no leading zeros, no pre-release and no build metadata. An
+   explicit input must match it. Otherwise the highest strict tag reachable from `HEAD` is the current version, and `svu next` is
+   given that exact tag as `--tag.pattern`, never a glob (a glob such as `v[0-9]*.[0-9]*.[0-9]*` also matches `v1.2.3-rc.1`).
+   With no strict tag reachable, a run with no version fails and asks for one. `svu` prints the current version unchanged, and
+   exits 0, when nothing since that tag is a `feat`, a `fix` or a breaking change, so equality is the "nothing to bump" case and
+   it fails with *"No feat/fix or breaking-change commit since `<tag>`, so there is nothing to bump. Re-run with an explicit
+   version to force one."* — unless that tag is on `HEAD` itself, which is a re-run of a run that derived its version.
 
    The version must then be **higher than every version already released**, whether it was derived or typed. Tags here are
    immutable and the release is marked latest, so publishing a `v1.1.1` after `v1.2.0` would create a permanent lower tag and
-   hand everyone following the "latest" link an older binary. The only version a run may reuse is the one it is recovering.
+   hand everyone following the "latest" link an older binary. The only version a run may reuse is the one it is recovering, and
+   only while it is still the highest release: goreleaser marks every release it publishes as latest and pushes its cask to the
+   tap, so re-running an older version would hand both an older binary. Unlike the sibling repositories, that recovery is
+   refused. A branch whose history does not contain the highest release — for example one tagged on a merge commit that was later
+   rewritten — derives from an older base and so fails that check; the failure names the out-of-history tag, and an explicit version
+   higher than it is the way out.
 
    **A recovery is exactly this version already sitting on `HEAD`** — not "`HEAD` carries some tag". The wider test would misread
    a release cut from a commit that is already tagged with the *previous* version, and would then read the catalog baseline from
-   one release further back. Every tag lookup in the step also matches `v[0-9]*.[0-9]*.[0-9]*` rather than taking the nearest
-   tag, because `latest` is a separate pointer that the ruleset deliberately leaves mutable.
+   one release further back. Every tag lookup in the step filters the full tag list through `RELEASE_TAG_REGEX` rather than
+   taking the nearest tag, because `latest` is a separate pointer that the ruleset deliberately leaves mutable.
 
    The baseline for the notes is the previous release tag — read from `HEAD^` on a recovery, since the tag being released is on
    `HEAD` already and describing from there would compare the catalog against itself.
@@ -144,7 +152,9 @@ If the release is wrong rather than incomplete — the wrong commit, a bad build
 ## Versioning
 
 Semantic versioning, derived from Conventional Commits by [`svu`](https://github.com/caarlos0/svu): `feat` is a minor, `fix` is a
-patch, `!` or `BREAKING CHANGE:` is a major. `svu` is a single Go binary installed with the toolchain already on the runner, it
+patch, `!` or `BREAKING CHANGE:` is a major, and everything else (`build`, `chore`, `ci`, `docs`, `perf`, `refactor`, `revert`,
+`style`, `test`) bumps nothing — so a performance improvement, refactor or revert that users should receive is committed as a
+`fix` (or `feat`). `svu` is a single Go binary installed with the toolchain already on the runner, it
 reads tags and commit messages, and it does nothing else — goreleaser already renders the changelog, so a second changelog
 engine would be one more thing to keep in step. Its version is pinned in the workflow by hand, because dependabot does not track
 a `go install` argument.
@@ -193,8 +203,9 @@ against the binary that will actually build the release. Like `SVU_VERSION`, it 
 mutable pointer: `@v7` resolves to whatever that tag points at on the day the job runs, and an action that moves — or whose
 repository is compromised — would execute inside the release job, which holds `contents: write`, an OIDC identity good for
 Cloudsmith, and the tap token. A SHA cannot be moved. Dependabot updates the pins and rewrites the comment, so this costs nothing
-to maintain. `svu` and `govulncheck` are pinned the same way, as versions in `SVU_VERSION` and `GOVULNCHECK_VERSION`, because
-dependabot cannot see a `go install` argument; those two are a human's job to bump. Pinning the scanner does not pin what it
+to maintain. `svu` and `govulncheck` are pinned the same way, as versions in `SVU_VERSION` and in `GOVULNCHECK_VERSION` in
+`.mk/audit-deps.mk` (the `make audit-deps` target both workflows and the pre-commit hook run), because dependabot cannot see
+a `go install` or `go run` argument; those two are a human's job to bump. Pinning the scanner does not pin what it
 knows about: govulncheck fetches the vulnerability database at run time.
 
 **The vulnerability scan runs on the toolchain the release builds with.** Both workflows call `setup-go` with
@@ -214,19 +225,19 @@ thing the `guard` job exists to prevent.
 
 [`.github/workflows/ci.yaml`](../.github/workflows/ci.yaml) runs on every pull request, on pushes to `main` and on dispatch.
 
-| Job                    | Runner                | What it does                                                                                       |
-| ---------------------- | --------------------- | -------------------------------------------------------------------------------------------------- |
-| `test`                 | ubuntu + macos        | `make go-test` (`go test -race ./...`) on both, so each backend's build-tagged tests run.          |
-| `cross`                | ubuntu                | `make go-build-cross`, `make go-vet-cross`, `make go-lint-cross`.                                  |
-| `lint-macos`           | macos                 | `golangci-lint run ./...` natively, the only look at `internal/backend/m1ddc` under its tag.       |
-| `govulncheck`          | ubuntu                | Vulnerability scan of the module.                                                                  |
-| `release-config`       | ubuntu                | `goreleaser check`.                                                                                |
-| `actionlint`           | ubuntu, pull requests | Workflow linting, as inline review comments.                                                       |
-| `pre-commit-hooks`     | ubuntu, pull requests | The hook suite `make check` runs, minus the hooks with their own job and minus `go-test-repo-mod`. |
-| `markdownlint`         | ubuntu, pull requests | Markdown linting.                                                                                  |
-| `shellcheck`           | ubuntu, pull requests | Shell linting.                                                                                     |
-| `yamllint`             | ubuntu, pull requests | YAML linting.                                                                                      |
-| `conventional-commits` | ubuntu, pull requests | Every commit message in the range, because the release version is derived from them.               |
+| Job | Runner | What it does |
+| --- | --- | --- |
+| `test` | ubuntu + macos | `make go-test` (`go test -race ./...`) on both, so each backend's build-tagged tests run. |
+| `cross` | ubuntu | `make go-build-cross`, `make go-vet-cross`, `make go-lint-cross`. |
+| `lint-macos` | macos | `golangci-lint run ./...` natively, the only look at `internal/backend/m1ddc` under its tag. |
+| `govulncheck` | ubuntu | Vulnerability scan of the module. |
+| `release-config` | ubuntu | `goreleaser check`. |
+| `actionlint` | ubuntu, pull requests | Workflow linting, as inline review comments. |
+| `pre-commit-hooks` | ubuntu, pull requests | The hook suite `make check` runs, minus the hooks with their own job and minus `go-test-repo-mod`. |
+| `markdownlint` | ubuntu, pull requests | Markdown linting. |
+| `shellcheck` | ubuntu, pull requests | Shell linting. |
+| `yamllint` | ubuntu, pull requests | YAML linting. |
+| `conventional-commits` | ubuntu, pull requests | Every commit message in the range, because the release version is derived from them. |
 
 Three things there are deliberate:
 

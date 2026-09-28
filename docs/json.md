@@ -11,11 +11,11 @@ Two rules run through all of it.
 it. A client reads the code, then reads the document, and treats a document that contradicts the code as a protocol error
 rather than choosing between them. The codes are unchanged by `--json`:
 
-| Code | Meaning                                                                                        |
-| ---- | ---------------------------------------------------------------------------------------------- |
-| `0`  | The input-switch command was sent, or a read-only command succeeded.                           |
-| `1`  | The tool ran and failed, or the request could not be made. Whether a write happened is stated. |
-| `2`  | monmux refused. No DDC write was performed.                                                    |
+| Code | Meaning |
+| --- | --- |
+| `0` | The input-switch command was sent, or a read-only command succeeded. |
+| `1` | The tool ran and failed, or the request could not be made. Whether a write happened is stated. |
+| `2` | monmux refused. No DDC write was performed. |
 
 **Redacted by default.** Serial numbers, serial strings, raw EDID hex and macOS display UUIDs are withheld in JSON exactly as
 they are in the text output, unless `--show-serial` is passed. Two shapes: inside an `identity`, `serialNumber` is `0` and
@@ -64,12 +64,12 @@ One document on stdout for every outcome. The exit code is unchanged, and nothin
 
 `outcome` and `writeStatus` are always present, and the pair is fixed:
 
-| `outcome` | `writeStatus` | Exit | What monmux knows                                                                     |
-| --------- | ------------- | ---- | ------------------------------------------------------------------------------------- |
-| `sent`    | `sent`        | `0`  | The command was sent. The switch itself is not independently confirmed.               |
-| `dry-run` | `none`        | `0`  | Nothing was executed. This is the same promise the text output's footer makes.        |
-| `refused` | `none`        | `2`  | monmux declined before the tool was reached. No DDC write was performed.              |
-| `failed`  | `unknown`     | `1`  | The tool ran and failed, or the request could not be made. A write may have happened. |
+| `outcome` | `writeStatus` | Exit | What monmux knows |
+| --- | --- | --- | --- |
+| `sent` | `sent` | `0` | The command was sent. The switch itself is not independently confirmed. |
+| `dry-run` | `none` | `0` | Nothing was executed. This is the same promise the text output's footer makes. |
+| `refused` | `none` | `2` | monmux declined before the tool was reached. No DDC write was performed. |
+| `failed` | `unknown` | `1` | The tool ran and failed, or the request could not be made. A write may have happened. |
 
 `writeStatus` is what monmux knows, not what it hopes. `none` is a promise and is made only where the text output makes it
 too; `unknown` withholds one.
@@ -80,20 +80,20 @@ error** — that is what stops a dry run ever being announced as a completed swi
 
 ### Fields
 
-| Field         | Present when           | Notes                                                                    |
-| ------------- | ---------------------- | ------------------------------------------------------------------------ |
-| `outcome`     | always                 | One of `sent`, `dry-run`, `refused`, `failed`.                           |
-| `writeStatus` | always                 | One of `sent`, `none`, `unknown`, paired as above.                       |
-| `assumed`     | always                 | `true` when identification was bypassed with `--unsafe-model`.           |
-| `backend`     | a backend was opened   | `ddcutil` or `m1ddc`.                                                    |
-| `display`     | a decision was reached | `label`, and `handle` — masked when the handle is private data.          |
-| `model`       | a decision was reached | The catalog entry's full name, e.g. `LG 38WR85QC-W`.                     |
-| `input`       | a decision was reached | The name as typed, e.g. `usb-c`.                                         |
-| `inputLabel`  | a decision was reached | The human name monmux prints, e.g. `USB-C`.                              |
-| `operation`   | a decision was reached | `mechanism`, `value`, `valueHex` — from the compiled-in catalog.         |
-| `command`     | a decision was reached | The invocation, redacted unless `--show-serial`. Prose: do not parse it. |
-| `refusal`     | `outcome` is `refused` | See below.                                                               |
-| `error`       | `outcome` is `failed`  | The failure text. Prose: do not parse it.                                |
+| Field | Present when | Notes |
+| --- | --- | --- |
+| `outcome` | always | One of `sent`, `dry-run`, `refused`, `failed`. |
+| `writeStatus` | always | One of `sent`, `none`, `unknown`, paired as above. |
+| `assumed` | always | `true` when identification was bypassed with `--unsafe-model`. |
+| `backend` | a backend was opened | `ddcutil` or `m1ddc`. |
+| `display` | a decision was reached | `label`, and `handle` — masked when the handle is private data. |
+| `model` | a decision was reached | The catalog entry's full name, e.g. `LG 38WR85QC-W`. |
+| `input` | a decision was reached | The name as typed, e.g. `usb-c`. |
+| `inputLabel` | a decision was reached | The human name monmux prints, e.g. `USB-C`. |
+| `operation` | a decision was reached | `mechanism`, `value`, `valueHex` — from the compiled-in catalog. |
+| `command` | a decision was reached | The invocation, redacted unless `--show-serial`. Prose: do not parse it. |
+| `refusal` | `outcome` is `refused` | See below. |
+| `error` | `outcome` is `failed` | The failure text. Prose: do not parse it. |
 
 "A decision was reached" means the run got as far as reporting one, which is `sent` and `dry-run` and nothing else. A refusal
 never carries `display`, `model`, `input` or `operation`, even the three raised after a target had been chosen —
@@ -175,17 +175,17 @@ The same report `monmux info` prints, and the same one `monmux doctor` prints th
 }
 ```
 
-| Field                      | Notes                                                                                            |
-| -------------------------- | ------------------------------------------------------------------------------------------------ |
-| `displays[].label`         | How the display is named in every message.                                                       |
-| `displays[].handle`        | The backend's address. Masked unless `--show-serial` when `handlePrivate` is `true`.             |
-| `displays[].writable`      | Whether the backend could write to it at all — before any catalog question.                      |
-| `displays[].status`        | `ok`, `no-ddc-channel`, `edid-unreadable`, `no-uuid`.                                            |
-| `displays[].identity`      | The parsed EDID identity. `serialNumber` and `serialString` are redacted unless `--show-serial`. |
-| `displays[].match`         | `exact`, `none` or `ambiguous`.                                                                  |
-| `displays[].model`         | The matched entry's full name, empty when `match` is not `exact`.                                |
-| `displays[].enabledInputs` | Input **names**, and empty for any display monmux will not write to.                             |
-| `checks[]`                 | The backend's diagnostics: `name`, `ok`, `detail`.                                               |
+| Field | Notes |
+| --- | --- |
+| `displays[].label` | How the display is named in every message. |
+| `displays[].handle` | The backend's address. Masked unless `--show-serial` when `handlePrivate` is `true`. |
+| `displays[].writable` | Whether the backend could write to it at all — before any catalog question. |
+| `displays[].status` | `ok`, `no-ddc-channel`, `edid-unreadable`, `no-uuid`. |
+| `displays[].identity` | The parsed EDID identity. `serialNumber` and `serialString` are redacted unless `--show-serial`. |
+| `displays[].match` | `exact`, `none` or `ambiguous`. |
+| `displays[].model` | The matched entry's full name, empty when `match` is not `exact`. |
+| `displays[].enabledInputs` | Input **names**, and empty for any display monmux will not write to. |
+| `checks[]` | The backend's diagnostics: `name`, `ok`, `detail`. |
 
 `enabledInputs` is a list of names, not of labels, and stays that way. A client that wants the human label joins on the
 catalog entry named by `model`, where every enabled input is recorded by construction — see below. `switch --json` carries
@@ -247,11 +247,11 @@ it.
 
 Every field is whatever the build put there, and there are three cases:
 
-| Build                      | `version`                                                                   | `commit`      | `date`                      |
-| -------------------------- | --------------------------------------------------------------------------- | ------------- | --------------------------- |
-| A release                  | the tag verbatim, **leading `v` kept**, e.g. `v0.6.0`                       | 40 hex digits | RFC 3339, the commit's date |
-| `make go-build`            | `git describe --tags --dirty --always`, e.g. `v0.5.0-4-gabc123def456-dirty` | 12 hex digits | RFC 3339, the build's time  |
-| `go build` with no ldflags | `dev`                                                                       | `none`        | `unknown`                   |
+| Build | `version` | `commit` | `date` |
+| --- | --- | --- | --- |
+| A release | the tag verbatim, **leading `v` kept**, e.g. `v0.6.0` | 40 hex digits | RFC 3339, the commit's date |
+| `make go-build` | `git describe --tags --dirty --always`, e.g. `v0.5.0-4-gabc123def456-dirty` | 12 hex digits | RFC 3339, the build's time |
+| `go build` with no ldflags | `dev` | `none` | `unknown` |
 
 A client that gates on the version parses it accordingly: the leading `v` is part of the released string, and neither a
 `git describe` string nor `dev` is a plain semantic version. Treating an unparsable `version` as acceptable is the right

@@ -36,11 +36,11 @@ probe that costs nothing and touches no monitor: a build without those options f
 Displays come from `/sys/class/drm`, not from `ddcutil`. For every connector whose `status` reads `connected`, monmux reads the
 `edid` file and resolves the `ddc` symlink to an I²C bus:
 
-| What it finds                   | Result                                                |
-| ------------------------------- | ----------------------------------------------------- |
+| What it finds | Result |
+| --- | --- |
 | EDID parses, `ddc` link present | `writable`, status `ok`, handle is the connector name |
-| EDID missing or unparsable      | not writable, status `edid-unreadable`                |
-| no `ddc` symlink                | not writable, status `no-ddc-channel`                 |
+| EDID missing or unparsable | not writable, status `edid-unreadable` |
+| no `ddc` symlink | not writable, status `no-ddc-channel` |
 
 The raw EDID bytes and the bus number are kept inside the backend and never exported. Because enumeration reads only sysfs, `info`
 lists your monitors even when `ddcutil` is missing or too old — the checks then say why nothing can be switched.

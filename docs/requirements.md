@@ -77,7 +77,7 @@ The `ddcutil` LG compatibility page contains different confirmed input values fo
 Likewise, `m1ddc` documents only *common* alternate-input values:
 
 | Common `m1ddc` value | Hex | Generic label in `m1ddc` |
-| ---: | ---: | --- |
+| --: | --: | --- |
 | 208 | `0xD0` | DisplayPort 1 |
 | 209 | `0xD1` | DisplayPort 2 |
 | 144 | `0x90` | HDMI 1 |
@@ -133,7 +133,7 @@ Read-only brightness also returned the same value seen on Linux.
 The same physical 38WR85QC-W exposed different EDID product IDs depending on the connection used during the test:
 
 | Connection | Manufacturer | Product ID |
-| --- | --- | ---: |
+| --- | --- | --: |
 | DisplayPort | `GSM` | `0x77D3` |
 | USB-C | `GSM` | `0x77D4` |
 
@@ -148,7 +148,7 @@ The generic model string `LG ULTRAWIDE` is not specific enough to identify the m
 Both directions were successfully tested on the same physical monitor:
 
 | Requested input | Hex value | Decimal | Result |
-| --- | ---: | ---: | --- |
+| --- | --: | --: | --- |
 | DisplayPort | `0xD0` | `208` | Successfully switched from USB-C to DisplayPort |
 | USB-C | `0xD1` | `209` | Successfully switched from DisplayPort to USB-C |
 
@@ -163,7 +163,7 @@ HDMI input values have **not** been tested on this unit and should not currently
 The `ddcutil` LG compatibility page lists the **38BR85QC** as confirmed by a tester with these values: [S1]
 
 | Input | Hex value | Decimal |
-| --- | ---: | ---: |
+| --- | --: | --: |
 | HDMI 1 | `0x90` | `144` |
 | HDMI 2 | `0x91` | `145` |
 | DisplayPort | `0xD0` | `208` |
@@ -551,7 +551,7 @@ This is currently the situation for the 38BR85QC: its input mapping is externall
 ## 11. Current compatibility status
 
 | Monitor | Identification data | DP | USB-C | HDMI 1 | HDMI 2 | Safe for automatic writes now? |
-| --- | --- | ---: | ---: | ---: | ---: | --- |
+| --- | --- | --: | --: | --: | --: | --- |
 | LG 38WR85QC-W | Directly observed: `GSM/0x77D3`, `GSM/0x77D4` | `0xD0` verified | `0xD1` verified | Not verified for this model | Not verified for this model | **Yes, for DP and USB-C only** |
 | LG 38BR85QC | Exact EDID fingerprint not yet collected | `0xD0` externally confirmed | `0xD1` externally confirmed | `0x90` externally confirmed | `0x91` externally confirmed | **No; identification data still required** |
 

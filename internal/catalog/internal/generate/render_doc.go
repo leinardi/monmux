@@ -165,7 +165,7 @@ func renderRows(model *Model) ([]string, error) {
 		}
 
 		rows = append(rows, fmt.Sprintf(
-			"| %s | %s | `%s` | `0x%02X` | `%s` | %s | %s | %s |",
+			"| %s | %s | %#q | `0x%02X` | %#q | %s | %s | %s |",
 			model.FullName(),
 			identities,
 			name,

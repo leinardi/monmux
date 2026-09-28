@@ -16,8 +16,6 @@ env:
   # The same pin the release workflow uses, so `goreleaser check` here validates
   # against the binary that will actually build the release.
   GORELEASER_VERSION: v2.18.1
-  # Pinned by hand: dependabot does not track a `go install` argument.
-  GOVULNCHECK_VERSION: v1.8.0
 
 concurrency:
   group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
@@ -151,11 +149,10 @@ jobs:
           cache: true
 
       - name: Scan the module for known vulnerabilities
-        # Pinning the scanner does not pin what it knows: the vulnerability
-        # database is fetched at run time.
-        run: |
-          go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
-          govulncheck ./...
+        # The pinned govulncheck in .mk/audit-deps.mk, the same target the
+        # pre-commit hook runs. Pinning the scanner does not pin what it knows:
+        # the vulnerability database is fetched at run time.
+        run: make audit-deps
 
   release-config:
     # The release configuration is checked on every run rather than only when
@@ -191,7 +188,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run actionlint via pre-commit + reviewdog
-        uses: leinardi/gha-pre-commit-reviewdog-actions/actionlint@969e0363ec9fc1de66f65ca3d37c8dd871ac3c19 # v1.0.0
+        uses: leinardi/gha-pre-commit-reviewdog-actions/actionlint@68bf8e338b79df404181ceef655ae02f1c8edb8a # v1.0.2
         with:
           from-ref: ${{ github.event.pull_request.base.sha }}
           to-ref: ${{ github.event.pull_request.head.sha }}
@@ -227,7 +224,7 @@ jobs:
       # pull request that edits models.yaml without regenerating what is built
       # from it gets the diff posted as a review comment.
       - name: Run pre-commit hooks + reviewdog diff
-        uses: leinardi/gha-pre-commit-reviewdog-actions/pre-commit-hooks@969e0363ec9fc1de66f65ca3d37c8dd871ac3c19 # v1.0.0
+        uses: leinardi/gha-pre-commit-reviewdog-actions/pre-commit-hooks@68bf8e338b79df404181ceef655ae02f1c8edb8a # v1.0.2
         with:
           from-ref: ${{ github.event.pull_request.base.sha }}
           to-ref: ${{ github.event.pull_request.head.sha }}
@@ -264,7 +261,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run markdownlint-cli2 via pre-commit + reviewdog
-        uses: leinardi/gha-pre-commit-reviewdog-actions/markdownlint-cli2@969e0363ec9fc1de66f65ca3d37c8dd871ac3c19 # v1.0.0
+        uses: leinardi/gha-pre-commit-reviewdog-actions/markdownlint-cli2@68bf8e338b79df404181ceef655ae02f1c8edb8a # v1.0.2
         with:
           from-ref: ${{ github.event.pull_request.base.sha }}
           to-ref: ${{ github.event.pull_request.head.sha }}
@@ -287,7 +284,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run shellcheck via pre-commit + reviewdog
-        uses: leinardi/gha-pre-commit-reviewdog-actions/shellcheck@969e0363ec9fc1de66f65ca3d37c8dd871ac3c19 # v1.0.0
+        uses: leinardi/gha-pre-commit-reviewdog-actions/shellcheck@68bf8e338b79df404181ceef655ae02f1c8edb8a # v1.0.2
         with:
           from-ref: ${{ github.event.pull_request.base.sha }}
           to-ref: ${{ github.event.pull_request.head.sha }}
@@ -310,7 +307,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run yamllint via pre-commit + reviewdog
-        uses: leinardi/gha-pre-commit-reviewdog-actions/yamllint@969e0363ec9fc1de66f65ca3d37c8dd871ac3c19 # v1.0.0
+        uses: leinardi/gha-pre-commit-reviewdog-actions/yamllint@68bf8e338b79df404181ceef655ae02f1c8edb8a # v1.0.2
         with:
           from-ref: ${{ github.event.pull_request.base.sha }}
           to-ref: ${{ github.event.pull_request.head.sha }}
@@ -329,7 +326,7 @@ jobs:
           fetch-depth: 0
 
       - name: Validate the commit messages
-        uses: leinardi/gha-pre-commit-reviewdog-actions/conventional-commits@969e0363ec9fc1de66f65ca3d37c8dd871ac3c19 # v1.0.0
+        uses: leinardi/gha-pre-commit-reviewdog-actions/conventional-commits@68bf8e338b79df404181ceef655ae02f1c8edb8a # v1.0.2
         with:
           from-ref: ${{ github.event.pull_request.base.sha }}
           to-ref: ${{ github.event.pull_request.head.sha }}

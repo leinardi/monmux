@@ -55,9 +55,11 @@ repos:
         # the convenience that fixes the file for you.
         files: '^(internal/catalog/models\.yaml|docs/compatibility\.md|internal/catalog/catalog\.go|internal/catalog/internal/(generate|input)/.*\.go)$'
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.23.2
+    rev: v0.23.3
     hooks:
       - id: markdownlint-cli2
+        additional_dependencies:
+          - markdownlint-rule-table-format@1.0.3
   - repo: local
     hooks:
       - id: shellcheck
@@ -89,6 +91,20 @@ repos:
         additional_dependencies: ["prettier@3.7.4"]
         files: \.(yml|yaml)$
         args: ["--write"]
+      # Dependency-change check, and nothing more. It runs the same target as `make audit-deps` --
+      # the full source-aware govulncheck scan over every package -- but only when go.mod or go.sum
+      # change, which is what limits it: it catches a bad upgrade at the moment it is made, and
+      # nothing else. It does not catch a CVE disclosed against a dependency nobody touched since,
+      # and it never fires on a .go change. Widening the trigger is not the fix: it would put a
+      # network scan on every Go commit. The govulncheck CI job runs the same target on every pull
+      # request.
+      - id: audit-deps-go
+        name: go dependency audit
+        entry: make audit-deps
+        language: system
+        pass_filenames: false
+        require_serial: true
+        files: ^go\.(mod|sum)$
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
     hooks:
@@ -99,16 +115,18 @@ repos:
         args: ["--format", "parsable"]
         stages: [manual]
   # The release version is derived from the commit types since the last tag, so
-  # a message nobody can classify is a release nobody can version. No
-  # --force-scope, unlike the sibling repositories: this history writes `docs:`
-  # and `build:` without one, and CONTRIBUTING.md allows that.
+  # a message nobody can classify is a release nobody can version. With
+  # --force-scope: every commit from now on names a scope, and CONTRIBUTING.md
+  # requires one. The goreleaser changelog groups match any scope, and the cask
+  # commit it pushes to leinardi/homebrew-tap is scoped too (`chore(cask): ...`).
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.4.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
+        args: ["--force-scope"]
   - repo: https://github.com/golangci/golangci-lint
-    rev: v2.13.2
+    rev: v2.14.0
     hooks:
       - id: golangci-lint-config-verify
       - id: golangci-lint-fmt

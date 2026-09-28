@@ -201,11 +201,11 @@ A wrong value can leave a monitor on an input with no signal, so have the monito
 
 ## Exit codes
 
-| Code | Meaning                                                                                                                        |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `0`  | The input-switch command was sent, or a read-only command succeeded.                                                           |
-| `1`  | The external tool ran and failed, or the request could not be made at all. The message says whether a write may have happened. |
-| `2`  | monmux refused. No DDC write was performed.                                                                                    |
+| Code | Meaning |
+| --- | --- |
+| `0` | The input-switch command was sent, or a read-only command succeeded. |
+| `1` | The external tool ran and failed, or the request could not be made at all. The message says whether a write may have happened. |
+| `2` | monmux refused. No DDC write was performed. |
 
 Only exit `2` carries the promise that nothing was written.
 
