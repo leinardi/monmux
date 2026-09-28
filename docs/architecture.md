@@ -6,20 +6,20 @@ reaching a monitor.
 
 ## Packages
 
-| Package                    | What it is                                                                                                                |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `internal/edid`            | Parses EDID block 0 into an identity: manufacturer, product code, serials, model name. No raw bytes leave it.             |
-| `internal/refusal`         | The one refusal error, its closed set of reasons, and the message template every refusal renders through.                 |
-| `internal/catalog`         | The supported-monitor catalog, written in YAML and rendered to Go. Which models, which inputs, which value, why.          |
-| `internal/policy`          | Pure decision: given the attached displays and a request, which display and which operation — or which refusal.           |
-| `internal/backend`         | What a backend *is*: `Display`, `Command`, `Check`, the `Backend` interface, and the shared tool-path trust check.        |
-| `internal/backend/exec`    | The only place monmux runs an external program, and the fake that lets tests observe invocations without performing them. |
-| `internal/backend/ddcutil` | The Linux backend (`//go:build linux`).                                                                                   |
-| `internal/backend/m1ddc`   | The macOS backend (`//go:build darwin`); its parser and decisions carry no build tag and are tested everywhere.           |
-| `internal/backend/select`  | Chooses the backend from the operating system. There is no override.                                                      |
-| `internal/app`             | Orchestration: the steps of a switch, in the one order they may happen in.                                                |
-| `internal/config`          | The three-key configuration file.                                                                                         |
-| `cmd/monmux`               | The CLI: `info`, `switch`, `doctor`, `version`, `completion`.                                                             |
+| Package | What it is |
+| --- | --- |
+| `internal/edid` | Parses EDID block 0 into an identity: manufacturer, product code, serials, model name. No raw bytes leave it. |
+| `internal/refusal` | The one refusal error, its closed set of reasons, and the message template every refusal renders through. |
+| `internal/catalog` | The supported-monitor catalog, written in YAML and rendered to Go. Which models, which inputs, which value, why. |
+| `internal/policy` | Pure decision: given the attached displays and a request, which display and which operation — or which refusal. |
+| `internal/backend` | What a backend *is*: `Display`, `Command`, `Check`, the `Backend` interface, and the shared tool-path trust check. |
+| `internal/backend/exec` | The only place monmux runs an external program, and the fake that lets tests observe invocations without performing them. |
+| `internal/backend/ddcutil` | The Linux backend (`//go:build linux`). |
+| `internal/backend/m1ddc` | The macOS backend (`//go:build darwin`); its parser and decisions carry no build tag and are tested everywhere. |
+| `internal/backend/select` | Chooses the backend from the operating system. There is no override. |
+| `internal/app` | Orchestration: the steps of a switch, in the one order they may happen in. |
+| `internal/config` | The three-key configuration file. |
+| `cmd/monmux` | The CLI: `info`, `switch`, `doctor`, `version`, `completion`. |
 
 The dependency direction is one-way. `internal/backend` imports no backend implementation, which is what lets the decision
 layers depend on the vocabulary without depending on `ddcutil` or `m1ddc`.
@@ -104,14 +104,14 @@ statement available (requirements 9.8, 9.11, 9.12).
 
 Both backends produce the same `edid.Identity`, which is what lets one catalog serve both.
 
-| Field         | Linux                                     | macOS                                                           |
-| ------------- | ----------------------------------------- | --------------------------------------------------------------- |
-| Manufacturer  | EDID bytes 8–9, decoded to a PNP ID       | IORegistry `ManufacturerID`, or `CGDisplayVendorNumber` decoded |
-| Product code  | EDID bytes 10–11                          | `CGDisplayModelNumber`                                          |
-| Serial number | EDID bytes 12–15                          | `CGDisplaySerialNumber`                                         |
-| Serial string | EDID descriptor `0xFF`                    | IORegistry `AlphanumericSerialNumber`                           |
-| Model name    | EDID descriptor `0xFC`                    | IORegistry `Product name`, or the display list's header name    |
-| Handle        | the DRM connector name, e.g. `card1-DP-1` | the display's system UUID — private data, masked in output      |
+| Field | Linux | macOS |
+| --- | --- | --- |
+| Manufacturer | EDID bytes 8–9, decoded to a PNP ID | IORegistry `ManufacturerID`, or `CGDisplayVendorNumber` decoded |
+| Product code | EDID bytes 10–11 | `CGDisplayModelNumber` |
+| Serial number | EDID bytes 12–15 | `CGDisplaySerialNumber` |
+| Serial string | EDID descriptor `0xFF` | IORegistry `AlphanumericSerialNumber` |
+| Model name | EDID descriptor `0xFC` | IORegistry `Product name`, or the display list's header name |
+| Handle | the DRM connector name, e.g. `card1-DP-1` | the display's system UUID — private data, masked in output |
 
 A display monmux cannot address is still reported, with a status saying why: `no-ddc-channel`, `edid-unreadable`, `no-uuid`.
 `info` lists it; policy can never select it.

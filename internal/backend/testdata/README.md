@@ -11,13 +11,13 @@ serial number of somebody's monitor. Before it is committed, every identifier is
 replaced with one of the values below, and `TestFixturesCarryOnlySyntheticSerials`
 fails if any other value appears.
 
-| Identifier                | Value                                   |
-| ------------------------- | --------------------------------------- |
-| EDID numeric serial       | `0x01020304`                            |
-| EDID serial string (0xFF) | `TESTSERIAL01`                          |
-| m1ddc alphanumeric serial | `TESTSERIAL01`                          |
-| m1ddc binary serial       | `16909060 (0x01020304)`                 |
-| macOS display UUID        | `00000000-0000-4000-8000-00000000000N`  |
+| Identifier | Value |
+| --- | --- |
+| EDID numeric serial | `0x01020304` |
+| EDID serial string (0xFF) | `TESTSERIAL01` |
+| m1ddc alphanumeric serial | `TESTSERIAL01` |
+| m1ddc binary serial | `16909060 (0x01020304)` |
+| macOS display UUID | `00000000-0000-4000-8000-00000000000N` |
 
 m1ddc prints its numeric fields twice, in decimal and in hex, and prints `(null)`
 for a value the IORegistry did not supply; both forms are accepted for a serial,

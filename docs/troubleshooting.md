@@ -11,11 +11,11 @@ Both are read-only, and both redact serials by default, so their output is safe 
 
 ## Exit codes
 
-| Code | Meaning                                                                                        |
-| ---- | ---------------------------------------------------------------------------------------------- |
-| `0`  | The input-switch command was sent, or a read-only command succeeded.                           |
-| `1`  | The tool ran and failed, or the request could not be made. Whether a write happened is stated. |
-| `2`  | monmux refused. No DDC write was performed.                                                    |
+| Code | Meaning |
+| --- | --- |
+| `0` | The input-switch command was sent, or a read-only command succeeded. |
+| `1` | The tool ran and failed, or the request could not be made. Whether a write happened is stated. |
+| `2` | monmux refused. No DDC write was performed. |
 
 Only exit `2` promises that nothing was written. A refusal always ends with `No DDC write was performed.`, and that sentence is
 load-bearing: monmux never prints it about a run that reached the tool.

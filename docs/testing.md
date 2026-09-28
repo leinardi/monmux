@@ -123,13 +123,13 @@ on both OSes for exactly this reason — [release.md](release.md).
 Fixtures are captures of real hardware, so they arrive carrying somebody's serial number. Every identifier is replaced before
 the fixture is committed, with the synthetic values documented in `internal/backend/testdata/README.md`:
 
-| Identifier                | Value                                  |
-| ------------------------- | -------------------------------------- |
-| EDID numeric serial       | `0x01020304`                           |
-| EDID serial string (0xFF) | `TESTSERIAL01`                         |
-| m1ddc alphanumeric serial | `TESTSERIAL01`                         |
-| m1ddc binary serial       | `16909060 (0x01020304)`                |
-| macOS display UUID        | `00000000-0000-4000-8000-00000000000N` |
+| Identifier | Value |
+| --- | --- |
+| EDID numeric serial | `0x01020304` |
+| EDID serial string (0xFF) | `TESTSERIAL01` |
+| m1ddc alphanumeric serial | `TESTSERIAL01` |
+| m1ddc binary serial | `16909060 (0x01020304)` |
+| macOS display UUID | `00000000-0000-4000-8000-00000000000N` |
 
 `TestFixturesCarryOnlySyntheticSerials` reads every file under every `testdata` directory in the repository, at any depth, and
 fails if any other serial or UUID appears. The values are format-valid rather than obviously fake, because a parser must accept

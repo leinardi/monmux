@@ -161,12 +161,12 @@ The evidence is a record, not a sentence. The generator composes the sentence th
 [compatibility.md](compatibility.md), so every row of one grade reads the same way and nobody can talk a weak report up in
 prose. The grades, and what each one needs:
 
-| Grade        | Means                                                                         | Required fields    |
-| ------------ | ----------------------------------------------------------------------------- | ------------------ |
-| `verified`   | You ran it on the unit. The only grade that may be enabled.                   | `date, tool, note` |
-| `documented` | The manufacturer documents it, and no field report was found.                 | `by, url`          |
-| `reported`   | Somebody reports switching that named input with that value.                  | `by, tool, url`    |
-| `quoted`     | A report quotes the values and says they work, without saying which it tried. | `by, tool, url`    |
+| Grade | Means | Required fields |
+| --- | --- | --- |
+| `verified` | You ran it on the unit. The only grade that may be enabled. | `date, tool, note` |
+| `documented` | The manufacturer documents it, and no field report was found. | `by, url` |
+| `reported` | Somebody reports switching that named input with that value. | `by, tool, url` |
+| `quoted` | A report quotes the values and says they work, without saying which it tried. | `by, tool, url` |
 
 `note` is optional free text for every grade but `verified`, where it says what was switched. `notes` is per-model prose and is
 rendered under the model in [compatibility.md](compatibility.md); it is documentation and never an operation, so nothing written
