@@ -55,7 +55,7 @@ repos:
         # the convenience that fixes the file for you.
         files: '^(internal/catalog/models\.yaml|docs/compatibility\.md|internal/catalog/catalog\.go|internal/catalog/internal/(generate|input)/.*\.go)$'
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.23.2
+    rev: v0.23.3
     hooks:
       - id: markdownlint-cli2
   - repo: local
@@ -108,7 +108,7 @@ repos:
       - id: conventional-pre-commit
         stages: [commit-msg]
   - repo: https://github.com/golangci/golangci-lint
-    rev: v2.13.2
+    rev: v2.14.0
     hooks:
       - id: golangci-lint-config-verify
       - id: golangci-lint-fmt
