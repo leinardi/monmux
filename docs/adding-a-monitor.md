@@ -104,7 +104,9 @@ Write down: the date, the operating system, the backend, the exact command, and 
 
 Most entries are already in the catalog, recorded from somebody else's report, disabled and without an identity — so
 `monmux switch` refuses them, and there is nothing to test yet. `--unsafe-model` is how you get from a `reported` row to a
-`verified` one **without editing the catalog first**:
+`verified` one **without editing the catalog first**. Every such entry has an open
+[`Help verify: <Vendor> <Model>`](https://github.com/leinardi/monmux/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+label%3Acatalog)
+issue with its values and these commands; report what you ran there, negative results included:
 
 ```sh
 monmux catalog show AOC/Q27P1B                            # read the values and the evidence behind them
@@ -246,5 +248,7 @@ A disabled entry is not a lesser contribution. It is the thing that stops the ne
 - [ ] `make go-generate` run, and everything it rewrote — `models_gen.go` and `compatibility.md` — committed alongside the YAML.
 - [ ] Any new fixture sanitized, and `make go-test` passing.
 - [ ] `make check` clean.
+- [ ] If the model has a `Help verify` issue, the description closes it (`Closes #N`) when the PR enables the model, or links
+      it otherwise.
 - [ ] If you added a mechanism: the enum value, the generator's name table, both backends' handling of it, and a golden test for
       the exact arguments.

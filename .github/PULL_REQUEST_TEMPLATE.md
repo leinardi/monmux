@@ -19,6 +19,8 @@ Any HTML comment will be stripped when the markdown is rendered, so you don't ne
 
 - [ ] If this changes `internal/catalog/models.yaml`, the evidence is in the entry, and the Summary above says which model
   and which input it enables
+- [ ] If this enables a model, the Summary closes its `Help verify` issue (`Closes #N`); if it records a new model or changes a
+  recorded value, the Summary says so, so the model's issue can be opened or updated
 - [ ] No hardware run in this pull request was performed by an AI agent — [AGENTS.md](../AGENTS.md)
 
 ## Type of changes

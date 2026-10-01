@@ -24,8 +24,13 @@ written down for the contributor who owns one — enabling a row means testing i
 [docs/adding-a-monitor.md](docs/adding-a-monitor.md). The full list, with the evidence and the conflicts behind
 every value, is in [docs/compatibility.md](docs/compatibility.md).
 
+**Own one of them?** Every recorded model has an open
+[`help wanted` issue](https://github.com/leinardi/monmux/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+label%3Acatalog)
+titled `Help verify: <Vendor> <Model>`, with the recorded values and the three commands that test them. A test on your unit,
+reported there, is what makes a model switchable — and a value that did nothing is as useful to report as one that worked.
+
 Two mechanisms are implemented: `lg-alt-input`, the LG side channel, and `vcp-input-source`, the standard `VCP 0x60` Input
-Source feature. Only the first has ever reached a monitor; the second has one recorded model, disabled, and enabling it would
+Source feature. Only the first has ever reached a monitor; the second has 36 recorded models, all disabled, and enabling one would
 be the first hardware run of that path.
 
 ## Install
