@@ -1265,6 +1265,7 @@ var models = []Model{
 		},
 		Notes: []string{
 			"gzougianos reports the \"exact same numbers\" as the NVapi-write-value-to-monitor README working over NVAPI. An m1ddc issue separately reports 208 and 144 working through BetterDisplay's LG alternate input on this model, which is the same two values in decimal.",
+			"The same m1ddc issue reports that `m1ddc set input-alt 208` did nothing on that unit, and no m1ddc release has followed it. `input-alt` is exactly what monmux sends on macOS, so a macOS test may fail where Linux, through ddcutil, works; whoever verifies it should say which system they used.",
 		},
 		Sources: []string{
 			"https://github.com/rockowitz/ddcutil/issues/100#issuecomment-2244679727",
@@ -2076,6 +2077,7 @@ var models = []Model{
 		Notes: []string{
 			"The Odyssey Neo G9 57 inch; the thread names model codes LS57CG952NUXEN and LS57CG952NNXZA. jimmy-tr33 in the same thread confirms HDMI-1 and HDMI-2 switch with 0x05 and 0x06.",
 			"Conflict, recorded and not resolved: mwd102, on firmware 1009.2 and working from the Samsung Windows application, lists HDMI-1 as 0x11 and HDMI-2 as 0x12. HDMI-3 reads back 0x01 but writing 0x01 does not switch, and the ddc-mqtt project configures 7 for it; HDMI-3 is left out. PBP and PIP use vendor codes 0xE2 and 0xE3, which ema987 found absent on firmware 1007.0 and present on 1009.2; out of scope either way.",
+			"The recorded values come from firmware 1007.0. ema987 has since moved to 1009.2, and the thread does not say which HDMI values work there, so 0x05 and 0x06 may be wrong on current firmware. A report verifying this model has to name the firmware version shown in the OSD.",
 		},
 		Sources: []string{
 			"https://github.com/rockowitz/ddcutil/issues/397",
