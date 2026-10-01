@@ -204,6 +204,17 @@ result line says the identification was bypassed.
 A wrong value can leave a monitor on an input with no signal, so have the monitor's OSD within reach, and read
 [docs/adding-a-monitor.md](docs/adding-a-monitor.md) before you record what happened.
 
+## GNOME Shell extension
+
+[gnome-shell-extension-monmux](https://github.com/leinardi/gnome-shell-extension-monmux) puts the same switch in the GNOME top
+panel: a menu of the attached displays and the inputs monmux will write, with the ones it will not shown greyed out next to the
+reason. It runs `monmux` for every decision and can enable nothing monmux refuses. It is in development, installed from source,
+and needs GNOME Shell 46 to 50 and monmux 0.6.0 or newer.
+
+<a href="https://github.com/leinardi/gnome-shell-extension-monmux">
+  <img src="https://raw.githubusercontent.com/leinardi/gnome-shell-extension-monmux/main/docs/images/menu.png" alt="The extension's panel menu: one LG 38WR85QC-W on card1-DP-1, with DisplayPort and USB-C to pick from, the monmux version, a Dry run switch and Preferences" width="250">
+</a>
+
 ## Exit codes
 
 | Code | Meaning |
