@@ -73,6 +73,11 @@ reported elsewhere.
 If you have values but no unit to test them on, contribute the entry disabled, with a source. That is a real contribution: it
 stops the next person guessing.
 
+Every model that is recorded but not write-enabled has one open `Help verify: <Vendor> <Model>` issue, labelled `help wanted`
+and `catalog`, whose body repeats the model's recorded values. Those tables are copies, so they are kept in step with
+`models.yaml` by hand: a pull request that enables a model closes its issue with `Closes #N`; one that records a new disabled
+model, or changes, adds or removes a recorded value, says so in its summary so the issue can be opened or edited when it merges.
+
 The full procedure, including how to sanitize a fixture and what belongs in the pull request, is in
 [docs/adding-a-monitor.md](docs/adding-a-monitor.md).
 

@@ -65,6 +65,11 @@ A change to the catalog is a change to `internal/catalog/models.yaml` followed b
 Commit all three. Three tests fail the build if they disagree: one compares each rendered file against a fresh rendering of the
 YAML, and one reads the document back and compares it against the compiled catalog. Do not hand-edit inside the markers.
 
+Each recorded, not write-enabled model also has an open `Help verify: <Vendor> <Model>` GitHub issue whose body copies its
+values, and nothing checks that copy. A catalog change that enables a model closes its issue; one that records a model or changes
+a recorded value says so in the PR summary, so the human can update the issue. Agents do not open or edit those issues
+unprompted.
+
 ## Common commands
 
 ```bash
