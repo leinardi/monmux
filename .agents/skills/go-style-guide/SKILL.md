@@ -1,24 +1,24 @@
 ---
 name: go-style-guide
 description: >
-  Project-specific Go coding rules for monmux. Apply whenever writing,
-  editing, or reviewing any .go file in this repository — new functions, new files,
-  bug fixes, refactors, test additions. The rules here are enforced by golangci-lint
-  (version 2, default: all linters) and the pre-commit hooks. Violations require
-  manual fixup after the fact, so internalise them up-front instead. Use this skill
-  proactively: consult it before generating Go code, not after lint fails.
+  Go coding rules for monmux: the golangci-lint v2 (default: all) settings and how
+  to satisfy them, the linux/darwin build-tag layout and cross-OS lint, refusal
+  error handling (never wrapped), and the helpers to reuse (tool-path trust check,
+  refusals, doctor checks, redaction, catalog lookups, fakes). Use when writing,
+  editing or reviewing any .go file in monmux — new code, bug fixes, refactors or
+  tests — before generating Go code, not after lint fails.
 ---
 
 # Go Style Guide — monmux
 
 Rules derived from `.golangci.yaml` (golangci-lint v2, `default: all`) and verified
-against the existing codebase in `cmd/` and `internal/`. §1–§16 follow from the linters
-and the build, §17–§19 are review rules the linters cannot check.
+against the existing codebase in `cmd/` and `internal/`. §1–§12 follow from the linters
+and the build, §13–§15 are review rules the linters cannot check.
 
-golangci-lint is not on `PATH` in every environment; run it through pre-commit
-(`pre-commit run golangci-lint-full --all-files`). That lints only the host's backend
-(§10): after touching a tagged file or anything shared, also run `make go-lint-cross`,
-which lints both. Never commit with `--no-verify` — fix the underlying issue instead.
+golangci-lint is not on `PATH` in every environment; run it through pre-commit (see *Lint,
+test and cross-OS loop* at the end). That lints only the host's backend (§8): after touching
+a tagged file or anything shared, also run `make go-lint-cross`, which lints both. Never
+commit with `--no-verify` — fix the underlying issue instead.
 
 Linters that are **disabled** in `.golangci.yaml`, so their rules do not apply:
 
@@ -28,7 +28,7 @@ Linters that are **disabled** in `.golangci.yaml`, so their rules do not apply:
 | `gomodguard` | Replaced by `gomodguard_v2`, which is enabled |
 | `gochecknoglobals` | Package-level lookup tables (`kinds`, `grades`, `busPattern`) are intentional |
 | `nonamedreturns` | Named returns are allowed |
-| `wsl` | Whitespace style is enforced by `gofumpt` instead |
+| `wsl` | The deprecated v4 linter; its successor `wsl_v5` stays enabled |
 
 The formatters (`gci`, `gofmt`, `gofumpt`, `goimports`, `golines`) run in the
 `golangci-lint-fmt` hook and in CI.
@@ -37,30 +37,9 @@ The formatters (`gci`, `gofmt`, `gofumpt`, `goimports`, `golines`) run in the
 
 ## 1. Import grouping
 
-Three groups, separated by blank lines — this is enforced by both `gci` (explicit
-`sections: standard, default, prefix(github.com/leinardi/monmux)`) and `goimports`
-(`local-prefixes: github.com/leinardi/monmux`) simultaneously, and they must agree:
-
-```go
-import (
-    // Group 1: stdlib
-    "context"
-    "errors"
-    "fmt"
-
-    // Group 2: third-party (everything that is NOT this module)
-    "github.com/spf13/cobra"
-    "gopkg.in/yaml.v3"
-
-    // Group 3: local module (github.com/leinardi/monmux/...)
-    "github.com/leinardi/monmux/internal/catalog"
-    "github.com/leinardi/monmux/internal/edid"
-)
-```
-
-Within each group imports are sorted alphabetically. A blank line between groups
-is required; no blank lines within a group. Getting this wrong triggers both
-`gci` and `goimports`.
+Three groups separated by blank lines — stdlib, third-party, then local
+`github.com/leinardi/monmux/...` — alphabetical within each group. `gci` and `goimports`
+both enforce it and the `golangci-lint-fmt` hook rewrites it.
 
 ---
 
@@ -68,49 +47,34 @@ is required; no blank lines within a group. Getting this wrong triggers both
 
 ### 2a. No inline error assignment in `if` (`noinlineerr`)
 
-**Wrong:**
-
 ```go
+// Wrong
 if err := doSomething(); err != nil {
-```
 
-**Right:**
-
-```go
+// Right
 err := doSomething()
 if err != nil {
-```
+    return err
+}
 
-When a variable is already declared in the same scope, use `=` not `:=` for
-the second and later assignments:
-
-```go
-err := firstThing()
-if err != nil { ... }
-err = secondThing() // = not :=
-if err != nil { ... }
+err = secondThing() // = not := for the second and later assignments
 ```
 
 ### 2b. Wrap errors with `%w` (`errorlint`)
-
-Always wrap errors so callers can use `errors.Is`/`errors.As`:
 
 ```go
 return "", fmt.Errorf("locating the home directory: %w", err)
 ```
 
-The prefix is a short, lowercase phrase naming the operation, not a full
-sentence: no capital letters, no trailing period.
-
-Use `errors.Is` and Go 1.26's `errors.AsType[T]` (`errors.AsType[*refusal.Refusal](err)`)
-for comparisons, never `==` on error values — `err113` flags that too.
-
-A refusal is the exception to wrapping: pass it up unchanged, because wrapping
-would corrupt the message the user sees (the `//nolint:wrapcheck` sites in
-`internal/app` say so).
-
+The prefix is a short, lowercase phrase naming the operation, not a full sentence: no
+capital letters, no trailing period. Compare with `errors.Is` and the generic
+`errors.AsType[T]` (`errors.AsType[*refusal.Refusal](err)`), never `==` on error values.
 Prefer flat code with early returns; no `else` after a `return` (`revive`'s
 `indent-error-flow`).
+
+A refusal is the exception to wrapping: pass it up unchanged, because wrapping would
+corrupt the message the user sees (the `//nolint:wrapcheck` sites in `internal/app` say
+so).
 
 ### 2c. Errors are sentinels, detail is wrapped (`err113`)
 
@@ -131,17 +95,8 @@ sentinel can fit, and say why (§3).
 
 ### 2d. Aggregating multiple errors
 
-Use `errors.Join`:
-
-```go
-var problems []error
-for _, kind := range kinds {
-    if bare[kind] && numbered[kind] {
-        problems = append(problems, fmt.Errorf("%w: %q", ErrMixedNumbering, kind))
-    }
-}
-return errors.Join(problems...)
-```
+Use `errors.Join` over a slice of wrapped errors, as `input.CheckNumbering` does to report
+every problem at once.
 
 ### 2e. Ignoring errors explicitly
 
@@ -162,33 +117,20 @@ _, _ = fmt.Fprintln(stderr, rendered)
 - **Explanation required**: every directive needs `// reason`
 - **No unused**: remove directives when the code no longer triggers that linter
 
-The explanation says why the fix does not apply here, not which rule fired (§18).
-
-### On the line before a statement
+The explanation says why the fix does not apply here, not which rule fired (§14). Put the
+directive on the line before the statement or declaration it covers, or at the end of a
+single-line statement:
 
 ```go
 //nolint:gosec // an EDID product code is 16 bits by definition
 ProductCode: uint16(decimal(b.fields[fieldModel])),
-```
 
-### Preceding-line — for a function or type declaration
-
-```go
-// Ready records the call and returns the scripted error.
-//
 //nolint:gocritic // hugeParam: the Backend interface passes a Display by value
 func (f *Fake) Ready(_ context.Context, _ Display) error {
 ```
 
-### Multiple linters — comma-separated, no spaces
-
-```go
-//nolint:gocyclo,cyclop,gocognit // <why the branches cannot be split>
-```
-
-Always name all linters that fire. If `gocyclo` AND `cyclop` both fire for a
-complex function, suppress both. Same for `gocyclo`/`cyclop`/`gocognit` when
-all three exceed their thresholds.
+Multiple linters are comma-separated with no spaces. Name all that fire: `gocyclo` and
+`cyclop` measure the same thing, and `gocognit` often joins them.
 
 ---
 
@@ -201,11 +143,8 @@ all three exceed their thresholds.
 | `gocognit` | 35 | Cognitive complexity |
 | `funlen` | 50 statements | Lines are disabled (`lines: -1`) |
 
-Prefer extracting helpers over suppressing. When suppression is the right call
-(e.g., a function that branches over many independent config fields), explain
-why in the nolint comment.
-
-These limits apply to test files too: `.golangci.yaml` exempts tests only from
+Prefer extracting helpers over suppressing; when suppression is the right call, the
+nolint comment says why. These limits apply to test files too: `.golangci.yaml` exempts tests only from
 `dupl`, `goconst`, `lll`, `mnd`, `paralleltest`, `testpackage` and `varnamelen`.
 
 ---
@@ -225,41 +164,20 @@ const (
 )
 ```
 
-`strings.SplitN` is excluded from mnd checks.
-
-Test files (`_test.go`) are fully exempt from `mnd`.
+`strings.SplitN` is excluded from mnd checks. Test files are fully exempt from `mnd`.
 
 ---
 
-## 6. Type aliases
+## 6. Struct size (`gocritic hugeParam`)
 
-Use `any` instead of `interface{}`. `gofmt` rewrites `interface{}` → `any`
-automatically, but write `any` in new code to avoid the formatter changing
-your diff.
-
----
-
-## 7. Struct size (`gocritic hugeParam`)
-
-Structs passed by value that are over ~80 bytes trigger `hugeParam`. Pass by
-pointer instead — or add `//nolint:gocritic // <interface constraint reason>`
-when the signature is fixed by an interface (the `Backend` interface passes a
-`Display` by value).
-
-The same applies to `rangeValCopy`: iterate large slices by index and take a
-pointer (`item := &items[idx]`).
+Structs over ~80 bytes passed by value trigger `hugeParam`. Pass by pointer — or suppress
+when an interface fixes the signature (the `Backend` interface passes a `Display` by value;
+§3). The same applies to `rangeValCopy`: iterate large slices by index and take a pointer
+(`item := &items[idx]`).
 
 ---
 
-## 8. Line length (`lll`)
-
-Max 140 characters. `golines` wraps automatically, but try to stay within
-bounds when writing new code — especially long function signatures and struct
-tags. Test files are exempt.
-
----
-
-## 9. Forbidden packages (`depguard`)
+## 7. Forbidden packages (`depguard`)
 
 | Forbidden | Use instead |
 | --- | --- |
@@ -268,7 +186,7 @@ tags. Test files are exempt.
 
 ---
 
-## 10. Build tags
+## 8. Build tags
 
 monmux is cross-platform by default. Only the two OS backends are tagged, and
 the tag is the very first line of the file (before the copyright block):
@@ -297,105 +215,64 @@ Test files mirror the build tag of the code they test.
 
 ---
 
-## 11. Comments and `godox`
+## 9. Comments and `godox`
 
-- `FIXME` is flagged by `godox`. Do not leave `FIXME` comments in committed code.
-- `TODO` is allowed.
-- Comment style: gocritic's `whyNoLint` check is disabled, but all `//nolint`
-  directives still need an explanation per nolintlint's `require-explanation` setting.
-
-Doc comments:
-
+- `FIXME` is flagged by `godox`. `TODO` is allowed.
+- gocritic's `whyNoLint` check is disabled, but every `//nolint` still needs an
+  explanation (`require-explanation`).
 - Every exported function, type, and variable has a doc comment beginning with
   the symbol name (`// Redacted returns a copy with both serial fields zeroed.`).
 - Unexported symbols get one when their purpose is not obvious from the name.
-- Inline comments explain *why*, not *what* (§18).
+- Inline comments explain *why*, not *what* (§14).
 - Do not add doc comments or comment scaffolding to code you did not otherwise
   change, e.g. as a side effect of a bug fix.
 
 ---
 
-## 12. Duplication (`dupl`)
+## 10. Variable naming (`varnamelen`)
 
-Avoid copy-pasting blocks longer than ~100 tokens. Extract shared logic into a
-helper. Test files are exempt from `dupl`.
+`varnamelen` flags a name shorter than 3 characters whose last use is more than 5 lines
+from its declaration (defaults: `min-name-length: 3`, `max-distance: 5`). Test files are
+exempt.
 
----
-
-## 13. Shadowing (`govet shadow`)
-
-`govet` shadow detection is enabled. Avoid re-declaring variables with `:=`
-when they shadow an outer-scope variable. Prefer distinct names or
-restructuring to avoid shadows.
-
----
-
-## 14. Variable naming (`varnamelen`)
-
-Short variable names are fine in tight scopes (loop indices `i`, `k`, map
-values `v`). `varnamelen` flags a name shorter than 3 characters whose last use
-is more than 5 lines from its declaration (its defaults: `min-name-length: 3`,
-`max-distance: 5`). Test files are exempt.
-
-**Specific rules that bite most often:**
-
-- **Receivers are exempt**: `(b *Backend)`, `(f *Fake)`, `(m Model)` — all fine.
-- **Parameters are checked like locals.** A one-letter parameter passes in a
-  three-line function and is flagged as soon as the body grows, so give
-  parameters ≥ 3-char descriptive names from the start:
+- **Receivers are exempt**: `(b *Backend)`, `(f *Fake)`, `(m Model)` are fine.
+- **Parameters are checked like locals.** A one-letter parameter passes in a three-line
+  function and is flagged as soon as the body grows, so name them from the start:
 
   ```go
-  // Wrong — 'b', 'c', 'k' are too short for params
-  func Parse(b []byte) (Identity, error)
+  // Wrong
   func ResolveTool(b, c, k string) (string, error)
 
   // Right
-  func Parse(raw []byte) (Identity, error)
   func ResolveTool(binary, configured, configKey string) (string, error)
   ```
 
-- **Local variables** follow the same distance rule: a variable named `c` that
-  is still used more than 5 lines later is flagged; rename it to reflect its type
-  or role.
-
-Rule of thumb: if the name alone doesn't tell you what the variable holds,
-make it longer.
+Local variables follow the same distance rule; rename them to reflect their type or role.
 
 ---
 
-## 15. `modernize` — no pointer-boxing helpers
+## 11. `modernize` — no pointer-boxing helpers
 
-The `modernize` linter (`newexpr` check) flags any function whose sole purpose
-is to return a pointer to its argument — the generic `func ptr[T any](v T) *T`
-included — at the declaration and at every call site. Go 1.26's `new` takes an
-expression, so no helper is needed:
-
-```go
-// Wrong — flagged twice
-func boolPtr(b bool) *bool { return &b }
-cases := []struct{ enable *bool }{{enable: boolPtr(true)}}
-
-// Right
-cases := []struct{ enable *bool }{
-    {enable: new(true)},
-    {enable: new(false)},
-    {enable: nil},
-}
-```
-
-Taking the address of a local (`val := computeSomething()`, then `&val`) is fine
-too, and reads better when the value is computed or used more than once.
+The `modernize` linter (`newexpr` check) flags any function whose sole purpose is to return
+a pointer to its argument — the generic `func ptr[T any](v T) *T` included — at the
+declaration and at every call site. The Go version in `go.mod` lets `new` take an
+expression: write `new(true)` or `new(int64(5))`. Taking the address of a local is fine too.
 
 ---
 
-## 16. Constant strings (`goconst`)
+## 12. Other thresholds
 
-String literals appearing 3+ times with length ≥ 2 should be extracted to a
-named constant. Test files are exempt.
+| Rule | Setting | What to do |
+| --- | --- | --- |
+| `any` (`gofmt` rewrite rule) | `interface{}` → `any` | Write `any` in new code so the formatter does not change your diff |
+| `lll` | 140 characters | `golines` wraps automatically; test files are exempt |
+| `dupl` | 100 tokens | Extract shared logic into a helper; test files are exempt |
+| `govet` shadow | enabled | Use distinct names instead of re-declaring an outer variable with `:=` |
+| `goconst` | 3+ occurrences, length ≥ 2 | Extract to a named constant; test files are exempt |
 
 ---
 
-## 17. Reuse before writing
+## 13. Reuse before writing
 
 Every helper below exists so the hand-written version of it is written once. Before adding a
 path check, a refusal, a doctor check or a fake, check whether one of these already answers the
@@ -414,7 +291,7 @@ question — and if it nearly does, extend it rather than forking it.
 
 ---
 
-## 18. Comments carry rationale; history goes in the commit
+## 14. Comments carry rationale; history goes in the commit
 
 A comment says **why the code is the way it is** — the constraint, the failure it avoids, the
 alternative that was rejected and what broke. It does not narrate what changed, when, or at whose
@@ -436,11 +313,10 @@ not that the linter complained.
 
 ---
 
-## 19. Waiting in tests
+## 15. Waiting in tests
 
-monmux tests have no `time.Sleep`, no goroutines and nothing to wait for: they drive
-`exec.Fake` and `backend.Fake` synchronously. Keep it that way. If a test ever has to wait, decide
-what kind of wait it is *before* writing it:
+Tests drive `exec.Fake` and `backend.Fake` synchronously: no `time.Sleep`, no goroutines,
+nothing to wait for. If a test has to wait, decide what kind of wait it is *before* writing it:
 
 - **Positive eventual** ("something will have happened") — never a sleep: wait on the signal, or
   poll with a deadline and fail naming the condition that never held.
@@ -455,16 +331,16 @@ flaky test pass, are always wrong.
 
 ## What to avoid
 
-- `pkg/errors` (§9).
+- `pkg/errors` (§7).
 - `log.Fatal`, or `os.Exit` anywhere but a `main` function: `main()` calls `os.Exit(run(...))`
   exactly once so deferred cleanup always runs.
-- `os/exec` in a test, or anything else that could run a real `ddcutil` or `m1ddc` (§17).
-- OS-independent logic in a build-tagged file (§10).
-- `interface{}` (§6) and pointer-boxing helpers (§15).
+- `os/exec` in a test, or anything else that could run a real `ddcutil` or `m1ddc` (§13).
+- OS-independent logic in a build-tagged file (§8).
+- `interface{}` (§12) and pointer-boxing helpers (§11).
 - Designing for hypothetical requirements: no configurability, abstractions or helpers for
   features that do not exist yet.
 - Skipping or suppressing pre-commit hooks (`--no-verify`).
-- Adding comments to code you did not change (§11).
+- Adding comments to code you did not change (§9).
 
 ---
 
@@ -482,6 +358,17 @@ flaky test pass, are always wrong.
       after touching one
 - [ ] Function statement count ≤ 50, test files included
 - [ ] No shadowed variables
-- [ ] Checked §17 for an existing helper before writing a new one
-- [ ] Comments say why, not what changed — history is in the commit body (§18)
-- [ ] No `time.Sleep` in tests (§19)
+- [ ] Checked §13 for an existing helper before writing a new one
+- [ ] Comments say why, not what changed — history is in the commit body (§14)
+- [ ] No `time.Sleep` in tests (§15)
+
+## Lint, test and cross-OS loop
+
+1. Run `pre-commit run golangci-lint-fmt --files <changed .go files>` and
+   `pre-commit run golangci-lint-full --files <changed .go files>` (or `--all-files`).
+2. Run `make go-vet` and `make go-test`. After editing `internal/catalog/models.yaml`, run
+   `make go-generate` first and commit what it renders.
+3. After touching a build-tagged file or anything shared, run `make go-build-cross`,
+   `make go-vet-cross` and `make go-lint-cross`: step 1 lints only the host's backend.
+4. Fix each report and re-run from step 1 until all of them are clean.
+5. Check `git status`: the formatter hook rewrites files in place, so review and keep its changes.
