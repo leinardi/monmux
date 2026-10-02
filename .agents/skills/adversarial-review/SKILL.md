@@ -6,9 +6,9 @@ description: >
   unidentified or ambiguous writes, catalog entries without evidence, raw VCP
   bytes reaching a monitor, redaction leaks, wrong exit codes, build-tag and
   cross-OS breakage, and tests that execute real binaries, then reports ranked
-  findings. Use whenever the user asks to review changes, a diff, PR, branch,
-  or commit; check work before committing; assess merge readiness; or poke
-  holes in an implementation.
+  findings with a verdict. Use when the user asks to review changes, a diff,
+  PR, branch, or commit; check work before committing; assess merge
+  readiness; or poke holes in an implementation.
 ---
 
 # Adversarial Review — monmux
@@ -25,23 +25,32 @@ language**. It does not replace the project's authorities — it routes to them.
 the documentation and `go-style-guide` own the rules; this skill owns the mindset, the
 routing, and the report.
 
+Copy this checklist and tick items as you go:
+
+```text
+Review progress:
+- [ ] 0. Nothing run that writes to a monitor (AGENTS.md HARD RULE)
+- [ ] 1. Scope chosen; diff, stated intent and every changed file read in full
+- [ ] 2. AGENTS.md read; skills and docs from §2 loaded for every changed path
+- [ ] 3. Repository invariants checked
+- [ ] 4. Adversarial passes run; every candidate confirmed or dropped
+- [ ] 5. Always-on passes (a)–(e) run
+- [ ] 6. Gates run; `git status` checked for hook rewrites; skipped gates marked unverified
+- [ ] 7. Report written: findings, open questions, hardware commands for the human (marked
+        unresolved), verdict, gates run and not run
+```
+
 ## 0. The hard rule, during review too
 
-**Reviewing never writes to a monitor.** The `AGENTS.md` prohibition applies to
-this skill exactly as it applies to implementation: no `ddcutil setvcp`, no
-`ddcutil --i2c-source-addr`, no `m1ddc … set …`, no `monmux switch` without
-`--dry-run`, no `i2cset`/`i2ctransfer`, no writes to `/dev/i2c-*`, and no test
-or script that executes the real `ddcutil` or `m1ddc` binary.
-
-Read-only verification is allowed: `/sys/class/drm/**`, `ddcutil --version`,
-`ddcutil --help`, `ddcutil detect`, `monmux info`, `monmux doctor`, and
-`monmux switch … --dry-run`. Anything a reviewer wants proven on real hardware
-goes into the report as a command for the human to run, never executed here.
+**Reviewing never writes to a monitor.** The HARD RULE in `AGENTS.md` applies to review
+exactly as it applies to implementation: run only the commands it lists as allowed, and no
+test or script that executes the real `ddcutil` or `m1ddc`. Anything a reviewer wants proven
+on real hardware goes into the report as a command for the human to run, never executed here.
 
 ## 1. Establish the diff (what am I reviewing?)
 
 Never review from memory or from the user's description of the change — read the actual
-diff. Pick the scope from what the user said, defaulting to the most useful:
+diff. Pick the scope from what the user said:
 
 | User intent | Command |
 | --- | --- |
@@ -50,6 +59,9 @@ diff. Pick the scope from what the user said, defaulting to the most useful:
 | a branch / "this PR" / "ready to merge" | `git diff main...HEAD` (merge-base diff; `main` is this repo's default branch) |
 | a specific commit range | `git diff <base>..<head>` |
 | a GitHub PR number | `gh pr view <n>` for intent, then `gh pr diff <n>` |
+
+If the user names no scope, review the uncommitted work (first row); if the tree is
+clean, review the branch against `main` (third row).
 
 Also read `git log --oneline` for the range and any linked issue/PR body — the stated
 **intent** is what you check the code against. A change that works but does something other
@@ -87,47 +99,35 @@ review.
 
 ## 3. Repository invariants
 
-Check these whenever affected, directly or indirectly. Weakening any of them is
-normally **critical**.
+`AGENTS.md`'s fail-closed invariants 1–6 and its two blast-radius rules (*Never add a raw VCP
+command*, *Backends only execute a `Command` produced by `Plan`*) are the checklist: read them
+there, not from memory. Weakening any of them is normally **critical**. What each looks like in
+a diff:
 
-- **Identify before writing.** A write requires an exact catalog match on the
-  parsed EDID identity. Unknown, ambiguous, or multiple candidate monitors are
-  refused — never guessed at, never defaulted, never "best match". A model with
-  no identities must never be matched.
-- **Enabled inputs only.** An input is writable only if the matched model
-  explicitly enables it, with recorded evidence. Check that a new or edited
-  entry in `internal/catalog/models.yaml` carries evidence, and that both
-  rendered files — `internal/catalog/models_gen.go` and the marked region of
-  `docs/compatibility.md` — were regenerated from it in the same commit and
-  never hand-edited. A test compares each against a fresh rendering.
-- **Re-verify at the last moment.** `Execute` must re-read the identity (sysfs
-  EDID and bus on Linux, `display list detailed` on macOS) and refuse with
-  `identity-changed` if anything moved since enumeration. Removing, caching, or
-  short-circuiting that re-read is critical.
-- **Refuse loudly, write never.** Every refusal path returns a
-  `refusal.Refusal` whose rendered message ends with
-  `No DDC write was performed.` and exits with code 2. A path that reports a
-  refusal after the tool may have run is a false promise: only exit code 1 may
-  leave the write status unknown, and it must say so.
-- **Never fall back.** If the chosen mechanism is not implemented by the
-  backend, refuse with `invalid-operation`. No trying another mechanism,
-  another VCP code, another value, or a retry loop around a failed write.
-- **Redact by default.** Serial numbers, serial strings, raw EDID hex and macOS
-  UUIDs are masked unless `--show-serial` is passed. This covers refusal
-  messages, `info`, `doctor`, dry-run command rendering, error strings, and any
-  new output.
-- **No raw VCP command, ever.** No code path may take a VCP code or value from
-  a flag, config file, environment variable, or any other input. The only bytes
-  that reach a monitor come from a `catalog.Operation` built by the catalog's
-  package-private constructor from a compiled-in table entry. A new exported
-  `Operation` constructor, a settable `Value`, or a mechanism parsed from user
-  input is critical.
-- **Backends only execute a `Command` produced by `Plan`.** `Command` is
-  returned for display only and is never accepted as input by any method.
-  `Execute` takes the `catalog.Operation` and rebuilds the invocation through
-  the same private planner, so what `--dry-run` prints is what a real run
-  executes. Any method that accepts a path, argv, or `Command` from a caller
-  breaks this.
+- **The `--unsafe-model` exception.** It is the only way past invariants 1 and 2: the EDID is
+  not consulted and `write_enabled` is ignored (`Model.UnsafeOperation`, reached only from the
+  `policy.assume` path). It still refuses when no display is writable, refuses more than one
+  writable display with `multiple-candidates` (pin one with `--serial`), refuses an input the
+  named entry does not record (`input-not-enabled`), takes the value from the compiled-in
+  catalog, and still re-verifies at `Execute`. No configuration key or environment variable can arm it. A second
+  caller of `UnsafeOperation`, a non-flag way to set `Request.AssumeModel`, or an assume path
+  that picks among writable displays is critical.
+- **Catalog changes.** A new or edited entry in `internal/catalog/models.yaml` carries
+  evidence, and both rendered files — `internal/catalog/models_gen.go` and the marked region of
+  `docs/compatibility.md` — were regenerated in the same commit, never hand-edited.
+- **Re-verification.** Removing, caching, or short-circuiting the identity re-read in `Execute`
+  is critical.
+- **False promises.** A path that reports a refusal (exit `2`, "No DDC write was performed.")
+  after the tool may have run is critical; only exit code `1` may leave the write status
+  unknown, and it must say so. A retry loop around a failed write is a fallback.
+- **Redaction coverage.** Refusal messages, `info`, `doctor`, dry-run command rendering, error
+  strings, and any new output.
+- **Raw VCP and `Plan`/`Execute`.** A new exported `Operation` constructor, a settable `Value`,
+  a mechanism parsed from user input, or any backend method that accepts a path, argv, or
+  `Command` from a caller is critical.
+
+Review-only invariants that AGENTS.md states briefly or not at all:
+
 - **Tool paths are trust-checked once, in one place.** Both backends resolve
   through `backend.ResolveTool`: PATH or an absolute configured path, symlinks
   followed, plain file only, and refused if the file or its directory is
@@ -158,24 +158,9 @@ Do not skim for style. Run these passes, each with a "how would I make this fail
 
 ### Language-agnostic
 
-- **Correctness / logic**: off-by-one, inverted conditions (`<` vs `<=`), wrong operator
-  precedence, negated guards, early returns that skip cleanup, copy-paste that kept the old
-  variable. Trace one concrete failing input end to end rather than asserting "looks fine".
-- **Boundaries & nil/empty**: empty slice/map/string, zero, negative, missing key, `nil`
-  receiver/pointer, unset optional, first/last element, single-element collection, nil and
-  empty treated as the same thing where they mean different things.
-- **Aliasing**: a returned slice or map that shares its backing store with internal state, so
-  a caller's write changes it; an `append` onto a slice another owner still holds.
-- **Errors**: swallowed errors, `err` checked then ignored, wrapped-but-not-returned, `%v`
-  where `%w` was needed so `errors.Is`/`errors.As` stop matching, wrong sentinel, panics on
-  attacker- or user-controlled input, partial writes left on the error path.
-- **Concurrency**: shared state without a lock, lock held across I/O or a channel op, goroutine
-  leak, context not honored, map written from two goroutines, TOCTOU between check and use.
-- **Resources**: unclosed file/conn/response body, an ignored `Close` error on a write, missing
-  `defer`, context/timer leak, unbounded growth, work inside a loop that belongs outside it.
-- **Security**: input reaching a command/path/query/HTML without validation, authz check
-  missing or after the effect, secret in a log or response, unsafe deserialization, missing
-  rate/size limits.
+- **Generic passes**: correctness and logic, boundaries and nil/empty, aliasing, error
+  handling, concurrency, resources and security. For each, name one concrete failing input and
+  trace it end to end rather than asserting "looks fine".
 - **Contract drift**: does the code do what the commit message / PR / issue claims? A public
   signature, flag, config key, JSON field, refusal reason, exit code, output format or catalog
   entry changed without updating every consumer and the docs (§5 (e)).
@@ -215,6 +200,11 @@ Do not skim for style. Run these passes, each with a "how would I make this fail
   must share nothing with the compiled-in table; `uint8`/`uint16` truncation of
   EDID fields; a wrap that stops `errors.AsType[*refusal.Refusal]` from
   matching; shadowed errors; off-by-one in parser bounds checks.
+- **Unsafe override:** `--unsafe-model` with zero or two or more writable displays, a name not
+  in the catalog, an input the named entry does not record, and a dry run. Check that the
+  warning (`Decision.Assumed` → `app.Options.OnAssumed`) is printed before anything is planned,
+  that a warning that cannot be printed stops the switch, and that an outcome after a failed
+  write still reports the bypass.
 - **Exit codes:** `0` sent, `2` refused with nothing written, `1` the tool ran
   and failed or the request could not be made. Trace every new path to its
   code. A read-only command that fails must read as a diagnostic, not as a
@@ -226,18 +216,21 @@ Do not skim for style. Run these passes, each with a "how would I make this fail
   refusal reason without a test, and a new catalog input without a
   planned-command test are findings.
 
-Prefer one confirmed, reproducible defect over ten vague "consider"s. If you cannot name the
-triggering state and the wrong result or broken invariant, it is not yet a finding — keep
-digging or drop it.
+For each candidate defect:
+
+1. Reproduce it with a focused test, or trace one concrete input through the code to the wrong
+   result.
+2. Confirmed: it is a finding. Record the input and the wrong behavior.
+3. Not confirmed: dig once more (callers, tests, config path). Still not confirmed: drop it.
+   A vague "consider" is not a finding.
 
 ## 5. Always-on passes
 
-The passes above are shaped by the diff. These run on **every** review, whatever changed,
-because each names a way a repository like this one loses something without anyone noticing.
+The passes above are shaped by the diff. These run on **every** review, whatever changed.
 
 ### (a) What reaches a monitor
 
-Ask the one question §0 and §3 are built on: does this change create a new place where
+Ask the one question the HARD RULE and §3 are built on: does this change create a new place where
 something from outside monmux — a flag, a config key, an environment variable, a tool's output
 — becomes a byte sent to a monitor, a write decision, or a program that gets executed? If it
 does, walk the identify-before-writing, enabled-inputs, raw-VCP and `Plan`/`Execute` items of
@@ -271,9 +264,9 @@ a suppression with no reason comment at all. The same holds for a new exclusion 
 ### (d) Cross-file duplication
 
 Before accepting a new helper, search for the one that already exists — in `internal/**` and
-`cmd/**`, by *behaviour*, not by the name the author chose. `go-style-guide` §17 lists the helpers
-that already exist (the tool-path trust check, refusals, doctor checks, redaction, catalog
-lookups, the fakes). Two implementations of the same rule drift apart, and the one the reviewer
+`cmd/**`, by *behaviour*, not by the name the author chose. The *Reuse before writing* table in
+`go-style-guide` lists the helpers that already exist (the tool-path trust check, refusals,
+doctor checks, redaction, catalog lookups, the fakes). Two implementations of the same rule drift apart, and the one the reviewer
 did not read is the one that keeps the bug.
 
 ### (e) Docs drift
