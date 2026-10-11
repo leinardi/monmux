@@ -83,7 +83,7 @@ make go-lint-cross     # lint both; `make check` only ever lints the host's back
 make go-lint          # the pinned golangci-lint-full hook over the whole module (host backend)
 make verify-go        # go-build, go-test, go-vet, go-vet-cross, go-lint and go-lint-cross
 make go-tidy           # go mod tidy + go mod verify
-make audit-deps        # govulncheck over every package (network required); also runs in CI and as a pre-commit hook on go.mod/go.sum changes
+make audit-deps        # govulncheck -test over every package (network required); also runs in CI and as a pre-commit hook on go.mod/go.sum changes
 make check             # pre-commit on all files
 make check-stage       # pre-commit on the staging area only
 ```

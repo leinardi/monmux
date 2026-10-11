@@ -230,7 +230,7 @@ thing the `guard` job exists to prevent.
 | `test` | ubuntu + macos | `make go-test` (`go test -race ./...`) on both, so each backend's build-tagged tests run. |
 | `cross` | ubuntu | `make go-build-cross`, `make go-vet-cross`, `make go-lint-cross`. |
 | `lint-macos` | macos | `golangci-lint run ./...` natively, the only look at `internal/backend/m1ddc` under its tag. |
-| `govulncheck` | ubuntu | Vulnerability scan of the module. |
+| `govulncheck` | ubuntu | Vulnerability scan of the module, test files included. |
 | `release-config` | ubuntu | `goreleaser check`. |
 | `actionlint` | ubuntu, pull requests | Workflow linting, as inline review comments. |
 | `pre-commit-hooks` | ubuntu, pull requests | The hook suite `make check` runs, minus the hooks with their own job and minus `go-test-repo-mod`. |
