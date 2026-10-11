@@ -143,9 +143,9 @@ Multiple linters are comma-separated with no spaces. Name all that fire: `gocycl
 | `gocognit` | 35 | Cognitive complexity |
 | `funlen` | 50 statements | Lines are disabled (`lines: -1`) |
 
-Prefer extracting helpers over suppressing; when suppression is the right call, the
-nolint comment says why. These limits apply to test files too: `.golangci.yaml` exempts tests only from
-`dupl`, `goconst`, `lll`, `mnd`, `paralleltest`, `testpackage` and `varnamelen`.
+Prefer extracting helpers over suppressing; when suppression is the right call, the nolint comment
+says why. These limits apply to test files too: `.golangci.yaml` exempts tests only from `dupl`,
+`goconst`, `lll`, `mnd`, `paralleltest`, `testpackage` and `varnamelen`.
 
 ---
 
@@ -354,8 +354,8 @@ flaky test pass, are always wrong.
 - [ ] Numbers other than 0–3 extracted to named constants (non-test code)
 - [ ] Each `//nolint` names specific linters and explains why the fix does not apply
 - [ ] No `FIXME` comments
-- [ ] `//go:build linux` / `//go:build darwin` first line in backend-specific files; `make go-lint-cross`
-      after touching one
+- [ ] `//go:build linux` / `//go:build darwin` first line in backend-specific files;
+  `make go-lint-cross` after touching one
 - [ ] Function statement count ≤ 50, test files included
 - [ ] No shadowed variables
 - [ ] Checked §13 for an existing helper before writing a new one

@@ -39,9 +39,11 @@
 #
 # These two families are the in-file mechanisms of the tools that gate this repository's code:
 # golangci-lint and shellcheck. Others exist and are not counted: markdownlint directives (the pull
-# request template carries one, MD041, because it opens with a comment rather than a heading),
-# yamllint's disable-line, and shellcheck directives inside workflow run: blocks. Adding a
-# suppression of a kind nobody counts yet is the moment to add its family here.
+# request template disables MD041, because it opens with a comment rather than a heading, and
+# docs/compatibility.md lifts the line length around its generated region, whose notes are copied
+# verbatim from models.yaml), yamllint's disable-line, and shellcheck directives inside workflow
+# run: blocks. Adding a suppression of a kind nobody counts yet is the moment to add its family
+# here.
 #
 # Generated and vendored trees are not scanned (see EXCLUDED_PREFIXES): a suppression nobody in
 # this repository wrote is not a decision this ratchet can hold anyone to, and regenerating a file

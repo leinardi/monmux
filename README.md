@@ -2,36 +2,43 @@
 
 [![CI](https://github.com/leinardi/monmux/actions/workflows/ci.yaml/badge.svg)](https://github.com/leinardi/monmux/actions/workflows/ci.yaml)
 [![Release](https://img.shields.io/github/v/release/leinardi/monmux)](https://github.com/leinardi/monmux/releases/latest)
-[![Hosted By: Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith)](https://cloudsmith.com)
+[![Hosted By:
+Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith)](https://cloudsmith.com)
 [![Licence](https://img.shields.io/github/license/leinardi/monmux)](LICENSE)
 
 Switch supported monitors between video inputs, from the command line, on Linux and macOS.
 
-`monmux` is fail-closed by design. It writes to a monitor only when that monitor is positively identified, from its EDID, as a
-model in the built-in supported-monitor catalog, **and** the requested input is explicitly enabled for that model with recorded
-evidence that the value was tested on real hardware. Everything else — an unknown monitor, two candidates, an input nobody has
-verified — is refused without a write, and every refusal says so in as many words. The one documented exception is the
-`--unsafe-model` override below, which has to be typed on the command line it applies to.
+`monmux` is fail-closed by design. It writes to a monitor only when that monitor is positively
+identified, from its EDID, as a model in the built-in supported-monitor catalog, **and** the
+requested input is explicitly enabled for that model with recorded evidence that the value was
+tested on real hardware. Everything else — an unknown monitor, two candidates, an input nobody has
+verified — is refused without a write, and every refusal says so in as many words. The one
+documented exception is the `--unsafe-model` override below, which has to be typed on the command
+line it applies to.
 
-It wraps `ddcutil` on Linux and `m1ddc` on macOS; there is no native I²C or IOKit backend. One monitor model is verified so far.
+It wraps `ddcutil` on Linux and `m1ddc` on macOS; there is no native I²C or IOKit backend. One
+monitor model is verified so far.
 
 ## Supported monitors
 
-One model is verified on hardware: the LG 38WR85QC-W, on `dp` and `usb-c`. Another 70 models from twelve vendors are recorded
-from public reports, every one of them disabled and without an EDID fingerprint, so monmux can never match them, and will not
-write to them unless you take the identification off yourself with [`--unsafe-model`](#the---unsafe-model-override). They are
-written down for the contributor who owns one — enabling a row means testing it on a real unit and recording the evidence, see
-[docs/adding-a-monitor.md](docs/adding-a-monitor.md). The full list, with the evidence and the conflicts behind
-every value, is in [docs/compatibility.md](docs/compatibility.md).
+One model is verified on hardware: the LG 38WR85QC-W, on `dp` and `usb-c`. Another 70 models from
+twelve vendors are recorded from public reports, every one of them disabled and without an EDID
+fingerprint, so monmux can never match them, and will not write to them unless you take the
+identification off yourself with [`--unsafe-model`](#the---unsafe-model-override). They are written
+down for the contributor who owns one — enabling a row means testing it on a real unit and recording
+the evidence, see [docs/adding-a-monitor.md](docs/adding-a-monitor.md). The full list, with the
+evidence and the conflicts behind every value, is in [docs/compatibility.md](docs/compatibility.md).
 
-**Own one of them?** Every recorded model has an open
-[`help wanted` issue](https://github.com/leinardi/monmux/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+label%3Acatalog)
-titled `Help verify: <Vendor> <Model>`, with the recorded values and the three commands that test them. A test on your unit,
-reported there, is what makes a model switchable — and a value that did nothing is as useful to report as one that worked.
+**Own one of them?** Every recorded model has an open [`help wanted`
+issue](https://github.com/leinardi/monmux/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+label%3Acatalog)
+titled `Help verify: <Vendor> <Model>`, with the recorded values and the three commands that test
+them. A test on your unit, reported there, is what makes a model switchable — and a value that did
+nothing is as useful to report as one that worked.
 
-Two mechanisms are implemented: `lg-alt-input`, the LG side channel, and `vcp-input-source`, the standard `VCP 0x60` Input
-Source feature. Only the first is write-enabled on any model. The second has 36 recorded models, all disabled; it has reached one
-monitor, a Samsung G95NC switched through m1ddc under `--unsafe-model`, and has never been run through ddcutil.
+Two mechanisms are implemented: `lg-alt-input`, the LG side channel, and `vcp-input-source`, the
+standard `VCP 0x60` Input Source feature. Only the first is write-enabled on any model. The second
+has 36 recorded models, all disabled; it has reached one monitor, a Samsung G95NC switched through
+m1ddc under `--unsafe-model`, and has never been run through ddcutil.
 
 ## Install
 
@@ -41,9 +48,9 @@ monitor, a Samsung G95NC switched through m1ddc under `--unsafe-model`, and has 
 brew install --cask leinardi/tap/monmux
 ```
 
-The cask depends on the `m1ddc` formula, so Homebrew installs it for you. The binaries are not signed with an Apple Developer
-ID, so the cask strips the download quarantine on install; what that means, and how to install without it, is in
-[docs/security.md](docs/security.md#the-install-path).
+The cask depends on the `m1ddc` formula, so Homebrew installs it for you. The binaries are not
+signed with an Apple Developer ID, so the cask strips the download quarantine on install; what that
+means, and how to install without it, is in [docs/security.md](docs/security.md#the-install-path).
 
 ### Linux, apt
 
@@ -63,19 +70,22 @@ EOF
 sudo apt update && sudo apt install monmux
 ```
 
-The key stays armored, as `.asc`, because apt reads that directly. `Architectures` names the two the repository actually holds, so
-apt does not ask it for anything else on a multi-arch system. The one-line `deb [signed-by=…] …` form in a `.list` file works just
-as well if you prefer it.
+The key stays armored, as `.asc`, because apt reads that directly. `Architectures` names the two the
+repository actually holds, so apt does not ask it for anything else on a multi-arch system. The
+one-line `deb [signed-by=…] …` form in a `.list` file works just as well if you prefer it.
 
-The packages are uploaded once, not per distribution — one build per architecture, no distribution-specific anything — and Cloudsmith
-serves them through every distribution index it knows. So the source line names a distribution only because `apt` requires one. On a
-derivative whose `$ID` Cloudsmith does not recognise (Mint, Pop!\_OS, Raspberry Pi OS), name the distribution it is built on instead —
-`URIs: …/deb/ubuntu` with `Suites: noble`, say: the package you get is the same one.
+The packages are uploaded once, not per distribution — one build per architecture, no
+distribution-specific anything — and Cloudsmith serves them through every distribution index it
+knows. So the source line names a distribution only because `apt` requires one. On a derivative
+whose `$ID` Cloudsmith does not recognise (Mint, Pop!\_OS, Raspberry Pi OS), name the distribution
+it is built on instead — `URIs: …/deb/ubuntu` with `Suites: noble`, say: the package you get is the
+same one.
 
 `D5A5560F8D6A68B5` is the long key ID of the repository's signing key, fingerprint
-`7F28 A3C9 6319 1586 0980 5131 D5A5 560F 8D6A 68B5` — check it with `gpg --show-keys` on the downloaded file, or against the
-[repository's setup page](https://cloudsmith.io/~leinardi/repos/monmux/setup/). Cloudsmith also offers a `curl | sudo bash`
-setup script; the lines above are what it does.
+`7F28 A3C9 6319 1586 0980 5131 D5A5 560F 8D6A 68B5` — check it with `gpg --show-keys` on the
+downloaded file, or against the [repository's setup
+page](https://cloudsmith.io/~leinardi/repos/monmux/setup/). Cloudsmith also offers a
+`curl | sudo bash` setup script; the lines above are what it does.
 
 ### Linux, rpm
 
@@ -92,16 +102,19 @@ EOF
 sudo dnf install monmux
 ```
 
-Package repository hosting is graciously provided by [Cloudsmith](https://cloudsmith.com). Cloudsmith is the only fully hosted,
-cloud-native, universal package management solution, that enables your organization to create, store and share packages in any
-format, to any place, with total confidence.
+Package repository hosting is graciously provided by [Cloudsmith](https://cloudsmith.com).
+Cloudsmith is the only fully hosted, cloud-native, universal package management solution, that
+enables your organization to create, store and share packages in any format, to any place, with
+total confidence.
 
-A Linux package install trusts Cloudsmith in addition to GitHub — [docs/security.md](docs/security.md#the-install-path) says
-what that means and how to verify a package against the GitHub release instead.
+A Linux package install trusts Cloudsmith in addition to GitHub —
+[docs/security.md](docs/security.md#the-install-path) says what that means and how to verify a
+package against the GitHub release instead.
 
 ### A tarball
 
-Download one from the [releases page](https://github.com/leinardi/monmux/releases/latest), then verify it:
+Download one from the [releases page](https://github.com/leinardi/monmux/releases/latest), then
+verify it:
 
 ```sh
 sha256sum --check --ignore-missing checksums.txt
@@ -123,14 +136,16 @@ go install github.com/leinardi/monmux/cmd/monmux@latest
 
 ### Prerequisites
 
-**Linux** — `ddcutil` 2.2 or newer (2.2.5 is the version monmux was verified against; the `--i2c-source-addr` option it needs
-arrived in 2.1.0, and 2.2 is the floor because nobody has run monmux against 2.1), and permission to open the monitor's
-`/dev/i2c-N` for reading and writing. On most distributions that means installing `ddcutil`, loading the `i2c-dev` module, and
-adding yourself to the `i2c` group or installing the udev rule that ships with `ddcutil`. Log in again afterwards.
+**Linux** — `ddcutil` 2.2 or newer (2.2.5 is the version monmux was verified against; the
+`--i2c-source-addr` option it needs arrived in 2.1.0, and 2.2 is the floor because nobody has run
+monmux against 2.1), and permission to open the monitor's `/dev/i2c-N` for reading and writing. On
+most distributions that means installing `ddcutil`, loading the `i2c-dev` module, and adding
+yourself to the `i2c` group or installing the udev rule that ships with `ddcutil`. Log in again
+afterwards.
 
-Debian 12 and Ubuntu 24.04 ship `ddcutil` 1.4. The monmux package installs there — its dependency is unversioned on purpose, see
-[docs/release.md](docs/release.md) — but every command that needs the tool refuses until a `ddcutil` 2.2 is present, naming the
-version it found.
+Debian 12 and Ubuntu 24.04 ship `ddcutil` 1.4. The monmux package installs there — its dependency is
+unversioned on purpose, see [docs/release.md](docs/release.md) — but every command that needs the
+tool refuses until a `ddcutil` 2.2 is present, naming the version it found.
 
 **macOS** — [`m1ddc`](https://github.com/waydabber/m1ddc), which requires Apple Silicon:
 
@@ -160,17 +175,20 @@ monmux switch usb-c --dry-run --json   # one JSON document, whatever the outcome
 monmux version --json                  # {"version": …, "commit": …, "date": …}
 ```
 
-`--json` works on `switch`, `info`, `catalog list`, `catalog show` and `version`, and never changes the exit code.
-`monmux switch --json` prints one document on stdout for every outcome — sent, dry run, refusal or failure — and the pair of
-`outcome` and `writeStatus` in it is what tells a script a dry run from a real send, which the exit code alone cannot. The
-whole contract, field by field, is in [docs/json.md](docs/json.md).
+`--json` works on `switch`, `info`, `catalog list`, `catalog show` and `version`, and never changes
+the exit code. `monmux switch --json` prints one document on stdout for every outcome — sent, dry
+run, refusal or failure — and the pair of `outcome` and `writeStatus` in it is what tells a script a
+dry run from a real send, which the exit code alone cannot. The whole contract, field by field, is
+in [docs/json.md](docs/json.md).
 
-`monmux catalog` reads nothing outside the binary: no backend, no configuration file, no monitor. It is the offline view of
-[docs/compatibility.md](docs/compatibility.md), for the build you are actually running.
+`monmux catalog` reads nothing outside the binary: no backend, no configuration file, no monitor. It
+is the offline view of [docs/compatibility.md](docs/compatibility.md), for the build you are
+actually running.
 
-Serial numbers, macOS display UUIDs and raw EDID hex are redacted in every output by default, so what monmux prints is safe to
-paste into a bug report. `--show-serial` prints them verbatim, and is the only way to see them. That is why `info` masks the
-`Handle:` on macOS, where it is the display UUID, and prints it on Linux, where it is only the connector name.
+Serial numbers, macOS display UUIDs and raw EDID hex are redacted in every output by default, so
+what monmux prints is safe to paste into a bug report. `--show-serial` prints them verbatim, and is
+the only way to see them. That is why `info` masks the `Handle:` on macOS, where it is the display
+UUID, and prints it on Linux, where it is only the connector name.
 
 A successful switch reports exactly what happened:
 
@@ -178,41 +196,49 @@ A successful switch reports exactly what happened:
 Input-switch command sent (USB-C, 0xD1) to LG 38WR85QC-W via ddcutil. Switch not independently confirmed.
 ```
 
-The second sentence is not hedging. monmux never reads a monitor back to confirm a switch — the LG side channel has no reliable
-read-back, and a read of `VCP 0x60` is no better — so "the command was sent" is the strongest true statement available; monmux
-never claims a monitor switched.
+The second sentence is not hedging. monmux never reads a monitor back to confirm a switch — the LG
+side channel has no reliable read-back, and a read of `VCP 0x60` is no better — so "the command was
+sent" is the strongest true statement available; monmux never claims a monitor switched.
 
 ### The `--unsafe-model` override
 
-Seventy of the seventy-one entries are recorded from somebody else's report and are not write-enabled, so `monmux switch`
-refuses them. `--unsafe-model` is the deliberate way past that, for the person who owns the monitor and is trying to produce
-the evidence that would enable it:
+Seventy of the seventy-one entries are recorded from somebody else's report and are not
+write-enabled, so `monmux switch` refuses them. `--unsafe-model` is the deliberate way past that,
+for the person who owns the monitor and is trying to produce the evidence that would enable it:
 
 ```sh
 monmux switch hdmi --unsafe-model AOC/Q27P1B --dry-run   # always start here
 monmux switch hdmi --unsafe-model AOC/Q27P1B
 ```
 
-It treats the attached display as the catalog entry you name, instead of identifying it from its EDID, and it skips the
-write-enabled gate. It weakens those two things and nothing else: the value still comes from the compiled-in catalog, so there
-is still no way to send a VCP code or a value of your own; an input the named entry does not record is still refused; monmux
-still refuses when more than one attached display is writable, so pin with `--serial` rather than letting it guess; the
-identity is still re-verified immediately before the write; and no configuration key can arm the flag — it is per invocation,
-on purpose. A warning naming the display, the assumed model and the value goes to stderr before anything is written, and the
-result line says the identification was bypassed.
+It treats the attached display as the catalog entry you name, instead of identifying it from its
+EDID, and it skips the write-enabled gate. It weakens those two things and nothing else: the value
+still comes from the compiled-in catalog, so there is still no way to send a VCP code or a value of
+your own; an input the named entry does not record is still refused; monmux still refuses when more
+than one attached display is writable, so pin with `--serial` rather than letting it guess; the
+identity is still re-verified immediately before the write; and no configuration key can arm the
+flag — it is per invocation, on purpose. A warning naming the display, the assumed model and the
+value goes to stderr before anything is written, and the result line says the identification was
+bypassed.
 
-A wrong value can leave a monitor on an input with no signal, so have the monitor's OSD within reach, and read
-[docs/adding-a-monitor.md](docs/adding-a-monitor.md) before you record what happened.
+A wrong value can leave a monitor on an input with no signal, so have the monitor's OSD within
+reach, and read [docs/adding-a-monitor.md](docs/adding-a-monitor.md) before you record what
+happened.
 
 ## GNOME Shell extension
 
-[gnome-shell-extension-monmux](https://github.com/leinardi/gnome-shell-extension-monmux) puts the same switch in the GNOME top
-panel: a menu of the attached displays and the inputs monmux will write, with the ones it will not shown greyed out next to the
-reason. It runs `monmux` for every decision and can enable nothing monmux refuses. It is in development, installed from source,
-and needs GNOME Shell 46 to 50 and monmux 0.6.0 or newer.
+[gnome-shell-extension-monmux](https://github.com/leinardi/gnome-shell-extension-monmux) puts the
+same switch in the GNOME top panel: a menu of the attached displays and the inputs monmux will
+write, with the ones it will not shown greyed out next to the reason. It runs `monmux` for every
+decision and can enable nothing monmux refuses. It is in development, installed from source, and
+needs GNOME Shell 46 to 50 and monmux 0.6.0 or newer.
 
 <a href="https://github.com/leinardi/gnome-shell-extension-monmux">
-  <img src="https://raw.githubusercontent.com/leinardi/gnome-shell-extension-monmux/main/docs/images/menu.png" alt="The extension's panel menu: one LG 38WR85QC-W on card1-DP-1, with DisplayPort and USB-C to pick from, the monmux version, a Dry run switch and Preferences" width="250">
+  <img
+    src="https://raw.githubusercontent.com/leinardi/gnome-shell-extension-monmux/main/docs/images/menu.png"
+    alt="The extension's panel menu: one LG 38WR85QC-W on card1-DP-1, with DisplayPort and USB-C
+    to pick from, the monmux version, a Dry run switch and Preferences"
+    width="250">
 </a>
 
 ## Exit codes
@@ -231,24 +257,30 @@ Only exit `2` carries the promise that nothing was written.
 - [Compatibility](docs/compatibility.md) — the catalog, with the evidence for every value.
 - [Configuration](docs/configuration.md) — the configuration file, the flags, and which wins.
 - [Troubleshooting](docs/troubleshooting.md) — every refusal reason, and what to do about it.
-- [JSON output](docs/json.md) — the `--json` contract: every field, what is stable, and what is redacted.
+- [JSON output](docs/json.md) — the `--json` contract: every field, what is stable, and what is
+  redacted.
 - [Backends](docs/backends.md) — `ddcutil` and `m1ddc` specifics: versions, permissions, quirks.
 - [Adding a monitor](docs/adding-a-monitor.md) — the procedure for enabling a model or an input.
-- [Security](docs/security.md) — threat model, mitigations, trust boundaries, and what monmux never does.
-- [Testing](docs/testing.md) — why no test ever runs an external binary, and the human hardware checklist.
-- [Release](docs/release.md) — what a release produces, how one runs, and how to recover a failed one.
+- [Security](docs/security.md) — threat model, mitigations, trust boundaries, and what monmux never
+  does.
+- [Testing](docs/testing.md) — why no test ever runs an external binary, and the human hardware
+  checklist.
+- [Release](docs/release.md) — what a release produces, how one runs, and how to recover a failed
+  one.
 - [Requirements](docs/requirements.md) — the source document this project was built from.
 - [Contributing](CONTRIBUTING.md) — prerequisites, workflow, and the catalog evidence rule.
-- [AGENTS.md](AGENTS.md) — repository conventions, including the rule that no AI agent may write to a monitor.
+- [AGENTS.md](AGENTS.md) — repository conventions, including the rule that no AI agent may write to
+  a monitor.
 
 ## How this was built
 
-monmux is written largely with agentic AI coding tools, under human review: every change is read before it lands, and the claims
-that matter are checked rather than taken on trust. The catalog is where that matters most, and it is the part an agent has the
-least say in — a value becomes writable only after a human ran it against the monitor in question and recorded what happened, per
-[Contributing](CONTRIBUTING.md) and [Adding a monitor](docs/adding-a-monitor.md). No AI agent may write to a monitor at all, during
-development or review; [AGENTS.md](AGENTS.md) states that rule and [Testing](docs/testing.md) describes how the test suite enforces
-it.
+monmux is written largely with agentic AI coding tools, under human review: every change is read
+before it lands, and the claims that matter are checked rather than taken on trust. The catalog is
+where that matters most, and it is the part an agent has the least say in — a value becomes writable
+only after a human ran it against the monitor in question and recorded what happened, per
+[Contributing](CONTRIBUTING.md) and [Adding a monitor](docs/adding-a-monitor.md). No AI agent may
+write to a monitor at all, during development or review; [AGENTS.md](AGENTS.md) states that rule and
+[Testing](docs/testing.md) describes how the test suite enforces it.
 
 ## Licence
 

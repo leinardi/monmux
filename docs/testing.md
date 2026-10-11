@@ -2,17 +2,19 @@
 
 ## The rule
 
-**No AI agent — an assistant in an editor, a coding agent, a subagent, a review bot, any tool-driven automation — may run a
-command that writes to a monitor.** Only a human runs a writing command, by hand, deliberately.
+**No AI agent — an assistant in an editor, a coding agent, a subagent, a review bot, any tool-driven
+automation — may run a command that writes to a monitor.** Only a human runs a writing command, by
+hand, deliberately.
 
-**Tests never write to a monitor, and never execute any external binary at all.** Not `ddcutil`, not `m1ddc`, not a stub script,
-not `--version`. Every test in this repository runs against a fake.
+**Tests never write to a monitor, and never execute any external binary at all.** Not `ddcutil`, not
+`m1ddc`, not a stub script, not `--version`. Every test in this repository runs against a fake.
 
 Both halves of that are enforced in code, not left to discipline.
 
 ## How the no-exec rule is enforced
 
-`internal/backend/exec` is the only package in monmux that starts a process, and the real runner refuses to:
+`internal/backend/exec` is the only package in monmux that starts a process, and the real runner
+refuses to:
 
 ```go
 func ExecutionDisabled() error {
@@ -28,100 +30,114 @@ func ExecutionDisabled() error {
 }
 ```
 
-The check is inside `Run`, not at construction time, so no code path can hold a runner that was built before the check. A test
-that constructs the real runner and asks it to run something gets an error, not a subprocess. `MONMUX_NO_EXEC=1` is the same
-guard for scripts and one-off runs, and it is useful for looking at monmux's behaviour on a machine you would rather it did not
-touch.
+The check is inside `Run`, not at construction time, so no code path can hold a runner that was
+built before the check. A test that constructs the real runner and asks it to run something gets an
+error, not a subprocess. `MONMUX_NO_EXEC=1` is the same guard for scripts and one-off runs, and it
+is useful for looking at monmux's behaviour on a machine you would rather it did not touch.
 
-From the outside, `TestNoTestFileCanStartAProcess` walks every `_test.go` in the repository and fails the build if one imports
-`os/exec` or so much as names the real runner's constructor. Two files are allowed to name the constructor — the guard's own
-test and the runner's — and only while they still assert that execution is refused.
+From the outside, `TestNoTestFileCanStartAProcess` walks every `_test.go` in the repository and
+fails the build if one imports `os/exec` or so much as names the real runner's constructor. Two
+files are allowed to name the constructor — the guard's own test and the runner's — and only while
+they still assert that execution is refused.
 
 ## What the tests are
 
-**Unit tests, everywhere.** The pure layers — `edid`, `catalog`, `policy`, `refusal`, `config` — are tested directly. The
-backends are tested through a recording fake runner that answers from captured output and records what it was asked to run.
+**Unit tests, everywhere.** The pure layers — `edid`, `catalog`, `policy`, `refusal`, `config` — are
+tested directly. The backends are tested through a recording fake runner that answers from captured
+output and records what it was asked to run.
 
-**Golden command tests.** Each backend has a test pinning the exact arguments it produces for the catalog's model, byte for
-byte:
+**Golden command tests.** Each backend has a test pinning the exact arguments it produces for the
+catalog's model, byte for byte:
 
 ```text
 ddcutil --edid <256 hex> setvcp 0xF4 0xD1 --i2c-source-addr=0x50 --noverify
 m1ddc display <UUID> set input-alt 209
 ```
 
-These exist so that a refactor cannot quietly change what reaches a monitor. If the bytes change, the test fails and somebody
-has to say why in a commit message.
+These exist so that a refactor cannot quietly change what reaches a monitor. If the bytes change,
+the test fails and somebody has to say why in a commit message.
 
-Each backend also has a table pinning the argv its private `arguments()` builder produces for a mechanism and a value — the
-`vcp-input-source` invocation, and the one catalog value that does not fit in a byte. That table can render argv the catalog
-does not enable, which is deliberately less power than it sounds: there is still no exported way to build a
-`catalog.Operation`, so a test can print an invocation and still not make a backend run one. A mechanism with no write-enabled
-model has no end-to-end `Plan` test, and cannot: the first pull request that enables such a model adds it.
+Each backend also has a table pinning the argv its private `arguments()` builder produces for a
+mechanism and a value — the `vcp-input-source` invocation, and the one catalog value that does not
+fit in a byte. That table can render argv the catalog does not enable, which is deliberately less
+power than it sounds: there is still no exported way to build a `catalog.Operation`, so a test can
+print an invocation and still not make a backend run one. A mechanism with no write-enabled model
+has no end-to-end `Plan` test, and cannot: the first pull request that enables such a model adds it.
 
-**Golden CLI output.** `info`, `info --json`, `doctor`, both dry-run renderings and the success sentence are compared exactly,
-including the redaction. Output is an interface too.
+**Golden CLI output.** `info`, `info --json`, `doctor`, both dry-run renderings and the success
+sentence are compared exactly, including the redaction. Output is an interface too.
 
 **Invariant tests.** The catalog's rules are tested rather than trusted:
 
 - a write-enabled model has at least one identity, and a disabled model never matches;
-- every recorded input has evidence, and every input of a **write-enabled** model is graded `verified` — a value nobody ran on
-  that unit never becomes writable;
-- an identity matches one model: two identities collide when the manufacturer and the product code are equal and either pins no
-  model name, or both pin the same one, so only two pinned identities with different names may share a reused product code;
-- every model carries at least one note, since the notes are the only place a negative report, a conflict or an alias is
-  written down;
+- every recorded input has evidence, and every input of a **write-enabled** model is graded
+  `verified` — a value nobody ran on that unit never becomes writable;
+- an identity matches one model: two identities collide when the manufacturer and the product code
+  are equal and either pins no model name, or both pin the same one, so only two pinned identities
+  with different names may share a reused product code;
+- every model carries at least one note, since the notes are the only place a negative report, a
+  conflict or an alias is written down;
 - the zero operation is invalid.
 
-`TestGeneratedCatalogMatchesTheYAML` and `TestCompatibilityDocumentMatchesTheGenerator` compare the two rendered files —
-`internal/catalog/models_gen.go` and the marked region of `docs/compatibility.md` — against a fresh rendering of
-`internal/catalog/models.yaml`, so a hand-edit of either fails the build instead of shipping.
-`TestCompatibilityDocumentMatchesTheCatalog` compares the table in `docs/compatibility.md` against the catalog and
-`TestCompatibilityDocumentCarriesEveryNoteAndSource` compares each model's notes and sources against its section verbatim; both
-read the document back and check it against the compiled catalog rather than against the generator, so a generator that renders
-something the binary does not carry is caught too. The `go-test-repo-mod` pre-commit hook is filtered to Go files and `go.mod`,
-which would let a commit that edits only the catalog file or only the document skip those tests; `.pre-commit-config.yaml`
-widens the filter to include both, and a `go-generate-catalog` hook re-runs the generator so an edit without a regeneration
-cannot be committed. The generator has its own tests for every rule it enforces, and
-`TestGeneratorKnowsEveryMechanism` and `TestGeneratorKnowsEveryGrade` keep its copies of those two enums in step with the real
-ones. Input names are not mirrored: the generator and the catalog import the one grammar from
-`internal/catalog/internal/input`, which has its own tests for what parses, how names sort and which numbering a model may not
-mix.
+`TestGeneratedCatalogMatchesTheYAML` and `TestCompatibilityDocumentMatchesTheGenerator` compare the
+two rendered files — `internal/catalog/models_gen.go` and the marked region of
+`docs/compatibility.md` — against a fresh rendering of `internal/catalog/models.yaml`, so a
+hand-edit of either fails the build instead of shipping.
+`TestCompatibilityDocumentMatchesTheCatalog` compares the table in `docs/compatibility.md` against
+the catalog and `TestCompatibilityDocumentCarriesEveryNoteAndSource` compares each model's notes and
+sources against its section verbatim; both read the document back and check it against the compiled
+catalog rather than against the generator, so a generator that renders something the binary does not
+carry is caught too. The `go-test-repo-mod` pre-commit hook is filtered to Go files and `go.mod`,
+which would let a commit that edits only the catalog file or only the document skip those tests;
+`.pre-commit-config.yaml` widens the filter to include both, and a `go-generate-catalog` hook
+re-runs the generator so an edit without a regeneration cannot be committed. The generator has its
+own tests for every rule it enforces, and `TestGeneratorKnowsEveryMechanism` and
+`TestGeneratorKnowsEveryGrade` keep its copies of those two enums in step with the real ones. Input
+names are not mirrored: the generator and the catalog import the one grammar from
+`internal/catalog/internal/input`, which has its own tests for what parses, how names sort and which
+numbering a model may not mix.
 
-**Cross-platform identity.** The model name is the one identity field the two backends read from different places — EDID
-descriptor `0xFC` on Linux, m1ddc's `Product name` on macOS — and a pinned catalog identity compares against whatever they
-produce. `internal/edid` and `internal/backend/m1ddc` each assert `LG ULTRAWIDE` for the same unit, and the macOS parser is
-tested with the field missing (the header name is used) and with both absent (the identity carries no model name, which matches
-no pinned entry — fail-closed, not a crash).
+**Cross-platform identity.** The model name is the one identity field the two backends read from
+different places — EDID descriptor `0xFC` on Linux, m1ddc's `Product name` on macOS — and a pinned
+catalog identity compares against whatever they produce. `internal/edid` and
+`internal/backend/m1ddc` each assert `LG ULTRAWIDE` for the same unit, and the macOS parser is
+tested with the field missing (the header name is used) and with both absent (the identity carries
+no model name, which matches no pinned entry — fail-closed, not a crash).
 
-**Structural tests.** A reflection test walks the `Backend` interface and fails if any method could be handed a `Command`,
-however deeply wrapped — that is what makes a command unforgeable.
+**Structural tests.** A reflection test walks the `Backend` interface and fails if any method could
+be handed a `Command`, however deeply wrapped — that is what makes a command unforgeable.
 
-**Cross-compilation.** Only one of the two backends is visible to the host toolchain at a time, so `make go-build-cross` and
-`make go-vet-cross` run it over `GOOS=linux` and then `GOOS=darwin`, type-checking each backend's build-tagged tests too. Both
-are named outright rather than derived as "the OS the host is not": `go env GOOS` reports the target rather than the host, and
-`go-build`/`go-vet` set no `GOOS` of their own, so any value derived from one of them has a case where both aim at the same OS
-and a backend is left checked by nothing at all. A backend's parser and decisions carry no build tag, so they run in
-`make go-test` like everything else.
+**Cross-compilation.** Only one of the two backends is visible to the host toolchain at a time, so
+`make go-build-cross` and `make go-vet-cross` run it over `GOOS=linux` and then `GOOS=darwin`,
+type-checking each backend's build-tagged tests too. Both are named outright rather than derived as
+"the OS the host is not": `go env GOOS` reports the target rather than the host, and
+`go-build`/`go-vet` set no `GOOS` of their own, so any value derived from one of them has a case
+where both aim at the same OS and a backend is left checked by nothing at all. A backend's parser
+and decisions carry no build tag, so they run in `make go-test` like everything else.
 
-`make go-lint-cross` does the same for the linter, and it is the one that matters: lint is where the two backends diverge most,
-and three findings in `internal/backend/m1ddc` went unreported for as long as the linter only ever ran on Linux. `make check`
-still covers the host's backend alone, so run the cross target before pushing a change to either one.
+`make go-lint-cross` does the same for the linter, and it is the one that matters: lint is where the
+two backends diverge most, and three findings in `internal/backend/m1ddc` went unreported for as
+long as the linter only ever ran on Linux. `make check` still covers the host's backend alone, so
+run the cross target before pushing a change to either one.
 
-It is also the one target that can fail for reasons outside this repository. When cross-targeting, `golangci-lint` typechecks
-the standard library from source using the `go/types` it was built with; if that is older than your toolchain it aborts inside
-`GOROOT` and then reports **nothing at all** about this repository — a violation planted in a build-tagged file is reported
-nowhere. v2.12.2, built with go1.26.5, does exactly that against a Go 1.27 toolchain; v2.13.2, built with go1.27.0, is clean.
+It is also the one target that can fail for reasons outside this repository. When cross-targeting,
+`golangci-lint` typechecks the standard library from source using the `go/types` it was built with;
+if that is older than your toolchain it aborts inside `GOROOT` and then reports **nothing at all**
+about this repository — a violation planted in a build-tagged file is reported nowhere. v2.12.2,
+built with go1.26.5, does exactly that against a Go 1.27 toolchain; v2.13.2, built with go1.27.0, is
+clean.
 
-If the target fails inside `GOROOT` rather than inside monmux, your linter is older than your toolchain: update
-`.pre-commit-config.yaml`, or skip the target for now. **Never silence that typecheck error with a path exclusion.** It does not
-restore the analysis, it only hides the abort, and the run then goes green having checked nothing. CI runs the linter natively
-on both OSes for exactly this reason — [release.md](release.md).
+If the target fails inside `GOROOT` rather than inside monmux, your linter is older than your
+toolchain: update `.pre-commit-config.yaml`, or skip the target for now. **Never silence that
+typecheck error with a path exclusion.** It does not restore the analysis, it only hides the abort,
+and the run then goes green having checked nothing. CI runs the linter natively on both OSes for
+exactly this reason — [release.md](release.md).
 
 ## Fixtures
 
-Fixtures are captures of real hardware, so they arrive carrying somebody's serial number. Every identifier is replaced before
-the fixture is committed, with the synthetic values documented in `internal/backend/testdata/README.md`:
+Fixtures are captures of real hardware, so they arrive carrying somebody's serial number. Every
+identifier is replaced before the fixture is committed, with the synthetic values documented in
+`internal/backend/testdata/README.md`:
 
 | Identifier | Value |
 | --- | --- |
@@ -131,13 +147,13 @@ the fixture is committed, with the synthetic values documented in `internal/back
 | m1ddc binary serial | `16909060 (0x01020304)` |
 | macOS display UUID | `00000000-0000-4000-8000-00000000000N` |
 
-`TestFixturesCarryOnlySyntheticSerials` reads every file under every `testdata` directory in the repository, at any depth, and
-fails if any other serial or UUID appears. The values are format-valid rather than obviously fake, because a parser must accept
-them exactly as it accepts the real thing.
+`TestFixturesCarryOnlySyntheticSerials` reads every file under every `testdata` directory in the
+repository, at any depth, and fails if any other serial or UUID appears. The values are format-valid
+rather than obviously fake, because a parser must accept them exactly as it accepts the real thing.
 
-For an EDID, recompute the block-0 checksum after editing: the 128 bytes must sum to zero modulo 256 or the parser rejects the
-fixture. The whitespace hooks skip `testdata/`, so a capture keeps the trailing spaces and missing final newline the real tool
-produced.
+For an EDID, recompute the block-0 checksum after editing: the 128 bytes must sum to zero modulo 256
+or the parser rejects the fixture. The whitespace hooks skip `testdata/`, so a capture keeps the
+trailing spaces and missing final newline the real tool produced.
 
 ## Running them
 
@@ -151,14 +167,16 @@ make check            # everything pre-commit runs, for the host OS only
 
 ## Hardware validation — for a human, by hand
 
-Automated tests prove that monmux builds the command it means to. They cannot prove a monitor accepts it. That is done once per
-model, by a person, and the result becomes the evidence in the catalog.
+Automated tests prove that monmux builds the command it means to. They cannot prove a monitor
+accepts it. That is done once per model, by a person, and the result becomes the evidence in the
+catalog.
 
 Run these yourself. Do not delegate them.
 
 ### Linux, on DisplayPort
 
-1. `monmux doctor` — every check passes; the `ddcutil` version is at least 2.2 and the options are present.
+1. `monmux doctor` — every check passes; the `ddcutil` version is at least 2.2 and the options are
+   present.
 2. `monmux info --json` — one display with:
    - `identity.manufacturer` `GSM`, `identity.productCode` `30675` (`0x77D3`)
    - `model` `LG 38WR85QC-W`
@@ -170,47 +188,50 @@ Run these yourself. Do not delegate them.
    /usr/bin/ddcutil --edid <redacted; --show-serial to print> setvcp 0xF4 0xD1 --i2c-source-addr=0x50 --noverify
    ```
 
-4. `monmux switch usb-c` — the monitor switches to USB-C. Exit code `0`, and the message says the switch was not independently
-   confirmed.
+4. `monmux switch usb-c` — the monitor switches to USB-C. Exit code `0`, and the message says the
+   switch was not independently confirmed.
 
 ### macOS, from USB-C
 
 Run this later, from the machine on the other input.
 
 1. `monmux doctor` — `m1ddc` is found and the display list parses.
-2. `monmux info --json` — one display with `identity.manufacturer` `GSM`, `identity.productCode` `30676` (`0x77D4`, the code the
-   unit reports while on USB-C), and a `handle` that is masked by default and is a UUID under `--show-serial`.
-3. Capture `m1ddc display list detailed`, sanitize it as above, and commit it as a fixture if it differs from the one in
-   `internal/backend/m1ddc/testdata/`.
+2. `monmux info --json` — one display with `identity.manufacturer` `GSM`, `identity.productCode`
+   `30676` (`0x77D4`, the code the unit reports while on USB-C), and a `handle` that is masked by
+   default and is a UUID under `--show-serial`.
+3. Capture `m1ddc display list detailed`, sanitize it as above, and commit it as a fixture if it
+   differs from the one in `internal/backend/m1ddc/testdata/`.
 4. `monmux switch dp --dry-run` — nothing is sent, and the `Command:` line reads
    `/opt/homebrew/bin/m1ddc display <redacted; --show-serial to print> set input-alt 208`.
 5. `monmux switch dp` — the monitor switches back to DisplayPort.
 
 ### Negative cases, on either platform
 
-1. `monmux switch hdmi1` — refused with `input-not-enabled`, exit code `2`, and nothing was written. HDMI was never tested on
-   this unit and must stay refused.
+1. `monmux switch hdmi1` — refused with `input-not-enabled`, exit code `2`, and nothing was written.
+   HDMI was never tested on this unit and must stay refused.
 2. `monmux switch usb-c --serial NOTMYSERIAL` — refused with `serial-mismatch`, exit code `2`.
-3. `monmux switch usb-c --unsafe-model AOC/Q27P1B --dry-run` — refused with `input-not-enabled`, exit code `2`, listing that
-   entry's **recorded** inputs, because it does not record `usb-c`. No warning banner is printed: the banner names the display
-   and the value, so it appears only once those have been chosen, and this is refused before that.
-4. `monmux switch hdmi --unsafe-model Acme/Nothing` — a name that is not a catalog entry is a usage error, exit code `1`, and
-   nothing is started for it.
+3. `monmux switch usb-c --unsafe-model AOC/Q27P1B --dry-run` — refused with `input-not-enabled`,
+   exit code `2`, listing that entry's **recorded** inputs, because it does not record `usb-c`. No
+   warning banner is printed: the banner names the display and the value, so it appears only once
+   those have been chosen, and this is refused before that.
+4. `monmux switch hdmi --unsafe-model Acme/Nothing` — a name that is not a catalog entry is a usage
+   error, exit code `1`, and nothing is started for it.
 
-Record what you ran, on what date, on which OS, and what the monitor did. Those are the `date`, `tool` and `note` fields of a
-`grade: verified` evidence record, which is the only grade a write-enabled model may carry — see
-[adding-a-monitor.md](adding-a-monitor.md).
+Record what you ran, on what date, on which OS, and what the monitor did. Those are the `date`,
+`tool` and `note` fields of a `grade: verified` evidence record, which is the only grade a
+write-enabled model may carry — see [adding-a-monitor.md](adding-a-monitor.md).
 
 ### The first model of a mechanism
 
-A mechanism enters the catalog with a **disabled** record, so its backend path has never reached a monitor. `vcp-input-source`
-has since reached one, a Samsung G95NC through m1ddc under `--unsafe-model`, but not through ddcutil, and no model using it is
-write-enabled. Enabling the first model that uses one is therefore two firsts at once, and needs more than the checklist above:
+A mechanism enters the catalog with a **disabled** record, so its backend path has never reached a
+monitor. `vcp-input-source` has since reached one, a Samsung G95NC through m1ddc under
+`--unsafe-model`, but not through ddcutil, and no model using it is write-enabled. Enabling the
+first model that uses one is therefore two firsts at once, and needs more than the checklist above:
 
-1. Work through the whole checklist for the model, substituting that mechanism's command line — the two are in
-   [backends.md](backends.md). The model is not write-enabled yet, so `monmux switch` refuses it: the run goes through
-   `--unsafe-model`, which assumes the entry you name and skips the write-enabled gate while still sending only the value that
-   entry records.
+1. Work through the whole checklist for the model, substituting that mechanism's command line — the
+   two are in [backends.md](backends.md). The model is not write-enabled yet, so `monmux switch`
+   refuses it: the run goes through `--unsafe-model`, which assumes the entry you name and skips the
+   write-enabled gate while still sending only the value that entry records.
 
    ```sh
    monmux catalog show VENDOR/MODEL                            # the values, and the evidence behind them
@@ -218,12 +239,15 @@ write-enabled. Enabling the first model that uses one is therefore two firsts at
    monmux switch <input> --unsafe-model VENDOR/MODEL           # a human runs this one, never an agent
    ```
 
-   `--dry-run` is not optional politeness: it is how you check that the value and the mechanism in the printed command are the
-   ones you meant before anything is sent. The warning banner on stderr names the display, the assumed model and the value, and
-   is worth reading rather than scrolling past.
-2. Do it on **both** operating systems if you can reach them, because the two backends build the invocation separately and only
-   the catalog is shared.
-3. Have a second input already connected and displaying before you switch. At least one recorded model wedges its DDC engine
-   when switched to an input with no signal, and the OSD is then the only way back.
-4. Say in the pull request that it is the first hardware run of that mechanism, say that it went through `--unsafe-model`, and
-   add the end-to-end `Plan` golden test that was impossible to write until a model using it was enabled.
+   `--dry-run` is not optional politeness: it is how you check that the value and the mechanism in
+   the printed command are the ones you meant before anything is sent. The warning banner on stderr
+   names the display, the assumed model and the value, and is worth reading rather than scrolling
+   past.
+2. Do it on **both** operating systems if you can reach them, because the two backends build the
+   invocation separately and only the catalog is shared.
+3. Have a second input already connected and displaying before you switch. At least one recorded
+   model wedges its DDC engine when switched to an input with no signal, and the OSD is then the
+   only way back.
+4. Say in the pull request that it is the first hardware run of that mechanism, say that it went
+   through `--unsafe-model`, and add the end-to-end `Plan` golden test that was impossible to write
+   until a model using it was enabled.

@@ -104,14 +104,14 @@ command*, *Backends only execute a `Command` produced by `Plan`*) are the checkl
 there, not from memory. Weakening any of them is normally **critical**. What each looks like in
 a diff:
 
-- **The `--unsafe-model` exception.** It is the only way past invariants 1 and 2: the EDID is
-  not consulted and `write_enabled` is ignored (`Model.UnsafeOperation`, reached only from the
+- **The `--unsafe-model` exception.** It is the only way past invariants 1 and 2: the EDID is not
+  consulted and `write_enabled` is ignored (`Model.UnsafeOperation`, reached only from the
   `policy.assume` path). It still refuses when no display is writable, refuses more than one
-  writable display with `multiple-candidates` (pin one with `--serial`), refuses an input the
-  named entry does not record (`input-not-enabled`), takes the value from the compiled-in
-  catalog, and still re-verifies at `Execute`. No configuration key or environment variable can arm it. A second
-  caller of `UnsafeOperation`, a non-flag way to set `Request.AssumeModel`, or an assume path
-  that picks among writable displays is critical.
+  writable display with `multiple-candidates` (pin one with `--serial`), refuses an input the named
+  entry does not record (`input-not-enabled`), takes the value from the compiled-in catalog, and
+  still re-verifies at `Execute`. No configuration key or environment variable can arm it. A second
+  caller of `UnsafeOperation`, a non-flag way to set `Request.AssumeModel`, or an assume path that
+  picks among writable displays is critical.
 - **Catalog changes.** A new or edited entry in `internal/catalog/models.yaml` carries
   evidence, and both rendered files — `internal/catalog/models_gen.go` and the marked region of
   `docs/compatibility.md` — were regenerated in the same commit, never hand-edited.
@@ -265,9 +265,9 @@ a suppression with no reason comment at all. The same holds for a new exclusion 
 
 Before accepting a new helper, search for the one that already exists — in `internal/**` and
 `cmd/**`, by *behaviour*, not by the name the author chose. The *Reuse before writing* table in
-`go-style-guide` lists the helpers that already exist (the tool-path trust check, refusals,
-doctor checks, redaction, catalog lookups, the fakes). Two implementations of the same rule drift apart, and the one the reviewer
-did not read is the one that keeps the bug.
+`go-style-guide` lists the helpers that already exist (the tool-path trust check, refusals, doctor
+checks, redaction, catalog lookups, the fakes). Two implementations of the same rule drift apart,
+and the one the reviewer did not read is the one that keeps the bug.
 
 ### (e) Docs drift
 
