@@ -50,6 +50,7 @@ make go-vet-cross      # and vet both, their build-tagged tests included
 make go-lint-cross     # and lint both, which `make check` does not
 make check             # the full pre-commit suite
 make check-stage       # the same, on staged files only
+make verify            # build, tests, vet and lint for both backends, plus the hook-script tests
 ```
 
 A single test:
@@ -112,7 +113,11 @@ up constantly:
 - Only the two backends carry build tags. Everything else compiles for both `GOOS=linux` and
   `GOOS=darwin`; keep OS-independent logic — parsers especially — in tag-free files so it is
   unit-tested on either host.
-- Every Go file starts with the Apache 2.0 header.
+- Every Go and shell file, the Makefile and the repo-local `.mk` fragments start with the Apache 2.0
+  header; the `check-license-headers` hook says which file lacks it.
+- A new `//nolint` or `# shellcheck disable=` needs `scripts/check-suppressions.sh --update`,
+  committed with it: the `check-suppressions` hook refuses a suppression the baseline does not
+  record.
 - Comments explain why, not what. A comment that restates the code is noise; a comment explaining
   why a check exists is the reason somebody will not delete it in six months.
 
