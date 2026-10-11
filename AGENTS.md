@@ -88,8 +88,10 @@ make go-generate       # re-render internal/catalog/models_gen.go from models.ya
 make go-build-cross    # compile-check both OS backends (GOOS=linux and GOOS=darwin), whatever the host
 make go-vet-cross      # go vet both, their build-tagged tests included
 make go-lint-cross     # lint both; `make check` only ever lints the host's backend
-make go-lint          # the pinned golangci-lint-full hook over the whole module (host backend)
-make verify-go        # go-build, go-test, go-vet, go-vet-cross, go-lint and go-lint-cross
+make go-lint           # the pinned golangci-lint-full hook over the whole module (host backend)
+make verify-go         # go-build, go-test, go-vet, go-vet-cross, go-lint and go-lint-cross
+make verify-scripts    # the shell tests of the check-* hook scripts (scratch git repositories)
+make verify            # verify-go and verify-scripts
 make go-tidy           # go mod tidy + go mod verify
 make audit-deps        # govulncheck -test over every package (network required); also runs in CI and as a pre-commit hook on go.mod/go.sum changes
 make check             # pre-commit on all files
@@ -105,6 +107,33 @@ go test ./internal/edid -run TestParse -v
 The Makefile pulls shared snippets from `leinardi/make-common@v1` into `.mk/` on first run. To
 refresh: `make mk-common-update`. Repo-local make targets live in `.mk/cross.mk`,
 `.mk/audit-deps.mk` and `.mk/verify.mk`, never as recipes in the Makefile.
+
+### Generated or fetched: never hand-edit
+
+- `internal/catalog/models_gen.go` and the region of `docs/compatibility.md` between the
+  `BEGIN GENERATED` and `END GENERATED` markers: edit `internal/catalog/models.yaml`, then
+  `make go-generate`.
+- `.mk/help.mk`, `.mk/go.mk`, `.mk/pre-commit.mk`, `.mk/.mk-common-version` and
+  `scripts/bootstrap-mk-common.sh`: fetched from make-common; refresh with `make mk-common-update`,
+  and port a change upstream.
+
+## Validation matrix
+
+Run before considering an edit done. `make check` applies to every row.
+
+| You edited | Run |
+| --- | --- |
+| `**/*.go` | `make verify-go`, then `make check-stage` |
+| `internal/backend/ddcutil`, `internal/backend/m1ddc`, `internal/backend/select`, or a shared file they use | `make go-build-cross`, `make go-vet-cross`, `make go-lint-cross` (in `verify-go`) |
+| `internal/catalog/models.yaml`, the generator, `internal/catalog/internal/input` | `make go-generate`, commit what it renders, then `make go-test` |
+| `go.mod`, `go.sum` | `make go-tidy`, `make audit-deps` (network), `go test ./test/toolchain/` |
+| `test/**` | `go test -count=1 ./test/...` |
+| `scripts/check-license-headers.sh`, `scripts/check-suppressions.sh`, `scripts/lib/**`, their `*.test.sh` | `make verify-scripts`, and the script itself over the tree |
+| `.github/workflows/**` | `pre-commit run actionlint --all-files`, `go test ./test/toolchain/` (pins, vacuous flags) |
+| `.pre-commit-config.yaml`, `Makefile`, `.mk/**` | `make check`, `go test ./test/toolchain/`, `make help` |
+| `.goreleaser.yaml` | the `release-config` CI job (`goreleaser check`) |
+| `**/*.md` | `go test -count=1 ./test/docs/` (relative links and anchors); prose wraps at 100 columns |
+| `scripts/hooks/gofmt-on-edit.sh`, `.claude/settings.json` | shellcheck (in `make check`); edit a `.go` file in Claude Code once |
 
 ## Package map
 
@@ -209,7 +238,17 @@ real run executes, by construction.
   unit-tested on either host.
 - Version strings (`version`, `commit`, `date`) live in `cmd/monmux/version.go` and are filled by
   `-ldflags -X main.version=...` from `GO_LDFLAGS` in `.mk/go.mk`.
-- Every Go file starts with the Apache 2.0 header from `.idea/copyright/Apache_2_0.xml`.
+- Every Go and shell file, the Makefile and the repo-local `.mk` fragments start with the Apache 2.0
+  header from `.idea/copyright/Apache_2_0.xml`, dated by the file's first commit.
+  `scripts/check-license-headers.sh` enforces it as an always-run pre-commit hook; make-common's
+  fetched files are exempt.
+- In-file suppressions (`//nolint:<linter>`, `# shellcheck disable=`) are ratcheted per rule
+  against `.suppressions-baseline` by `scripts/check-suppressions.sh`. Adding one is allowed, but
+  never silently: run `scripts/check-suppressions.sh --update` and commit the baseline with it. A
+  count that falls below its baseline fails the same way.
+- The meta-tests under `test/` (the Go line and linter pins, flags that make a gate pass on
+  nothing, Markdown links) read files only. The hook scripts are tested by shell tests against
+  scratch git repositories (`make verify-scripts`), because no Go test starts a process.
 - Test fixtures contain synthetic serials and UUIDs only, from a fixed allowlist that a test
   enforces. Never commit a real serial. The whitespace pre-commit hooks skip `testdata/`, so a
   capture keeps the bytes the real tool produced.

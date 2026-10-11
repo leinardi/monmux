@@ -272,6 +272,8 @@ any branch, which is the very thing the `guard` job exists to prevent.
 
 | Job | Runner | What it does |
 | --- | --- | --- |
+| `pre-commit-all` | ubuntu | Every pre-commit hook on every file, minus `go-test-repo-mod` and `audit-deps-go`, which `test` and `govulncheck` run; fails if a hook changed or created a file. |
+| `scripts` | ubuntu | The shell tests of the licence-header and suppression scripts, in scratch git repositories. |
 | `test` | ubuntu + macos | `make go-test` (`go test -race ./...`) on both, so each backend's build-tagged tests run. |
 | `cross` | ubuntu | `make go-build-cross`, `make go-vet-cross`, `make go-lint-cross`. |
 | `lint-macos` | macos | `golangci-lint run ./...` natively, the only look at `internal/backend/m1ddc` under its tag. |
@@ -283,6 +285,7 @@ any branch, which is the very thing the `guard` job exists to prevent.
 | `shellcheck` | ubuntu, pull requests | Shell linting. |
 | `yamllint` | ubuntu, pull requests | YAML linting. |
 | `conventional-commits` | ubuntu, pull requests | Every commit message in the range, because the release version is derived from them. |
+| `ci-result` | ubuntu | Needs every job above except the reviewdog annotation jobs, and fails unless each succeeded; `conventional-commits` may be skipped off pull requests. The one required check. |
 
 Three things there are deliberate:
 
@@ -349,11 +352,16 @@ Setup that is done by hand, once, in this order.
    which by itself changes nothing. Add a deployment branch rule limiting it to `main`, as a
    server-side second line of defence behind the `guard` job, and required reviewers if a release
    should wait for a human.
-5. **Rulesets.** Leave "Immutable tags" exactly as it is; the release job is written for it. Once
-   the workflows have run once, add the required status checks to the default-branch ruleset:
-   `test (ubuntu-latest)`, `test (macos-latest)`, `cross`, `lint-macos`, `govulncheck`,
-   `release-config`, `conventional-commits`, `pre-commit-hooks`, `markdownlint`, `yamllint`,
-   `shellcheck`, `actionlint`.
+5. **Rulesets.** Leave "Immutable tags" exactly as it is; the release job is written for it. The
+   rulesets are managed as code in
+   [`leinardi/gh-leinardi-iac`](https://github.com/leinardi/gh-leinardi-iac), in the `repo_monmux`
+   module of `stacks/github-repos/repos.tf`, never by hand: a change is a pull request there. The
+   one required check is `ci-result`, set there as
+   `default_branch_required_checks = ["ci-result"]`. It needs every gating job of `ci.yaml`, so a
+   new job becomes required by joining its `needs`, not the ruleset; GitHub counts a skipped
+   required job as passing, which is why the jobs themselves are not listed. Once the ruleset is
+   applied, open one pull request and confirm the check reports under exactly the name
+   `ci-result`: a required check that never reports blocks every merge.
 6. **Labels.** `catalog`, for monitor reports and catalog pull requests; confirm `dependencies` and
    `ci` exist for dependabot.
 7. **The release itself.** Record the hardware checklist in [testing.md](testing.md) for every model

@@ -107,6 +107,22 @@ no model name, which matches no pinned entry — fail-closed, not a crash).
 **Structural tests.** A reflection test walks the `Backend` interface and fails if any method could
 be handed a `Command`, however deeply wrapped — that is what makes a command unforgeable.
 
+**Repository meta-tests.** The packages under `test/` check the repository rather than the
+product, and read files only: `test/toolchain` holds the Go line to one value in `go.mod` and
+`CONTRIBUTING.md`, requires every `setup-go` step to read `go.mod` and every
+`golangci-lint-action` step to install the `golangci-lint` the pre-commit hook pins, and refuses a
+flag that makes a gate pass on nothing (`|| true`, `continue-on-error`, `if: false` and their
+kind), with an allowlist for the release workflow's deliberate ones that fails once an entry is
+stale. `test/docs` resolves every relative Markdown link and anchor.
+
+**Script tests.** The two pre-commit scripts that hold the repository to a rule,
+`scripts/check-license-headers.sh` and `scripts/check-suppressions.sh`, are tested by shell
+scripts beside them rather than by Go tests, because a Go test that ran them would have to start
+a process. The shell tests drive git in scratch repositories, with every variable that could
+point git at the repository being committed removed first (`scripts/lib/scratch-git.sh`), and
+run nothing else: never monmux, `ddcutil` or `m1ddc`. `make verify-scripts` runs them, and so
+does CI's `scripts` job.
+
 **Cross-compilation.** Only one of the two backends is visible to the host toolchain at a time, so
 `make go-build-cross` and `make go-vet-cross` run it over `GOOS=linux` and then `GOOS=darwin`,
 type-checking each backend's build-tagged tests too. Both are named outright rather than derived as
@@ -163,6 +179,8 @@ make go-build-cross   # compile-check both OS backends, whatever the host
 make go-vet-cross     # cross-vet both, including their build-tagged tests
 make go-lint-cross    # lint both, which `make check` does not
 make check            # everything pre-commit runs, for the host OS only
+make verify-go        # build, tests, vet and lint, for both OS backends
+make verify-scripts   # the shell tests of the check-* hook scripts
 ```
 
 ## Hardware validation — for a human, by hand
