@@ -106,9 +106,10 @@ switch whose warning could not be printed does not happen. There is no interacti
 the guard, and a prompt would break the scripting the flag exists to allow. The result line then says the identification was
 bypassed, so scrollback shows it later.
 
-Seventy of the seventy-one entries use `vcp-input-source`, which has never reached a monitor. The first `--unsafe-model` run
-against one of them is the first hardware run of that mechanism, and belongs with the checklist in
-[testing.md](testing.md), with `--dry-run` first and the monitor's OSD within reach.
+Seventy of the seventy-one entries use `vcp-input-source`, which has reached one monitor so far, through m1ddc, and none
+through ddcutil. Every `--unsafe-model` run against one of them is a first run of that entry's values, and the first from Linux is
+also the first hardware run of the ddcutil path: both belong with the checklist in [testing.md](testing.md), with `--dry-run`
+first and the monitor's OSD within reach.
 
 ### Serial and UUID leakage
 

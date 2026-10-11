@@ -8,7 +8,8 @@ is written by hand. Three tests check the result, so the page and the catalog ca
 `TestCompatibilityDocumentMatchesTheCatalog` and `TestCompatibilityDocumentCarriesEveryNoteAndSource` read it back and compare
 it against the compiled catalog, which is the copy the binary actually uses.
 
-One model is verified so far. Everything else in the table is a report somebody else published: recorded because it is useful
+One model is write-enabled so far. Apart from one row tested on the unit through `--unsafe-model`, the G95NC's DisplayPort,
+everything else in the table is a report somebody else published: recorded because it is useful
 to a contributor who owns that monitor, disabled, and without an EDID fingerprint, so it can never match a display, and
 `monmux switch` will not write to it. The one way to send a recorded value is `--unsafe-model`, where the user names the entry
 to assume instead of the EDID identifying it — that is what a contributor with the monitor uses to turn a report into evidence,
@@ -17,8 +18,8 @@ deliberately will not touch it" is information a reader needs.
 
 monmux implements two mechanisms. `lg-alt-input` is the LG side channel, and every model recorded with it is an LG;
 `vcp-input-source` is the standard Input Source feature, `VCP 0x60`, and is what every other vendor here uses, plus three LGs
-whose reports went through it. Every `vcp-input-source` row is disabled, and no monitor has ever been switched by monmux over
-it. "Standard" is a name, not a promise: which values a model accepts, and whether it accepts the write at all, are still
+whose reports went through it. Every `vcp-input-source` row is disabled, and monmux has switched one monitor over it: a Samsung
+G95NC, to DisplayPort, through m1ddc under `--unsafe-model`. The ddcutil path has not reached a monitor yet. "Standard" is a name, not a promise: which values a model accepts, and whether it accepts the write at all, are still
 per-model facts with per-input evidence, and the values recorded under it range from the specification's 0x0F/0x11 to 0x05,
 0x09, 0x13 and 0x00.
 
@@ -39,8 +40,8 @@ per-model facts with per-input evidence, and the values recorded under it range 
   is a per-model property and never a fallback — a backend that does not implement a model's mechanism refuses rather than
   trying the other one.
 - **Enabled** — whether monmux will actually perform this switch. A row with `no` is recorded for reference only.
-- **Grade** — how strong the evidence is. `verified` is a direct test on the unit by this project and is the only grade that
-  may be enabled; `documented` is the manufacturer's own documentation with no field report behind it; `reported` is somebody
+- **Grade** — how strong the evidence is. `verified` is a direct test on the unit, by this project or by a contributor running
+  monmux for a `Help verify` issue, and is the only grade that may be enabled; `documented` is the manufacturer's own documentation with no field report behind it; `reported` is somebody
   reporting that switching that named input with that value worked; `quoted` is a report that quotes the values and says they
   work, without saying which inputs were tried individually.
 - **Evidence** — why anyone believes that value does that thing on that model, composed from the fields the catalog records so

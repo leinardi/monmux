@@ -67,8 +67,9 @@ If your monitor switches through neither, that mechanism does not exist yet, and
 - A mechanism is added **together with the first model that needs it**, never speculatively. A model that only *records* it —
   disabled, with no identity — counts as that model: the point is that a mechanism enters the code with evidence attached, not
   that the first entry using it is trusted.
-- A mechanism's backend path is **untested on hardware** until the first model using it is write-enabled. `vcp-input-source` is
-  in that state today. Enabling that first model is therefore a first hardware run of the mechanism as well as of the model:
+- A mechanism's backend path is **unproven on hardware** until the first model using it is write-enabled. `vcp-input-source` is
+  in that state today: it has reached one monitor, through m1ddc under `--unsafe-model`, and none through ddcutil. Enabling that
+  first model is therefore the first enabling of the mechanism as well as of the model:
   work through the [testing.md](testing.md) checklist for it, and say in the pull request that it is the first, rather than
   treating it as a routine catalog flip.
 - A mechanism is a per-model property and never a fallback. A backend that does not implement a model's mechanism refuses with
