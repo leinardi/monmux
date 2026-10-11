@@ -14,6 +14,9 @@ Any HTML comment will be stripped when the markdown is rendered, so you don't ne
 - [ ] I have executed `make check` locally *before creating the commit* and it has run successfully
 - [ ] I have performed a self-review of my own code
 - [ ] There are no `WIP` commits in this PR
+- [ ] Each commit's type matches whether the change ships: `feat` or `fix` for anything users
+  should receive in the binary or its packages, a non-release type for everything else, since
+  `svu` derives the version from every commit ([AGENTS.md](../AGENTS.md#commit-messages))
 
 ## Monitor writes
 
