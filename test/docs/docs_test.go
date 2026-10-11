@@ -169,14 +169,7 @@ func markdownFiles(t *testing.T, root string) []string {
 func writeFixture(t *testing.T, dir, name, content string) {
 	t.Helper()
 
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		t.Fatalf("open %s: %v", dir, err)
-	}
-
-	defer func() { _ = root.Close() }()
-
-	err = root.WriteFile(name, []byte(content), 0o600)
+	err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600)
 	if err != nil {
 		t.Fatalf("write %s: %v", name, err)
 	}
