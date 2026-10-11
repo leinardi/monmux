@@ -339,8 +339,8 @@ func renderCatalogModel(out io.Writer, entry *catalog.Model) error {
 
 	if !entry.WriteEnabled {
 		page.linef("")
-		page.linef("Not write-enabled: \"monmux switch\" refuses this model, because nothing")
-		page.linef("recorded here was verified by this project. To send a recorded value")
+		page.linef("Not write-enabled: \"monmux switch\" refuses this model until every input")
+		page.linef("is verified on the unit and the entry is enabled. To send a recorded value")
 		page.linef(
 			"anyway, add --unsafe-model %s (with --dry-run first).",
 			entry.Vendor+"/"+entry.Name,

@@ -161,8 +161,9 @@ catalog parser and reads no catalog file at run time.
 
 A `Mechanism` is added the same way, together with the first model that needs it, and a **disabled** record counts as that model:
 the point is that the mechanism arrives with evidence attached, not that the first entry using it is trusted. Until a model using
-a mechanism is write-enabled, that backend path has never reached a monitor — `vcp-input-source` is in that state today. Enabling
-that first model is a first hardware run of the mechanism, done with the [`docs/testing.md`](docs/testing.md) checklist, not a
+a mechanism is write-enabled, that backend path is unproven — `vcp-input-source` is in that state today: it has reached one
+monitor, through m1ddc under `--unsafe-model`, and none through ddcutil. Enabling that first model is the first enabling of the
+mechanism, done with the [`docs/testing.md`](docs/testing.md) checklist, not a
 routine catalog flip.
 
 **Backends only execute a `Command` produced by `Plan`.** `Command` is returned by `Plan` for display only and is never accepted as

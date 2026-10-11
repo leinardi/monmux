@@ -67,8 +67,9 @@ If your monitor switches through neither, that mechanism does not exist yet, and
 - A mechanism is added **together with the first model that needs it**, never speculatively. A model that only *records* it —
   disabled, with no identity — counts as that model: the point is that a mechanism enters the code with evidence attached, not
   that the first entry using it is trusted.
-- A mechanism's backend path is **untested on hardware** until the first model using it is write-enabled. `vcp-input-source` is
-  in that state today. Enabling that first model is therefore a first hardware run of the mechanism as well as of the model:
+- A mechanism's backend path is **unproven on hardware** until the first model using it is write-enabled. `vcp-input-source` is
+  in that state today: it has reached one monitor, through m1ddc under `--unsafe-model`, and none through ddcutil. Enabling that
+  first model is therefore the first enabling of the mechanism as well as of the model:
   work through the [testing.md](testing.md) checklist for it, and say in the pull request that it is the first, rather than
   treating it as a routine catalog flip.
 - A mechanism is a per-model property and never a fallback. A backend that does not implement a model's mechanism refuses with
@@ -113,6 +114,10 @@ monmux catalog show AOC/Q27P1B                            # read the values and 
 monmux switch hdmi --unsafe-model AOC/Q27P1B --dry-run    # always start here: read the command
 monmux switch hdmi --unsafe-model AOC/Q27P1B              # then run it, with the OSD within reach
 ```
+
+On a MacBook, the built-in panel counts as a second writable display, so add `--serial` with the external monitor's serial from
+`monmux info --show-serial`; if the monitor has none,
+[troubleshooting.md](troubleshooting.md#multiple-candidates) has the alternatives.
 
 It treats the display as the entry you name and skips the write-enabled gate; it still sends only the value that entry
 records. Before you run it without `--dry-run`, have a second input connected and displaying, and know how to reach the

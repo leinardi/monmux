@@ -144,6 +144,10 @@ Before that runs, the display list is re-read and the UUID must still carry the 
   displaying.
 - `m1ddc`'s help lists USB-C as `210` among its common values. The unit in the catalog switches to USB-C on `0xD1` (209), which
   is what was tested on it. The catalog is the evidence; the help text is a general hint.
+- `m1ddc` 1.2.0 lists a MacBook's built-in panel with a system UUID, so monmux counts it as writable. It never matches a
+  catalog entry, so a normal switch is unaffected, but `--unsafe-model` counts every writable display and refuses with
+  `multiple-candidates` until the external monitor is pinned —
+  [troubleshooting.md](troubleshooting.md#multiple-candidates).
 - Both the no-display message and the field labels are pinned in constants and covered by fixtures, so an upstream change to
   either fails a test rather than silently changing behaviour.
 

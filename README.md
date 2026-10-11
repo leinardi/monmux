@@ -30,8 +30,8 @@ titled `Help verify: <Vendor> <Model>`, with the recorded values and the three c
 reported there, is what makes a model switchable — and a value that did nothing is as useful to report as one that worked.
 
 Two mechanisms are implemented: `lg-alt-input`, the LG side channel, and `vcp-input-source`, the standard `VCP 0x60` Input
-Source feature. Only the first has ever reached a monitor; the second has 36 recorded models, all disabled, and enabling one would
-be the first hardware run of that path.
+Source feature. Only the first is write-enabled on any model. The second has 36 recorded models, all disabled; it has reached one
+monitor, a Samsung G95NC switched through m1ddc under `--unsafe-model`, and has never been run through ddcutil.
 
 ## Install
 

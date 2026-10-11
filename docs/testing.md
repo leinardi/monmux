@@ -204,8 +204,8 @@ Record what you ran, on what date, on which OS, and what the monitor did. Those 
 ### The first model of a mechanism
 
 A mechanism enters the catalog with a **disabled** record, so its backend path has never reached a monitor. `vcp-input-source`
-is in that state today. Enabling the first model that uses one is therefore two firsts at once, and needs more than the
-checklist above:
+has since reached one, a Samsung G95NC through m1ddc under `--unsafe-model`, but not through ddcutil, and no model using it is
+write-enabled. Enabling the first model that uses one is therefore two firsts at once, and needs more than the checklist above:
 
 1. Work through the whole checklist for the model, substituting that mechanism's command line — the two are in
    [backends.md](backends.md). The model is not write-enabled yet, so `monmux switch` refuses it: the run goes through
