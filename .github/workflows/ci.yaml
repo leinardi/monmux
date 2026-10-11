@@ -25,6 +25,70 @@ permissions:
   contents: read
 
 jobs:
+  # The gate for every hook: all of them, on every file, on every run. The reviewdog jobs below only
+  # annotate a pull request's diff.
+  pre-commit-all:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # go-generate-catalog, docs-links and the golangci-lint hooks run the Go toolchain, and it
+      # has to be the one go.mod asks for.
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.x"
+
+      - name: Install pre-commit
+        run: pip install --no-cache-dir pre-commit==4.6.2
+
+      # Restore only: pre-commit-warmup.yaml saves the entry on main under the same key.
+      - name: Restore the pre-commit cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit|${{ runner.os }}|${{ hashFiles('.pre-commit-config.yaml') }}
+
+      # Skipped here because a dedicated job runs each of them: go-test-repo-mod is `test`, on
+      # both OSes, and audit-deps-go is `govulncheck`.
+      - name: Run every pre-commit hook on every file
+        env:
+          SKIP: go-test-repo-mod,audit-deps-go
+        run: pre-commit run --all-files --show-diff-on-failure
+
+      # pre-commit fails a hook that modifies a tracked file, which covers the auto-fixing hooks
+      # (markdownlint fix, prettier, golangci-lint fmt, go-generate-catalog); this also fails on a
+      # file a hook creates, which its diff check does not see, so no fix can pass silently.
+      - name: Fail if a hook modified a file
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+
+  # The shell tests of the check-* hook scripts. They drive git in scratch repositories and run
+  # nothing else; the Go suite cannot hold them, because it never starts a process.
+  scripts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Test check-license-headers.sh
+        run: bash scripts/check-license-headers.test.sh
+
+      - name: Test check-suppressions.sh
+        run: bash scripts/check-suppressions.test.sh
+
   test:
     # Both OSes, because a backend's build-tagged tests only ever compile on
     # their own. The macOS runner needs no m1ddc: nothing here executes it.
@@ -188,7 +252,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run actionlint via pre-commit + reviewdog
-        uses: leinardi/gha-pre-commit-reviewdog-actions/actionlint@68bf8e338b79df404181ceef655ae02f1c8edb8a # v1.0.2
+        uses: leinardi/gha-pre-commit-reviewdog-actions/actionlint@007919a45a04b0c52dfbb46732019dc4831fc03c # v1.0.3
         with:
           from-ref: ${{ github.event.pull_request.base.sha }}
           to-ref: ${{ github.event.pull_request.head.sha }}
@@ -224,7 +288,7 @@ jobs:
       # pull request that edits models.yaml without regenerating what is built
       # from it gets the diff posted as a review comment.
       - name: Run pre-commit hooks + reviewdog diff
-        uses: leinardi/gha-pre-commit-reviewdog-actions/pre-commit-hooks@68bf8e338b79df404181ceef655ae02f1c8edb8a # v1.0.2
+        uses: leinardi/gha-pre-commit-reviewdog-actions/pre-commit-hooks@007919a45a04b0c52dfbb46732019dc4831fc03c # v1.0.3
         with:
           from-ref: ${{ github.event.pull_request.base.sha }}
           to-ref: ${{ github.event.pull_request.head.sha }}
@@ -261,7 +325,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run markdownlint-cli2 via pre-commit + reviewdog
-        uses: leinardi/gha-pre-commit-reviewdog-actions/markdownlint-cli2@68bf8e338b79df404181ceef655ae02f1c8edb8a # v1.0.2
+        uses: leinardi/gha-pre-commit-reviewdog-actions/markdownlint-cli2@007919a45a04b0c52dfbb46732019dc4831fc03c # v1.0.3
         with:
           from-ref: ${{ github.event.pull_request.base.sha }}
           to-ref: ${{ github.event.pull_request.head.sha }}
@@ -284,7 +348,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run shellcheck via pre-commit + reviewdog
-        uses: leinardi/gha-pre-commit-reviewdog-actions/shellcheck@68bf8e338b79df404181ceef655ae02f1c8edb8a # v1.0.2
+        uses: leinardi/gha-pre-commit-reviewdog-actions/shellcheck@007919a45a04b0c52dfbb46732019dc4831fc03c # v1.0.3
         with:
           from-ref: ${{ github.event.pull_request.base.sha }}
           to-ref: ${{ github.event.pull_request.head.sha }}
@@ -307,7 +371,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run yamllint via pre-commit + reviewdog
-        uses: leinardi/gha-pre-commit-reviewdog-actions/yamllint@68bf8e338b79df404181ceef655ae02f1c8edb8a # v1.0.2
+        uses: leinardi/gha-pre-commit-reviewdog-actions/yamllint@007919a45a04b0c52dfbb46732019dc4831fc03c # v1.0.3
         with:
           from-ref: ${{ github.event.pull_request.base.sha }}
           to-ref: ${{ github.event.pull_request.head.sha }}
@@ -326,7 +390,49 @@ jobs:
           fetch-depth: 0
 
       - name: Validate the commit messages
-        uses: leinardi/gha-pre-commit-reviewdog-actions/conventional-commits@68bf8e338b79df404181ceef655ae02f1c8edb8a # v1.0.2
+        uses: leinardi/gha-pre-commit-reviewdog-actions/conventional-commits@007919a45a04b0c52dfbb46732019dc4831fc03c # v1.0.3
         with:
           from-ref: ${{ github.event.pull_request.base.sha }}
           to-ref: ${{ github.event.pull_request.head.sha }}
+
+  # The one required check: it needs every gating job, so the ruleset names this job alone.
+  # conventional-commits runs on pull requests only, so off them its "skipped" is not a failure.
+  ci-result:
+    if: always()
+    needs:
+      - pre-commit-all
+      - scripts
+      - test
+      - cross
+      - lint-macos
+      - govulncheck
+      - release-config
+      - conventional-commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check the needed jobs
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          failed="$(jq -r --arg event "${EVENT}" '
+            to_entries[]
+            | select(.value.result != "success")
+            | select(
+                (
+                  $event != "pull_request"
+                  and .key == "conventional-commits"
+                  and .value.result == "skipped"
+                ) | not
+              )
+            | "\(.key): \(.value.result)"
+          ' <<<"${NEEDS}")"
+          if [[ -n "${failed}" ]]; then
+            echo "::error::Needed jobs did not succeed:"
+            echo "${failed}"
+            exit 1
+          fi
+          echo "Every needed job succeeded."
