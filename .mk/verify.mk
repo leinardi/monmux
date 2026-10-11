@@ -29,4 +29,14 @@ MK_LOCAL_VERIFY_INCLUDED := 1
 .PHONY: verify-go
 verify-go: go-build go-test go-vet go-vet-cross go-lint go-lint-cross ## Verify the Go code (build, race tests, vet and lint for both OS backends)
 
+# The check-* hook scripts are tested by shell tests against scratch repositories, not by Go tests:
+# the Go suite never starts a process. They run git and the script under test, and nothing else.
+.PHONY: verify-scripts
+verify-scripts: ## Run the shell tests of the check-* hook scripts (scratch repositories only)
+	bash scripts/check-license-headers.test.sh
+	bash scripts/check-suppressions.test.sh
+
+.PHONY: verify
+verify: verify-go verify-scripts ## Verify everything (verify-go and verify-scripts)
+
 endif  # MK_LOCAL_VERIFY_INCLUDED

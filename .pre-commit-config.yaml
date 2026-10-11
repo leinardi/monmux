@@ -86,6 +86,16 @@ repos:
         additional_dependencies: ["prettier@3.9.9"]
         files: \.(yml|yaml)$
         args: ["--write"]
+      # The offline documentation check: every relative link and fragment in the Markdown
+      # resolves. -count=1 because the test walks the tree, which the test cache cannot see;
+      # always_run because deleting a linked page passes no Markdown file to the hook at all.
+      - id: docs-links
+        name: docs links
+        entry: go test -count=1 ./test/docs/
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
       # Every source file carries the Apache-2.0 header. Reads the whole tree, so it always runs;
       # pinned to one stage because always_run makes a hook eligible at every installed stage, and
       # commit-msg is one of them.
