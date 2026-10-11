@@ -10,7 +10,7 @@ MK_COMMON_DIR         := $(REPO_ROOT)/.mk
 MK_COMMON_FILES       := help.mk go.mk pre-commit.mk
 
 # Repo-local snippets that are NOT in make-common
-MK_LOCAL_FILES        := cross.mk audit-deps.mk
+MK_LOCAL_FILES        := cross.mk audit-deps.mk verify.mk
 
 MK_COMMON_BOOTSTRAP_SCRIPT := $(REPO_ROOT)/scripts/bootstrap-mk-common.sh
 

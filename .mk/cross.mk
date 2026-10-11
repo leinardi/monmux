@@ -35,9 +35,13 @@
 # planting a violation in a build-tagged file: the aborting version reports it
 # nowhere, the working version reports it.
 
-# The linter is not part of make-common's Go snippet, and the copy the hooks use
-# lives inside pre-commit's cache, so this expects one on PATH. Override it to
-# point at another: make go-lint-cross GOLANGCI_LINT=/path/to/golangci-lint
+# make-common's go-lint runs the copy the hooks use, through pre-commit, but
+# only for the host: that copy lives inside pre-commit's cache, and running the
+# hook with GOOS set would also cross-compile the hook's own environment the
+# first time pre-commit installs it. So this expects a golangci-lint on PATH, at
+# the rev .pre-commit-config.yaml pins (CI's `cross` job installs exactly that).
+# Override it to point at another:
+# make go-lint-cross GOLANGCI_LINT=/path/to/golangci-lint
 GOLANGCI_LINT ?= golangci-lint
 
 .PHONY: go-build-cross

@@ -80,6 +80,8 @@ make go-generate       # re-render internal/catalog/models_gen.go from models.ya
 make go-build-cross    # compile-check both OS backends (GOOS=linux and GOOS=darwin), whatever the host
 make go-vet-cross      # go vet both, their build-tagged tests included
 make go-lint-cross     # lint both; `make check` only ever lints the host's backend
+make go-lint          # the pinned golangci-lint-full hook over the whole module (host backend)
+make verify-go        # go-build, go-test, go-vet, go-vet-cross, go-lint and go-lint-cross
 make go-tidy           # go mod tidy + go mod verify
 make audit-deps        # govulncheck over every package (network required); also runs in CI and as a pre-commit hook on go.mod/go.sum changes
 make check             # pre-commit on all files
@@ -93,7 +95,7 @@ go test ./internal/edid -run TestParse -v
 ```
 
 The Makefile pulls shared snippets from `leinardi/make-common@v1` into `.mk/` on first run. To refresh: `make mk-common-update`.
-Repo-local make targets live in `.mk/cross.mk` and `.mk/audit-deps.mk`, never as recipes in the Makefile.
+Repo-local make targets live in `.mk/cross.mk`, `.mk/audit-deps.mk` and `.mk/verify.mk`, never as recipes in the Makefile.
 
 ## Package map
 
