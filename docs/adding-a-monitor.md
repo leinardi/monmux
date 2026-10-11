@@ -115,6 +115,10 @@ monmux switch hdmi --unsafe-model AOC/Q27P1B --dry-run    # always start here: r
 monmux switch hdmi --unsafe-model AOC/Q27P1B              # then run it, with the OSD within reach
 ```
 
+On a MacBook, the built-in panel counts as a second writable display, so add `--serial` with the external monitor's serial from
+`monmux info --show-serial`; if the monitor has none,
+[troubleshooting.md](troubleshooting.md#multiple-candidates) has the alternatives.
+
 It treats the display as the entry you name and skips the write-enabled gate; it still sends only the value that entry
 records. Before you run it without `--dry-run`, have a second input connected and displaying, and know how to reach the
 monitor's OSD: a value that is wrong for your unit can leave it on an input with no signal. Warnings and what the override
