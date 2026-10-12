@@ -109,7 +109,8 @@ be handed a `Command`, however deeply wrapped — that is what makes a command u
 
 **Repository meta-tests.** The packages under `test/` check the repository rather than the
 product, and read files only: `test/toolchain` holds the Go line to one value in `go.mod` and
-`CONTRIBUTING.md`, requires every `setup-go` step to read `go.mod` and every
+`CONTRIBUTING.md`, requires every `setup-go` step to read `go.mod` and set `check-latest`
+(`go.mod` names only the line, and the runner's cached patch can lag the newest release), every
 `golangci-lint-action` step to install the `golangci-lint` the pre-commit hook pins, and refuses a
 flag that makes a gate pass on nothing (`|| true`, `continue-on-error`, `if: false` and their
 kind), with an allowlist for the release workflow's deliberate ones that fails once an entry is

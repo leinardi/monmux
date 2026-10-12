@@ -103,6 +103,7 @@ func TestActionPinRules(t *testing.T) {
       - uses: actions/setup-go@0123456789abcdef0123456789abcdef01234567 # v7.0.0
         with:
           go-version-file: go.mod
+          check-latest: true
       - uses: golangci/golangci-lint-action@0123456789abcdef0123456789abcdef01234567 # v9.3.0
         with:
           version: ${{ steps.linter.outputs.version }}
@@ -144,8 +145,9 @@ func TestActionPinRules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// setup-go writing a version also fails the go.mod rule, hence two problems for that step.
-	const want = 8
+	// setup-go writing a version also fails the go.mod rule, and none of the three setup-go steps
+	// sets check-latest, hence three problems more.
+	const want = 11
 
 	problems = pinProblems(steps, "v2.14.0")
 	if len(problems) != want {
@@ -153,8 +155,10 @@ func TestActionPinRules(t *testing.T) {
 	}
 }
 
-// pinProblems applies the pin rules to steps: no step writes a go-version, setup-go reads go.mod,
-// and golangci-lint-action installs hookRev, by the hook-reading step or as that exact tag.
+// pinProblems applies the pin rules to steps: no step writes a go-version, setup-go reads go.mod
+// and sets check-latest (go.mod names only the 1.26 line, and the patch cached on the runner image
+// can lag the newest release), and golangci-lint-action installs hookRev, by the hook-reading step
+// or as that exact tag.
 func pinProblems(steps []actionStep, hookRev string) []string {
 	var problems []string
 
@@ -167,6 +171,10 @@ func pinProblems(steps []actionStep, hookRev string) []string {
 
 		if step.action == setupGo && step.with["go-version-file"] != "go.mod" {
 			problems = append(problems, step.file+": setup-go must read go-version-file: go.mod")
+		}
+
+		if step.action == setupGo && step.with["check-latest"] != "true" {
+			problems = append(problems, step.file+": setup-go must set check-latest: true")
 		}
 
 		if step.action != golangciLintA {
