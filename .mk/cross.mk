@@ -1,3 +1,19 @@
+#
+# Copyright 2026 Roberto Leinardi.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 # Repo-local cross-compilation targets.
 #
 # monmux ships two OS backends behind build tags - internal/backend/ddcutil is
@@ -35,9 +51,13 @@
 # planting a violation in a build-tagged file: the aborting version reports it
 # nowhere, the working version reports it.
 
-# The linter is not part of make-common's Go snippet, and the copy the hooks use
-# lives inside pre-commit's cache, so this expects one on PATH. Override it to
-# point at another: make go-lint-cross GOLANGCI_LINT=/path/to/golangci-lint
+# make-common's go-lint runs the copy the hooks use, through pre-commit, but
+# only for the host: that copy lives inside pre-commit's cache, and running the
+# hook with GOOS set would also cross-compile the hook's own environment the
+# first time pre-commit installs it. So this expects a golangci-lint on PATH, at
+# the rev .pre-commit-config.yaml pins (CI's `cross` job installs exactly that).
+# Override it to point at another:
+# make go-lint-cross GOLANGCI_LINT=/path/to/golangci-lint
 GOLANGCI_LINT ?= golangci-lint
 
 .PHONY: go-build-cross

@@ -2,11 +2,12 @@
 name: go-style-guide
 description: >
   Go coding rules for monmux: the golangci-lint v2 (default: all) settings and how
-  to satisfy them, the linux/darwin build-tag layout and cross-OS lint, refusal
-  error handling (never wrapped), and the helpers to reuse (tool-path trust check,
-  refusals, doctor checks, redaction, catalog lookups, fakes). Use when writing,
-  editing or reviewing any .go file in monmux — new code, bug fixes, refactors or
-  tests — before generating Go code, not after lint fails.
+  to satisfy them, nolint directives and the suppression ratchet, the linux/darwin
+  build-tag layout and cross-OS lint, refusal error handling (never wrapped), and
+  the helpers to reuse (tool-path trust check, refusals, doctor checks, redaction,
+  catalog lookups, fakes). Use when writing, editing or reviewing any .go file in
+  monmux — new code, bug fixes, refactors or tests — before generating Go code, not
+  after lint fails.
 ---
 
 # Go Style Guide — monmux
@@ -32,6 +33,12 @@ Linters that are **disabled** in `.golangci.yaml`, so their rules do not apply:
 
 The formatters (`gci`, `gofmt`, `gofumpt`, `goimports`, `golines`) run in the
 `golangci-lint-fmt` hook and in CI.
+
+`run.build-tags` is deliberately unset: monmux has no custom build tags, only the `GOOS`
+constraints of the two backends (§8), and a tag list cannot select an OS. The other backend is
+linted by `make go-lint-cross` and natively by CI's `lint-macos` job. `exclusions.generated` is
+`strict`: only a file whose first comment is Go's standard `// Code generated ... DO NOT EDIT.`
+line is skipped, which `internal/catalog/models_gen.go` carries because its generator writes it.
 
 ---
 
@@ -109,7 +116,7 @@ _, _ = fmt.Fprintln(stderr, rendered)
 
 ---
 
-## 3. `nolint` directives
+## 3. `nolint` directives and the suppression ratchet
 
 `nolintlint` enforces three things:
 
@@ -132,6 +139,15 @@ func (f *Fake) Ready(_ context.Context, _ Display) error {
 Multiple linters are comma-separated with no spaces. Name all that fire: `gocyclo` and
 `cyclop` measure the same thing, and `gocognit` often joins them.
 
+**Suppressions are ratcheted.** [`.suppressions-baseline`](../../../.suppressions-baseline) holds
+one count per rule (`nolint/<linter>`, and `shellcheck-disable/<code>` for shell).
+`scripts/check-suppressions.sh` runs as the `check-suppressions` pre-commit hook and refuses a
+count above its baseline, a rule the baseline does not know, a count below its baseline (the file
+must describe the tree), and a staged diff that adds a suppression line without also changing the
+baseline. Every new, moved or removed suppression therefore needs
+`scripts/check-suppressions.sh --update`, committed with the change that earned it. Raising a count
+needs a reviewer's agreement; the baseline file is what they read.
+
 ---
 
 ## 4. Complexity limits
@@ -143,9 +159,9 @@ Multiple linters are comma-separated with no spaces. Name all that fire: `gocycl
 | `gocognit` | 35 | Cognitive complexity |
 | `funlen` | 50 statements | Lines are disabled (`lines: -1`) |
 
-Prefer extracting helpers over suppressing; when suppression is the right call, the
-nolint comment says why. These limits apply to test files too: `.golangci.yaml` exempts tests only from
-`dupl`, `goconst`, `lll`, `mnd`, `paralleltest`, `testpackage` and `varnamelen`.
+Prefer extracting helpers over suppressing; when suppression is the right call, the nolint comment
+says why. These limits apply to test files too: `.golangci.yaml` exempts tests only from `dupl`,
+`goconst`, `lll`, `mnd`, `paralleltest`, `testpackage` and `varnamelen`.
 
 ---
 
@@ -352,10 +368,11 @@ flaky test pass, are always wrong.
 - [ ] No `errors.New` or `%w`-less `fmt.Errorf` in a function body: wrap a package-level sentinel
 - [ ] `any` not `interface{}`; `new(expr)`, not a pointer-boxing helper
 - [ ] Numbers other than 0–3 extracted to named constants (non-test code)
-- [ ] Each `//nolint` names specific linters and explains why the fix does not apply
+- [ ] Each `//nolint` names specific linters, explains why the fix does not apply, and is
+  committed with `scripts/check-suppressions.sh --update`
 - [ ] No `FIXME` comments
-- [ ] `//go:build linux` / `//go:build darwin` first line in backend-specific files; `make go-lint-cross`
-      after touching one
+- [ ] `//go:build linux` / `//go:build darwin` first line in backend-specific files;
+  `make go-lint-cross` after touching one
 - [ ] Function statement count ≤ 50, test files included
 - [ ] No shadowed variables
 - [ ] Checked §13 for an existing helper before writing a new one
@@ -365,10 +382,15 @@ flaky test pass, are always wrong.
 ## Lint, test and cross-OS loop
 
 1. Run `pre-commit run golangci-lint-fmt --files <changed .go files>` and
-   `pre-commit run golangci-lint-full --files <changed .go files>` (or `--all-files`).
+   `pre-commit run golangci-lint-full --files <changed .go files>`, or `make go-lint` for the
+   whole module (the same pinned golangci-lint).
 2. Run `make go-vet` and `make go-test`. After editing `internal/catalog/models.yaml`, run
    `make go-generate` first and commit what it renders.
 3. After touching a build-tagged file or anything shared, run `make go-build-cross`,
    `make go-vet-cross` and `make go-lint-cross`: step 1 lints only the host's backend.
 4. Fix each report and re-run from step 1 until all of them are clean.
 5. Check `git status`: the formatter hook rewrites files in place, so review and keep its changes.
+   If you added, moved or removed a suppression, run `scripts/check-suppressions.sh --update` and
+   stage `.suppressions-baseline`.
+
+`make verify-go` runs steps 2 and 3 plus both lints in one command.

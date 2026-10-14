@@ -2,16 +2,17 @@
 
 ## HARD RULE: no monitor writes by any AI agent
 
-**No AI agent — main session, subagent, reviewer, or any tool-driven automation — may run a command that writes to a monitor.**
-Only the human user runs writing commands, by hand, when they decide to. This applies during implementation *and* during review.
+**No AI agent — main session, subagent, reviewer, or any tool-driven automation — may run a command
+that writes to a monitor.** Only the human user runs writing commands, by hand, when they decide to.
+This applies during implementation *and* during review.
 
 Forbidden for agents:
 
 - `ddcutil setvcp …`, and any `ddcutil` invocation with `--i2c-source-addr`
 - `m1ddc … set …`
 - `monmux switch` without `--dry-run`
-- `monmux switch --unsafe-model …` without `--dry-run` — the override bypasses identification, which makes it more of a write
-  than a normal switch, not less
+- `monmux switch --unsafe-model …` without `--dry-run` — the override bypasses identification, which
+  makes it more of a write than a normal switch, not less
 - `i2cset`, `i2ctransfer`, or any direct write to `/dev/i2c-*`
 - any test or script that executes the real `ddcutil` / `m1ddc` binaries
 
@@ -19,13 +20,16 @@ Allowed for agents (read-only):
 
 - reading `/sys/class/drm/**`
 - `ddcutil --version`, `ddcutil --help`, `ddcutil detect`
-- `monmux info`, `monmux doctor`, `monmux switch … --dry-run`, including `monmux switch … --unsafe-model … --dry-run`
-- `monmux catalog list`, `monmux catalog show …` — the compiled-in catalog, no backend and no monitor involved
+- `monmux info`, `monmux doctor`, `monmux switch … --dry-run`, including
+  `monmux switch … --unsafe-model … --dry-run`
+- `monmux catalog list`, `monmux catalog show …` — the compiled-in catalog, no backend and no
+  monitor involved
 
-**Tests never perform DDC writes and never execute any external binary at all.** Unit tests use only the recording fake `Runner`.
-This is enforced from inside the real runner: it refuses to execute when `testing.Testing()` is true (which covers `make go-test`, the
-pre-commit `go-test-repo-mod` hook, and IDE runs) or when `MONMUX_NO_EXEC=1` is set (a belt for scripts). A repo test also fails if any
-`_test.go` imports `os/exec` or references the real runner constructor.
+**Tests never perform DDC writes and never execute any external binary at all.** Unit tests use only
+the recording fake `Runner`. This is enforced from inside the real runner: it refuses to execute
+when `testing.Testing()` is true (which covers `make go-test`, the pre-commit `go-test-repo-mod`
+hook, and IDE runs) or when `MONMUX_NO_EXEC=1` is set (a belt for scripts). A repo test also fails
+if any `_test.go` imports `os/exec` or references the real runner constructor.
 
 Hardware validation is a checklist the human runs; agents prepare the commands and wait.
 
@@ -33,13 +37,15 @@ CI runs no monmux command at all; a workflow that did would be a monitor write b
 
 ## What this is
 
-`monmux` is a cross-platform Go CLI that switches **supported monitors** between video inputs, with a fail-closed policy: a write happens
-only when the attached monitor is positively identified as a model in the built-in supported-monitor catalog *and* the requested input is
-explicitly enabled for that model — except under the `--unsafe-model` override, the one documented exception, which is spelled out in
-invariants 1 and 2 below. One model is verified so far (LG 38WR85QC-W); nothing in the code, CLI, or docs is vendor-specific
-except the catalog entries and the mechanisms they use.
+`monmux` is a cross-platform Go CLI that switches **supported monitors** between video inputs, with
+a fail-closed policy: a write happens only when the attached monitor is positively identified as a
+model in the built-in supported-monitor catalog *and* the requested input is explicitly enabled for
+that model — except under the `--unsafe-model` override, the one documented exception, which is
+spelled out in invariants 1 and 2 below. One model is verified so far (LG 38WR85QC-W); nothing in
+the code, CLI, or docs is vendor-specific except the catalog entries and the mechanisms they use.
 
-It wraps `ddcutil` on Linux and `m1ddc` on macOS, permanently. There is no native I²C/IOKit backend and there never will be one.
+It wraps `ddcutil` on Linux and `m1ddc` on macOS, permanently. There is no native I²C/IOKit backend
+and there never will be one.
 
 Requirements: [`docs/requirements.md`](docs/requirements.md) — the source document, kept as written.
 
@@ -60,15 +66,17 @@ Documentation, and what each page is for:
 | [`docs/release.md`](docs/release.md) | What a release produces, how one runs, and how to recover a failed one. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Prerequisites, workflow, and the catalog evidence rule. |
 
-A change to the catalog is a change to `internal/catalog/models.yaml` followed by `make go-generate`, which re-renders both
-`models_gen.go` and the marked region of [`docs/compatibility.md`](docs/compatibility.md) — the table and the per-model notes.
-Commit all three. Three tests fail the build if they disagree: one compares each rendered file against a fresh rendering of the
-YAML, and one reads the document back and compares it against the compiled catalog. Do not hand-edit inside the markers.
+A change to the catalog is a change to `internal/catalog/models.yaml` followed by
+`make go-generate`, which re-renders both `models_gen.go` and the marked region of
+[`docs/compatibility.md`](docs/compatibility.md) — the table and the per-model notes. Commit all
+three. Three tests fail the build if they disagree: one compares each rendered file against a fresh
+rendering of the YAML, and one reads the document back and compares it against the compiled catalog.
+Do not hand-edit inside the markers.
 
-Each recorded, not write-enabled model also has an open `Help verify: <Vendor> <Model>` GitHub issue whose body copies its
-values, and nothing checks that copy. A catalog change that enables a model closes its issue; one that records a model or changes
-a recorded value says so in the PR summary, so the human can update the issue. Agents do not open or edit those issues
-unprompted.
+Each recorded, not write-enabled model also has an open `Help verify: <Vendor> <Model>` GitHub issue
+whose body copies its values, and nothing checks that copy. A catalog change that enables a model
+closes its issue; one that records a model or changes a recorded value says so in the PR summary, so
+the human can update the issue. Agents do not open or edit those issues unprompted.
 
 ## Common commands
 
@@ -80,8 +88,12 @@ make go-generate       # re-render internal/catalog/models_gen.go from models.ya
 make go-build-cross    # compile-check both OS backends (GOOS=linux and GOOS=darwin), whatever the host
 make go-vet-cross      # go vet both, their build-tagged tests included
 make go-lint-cross     # lint both; `make check` only ever lints the host's backend
+make go-lint           # the pinned golangci-lint-full hook over the whole module (host backend)
+make verify-go         # go-build, go-test, go-vet, go-vet-cross, go-lint and go-lint-cross
+make verify-scripts    # the shell tests of the check-* hook scripts (scratch git repositories)
+make verify            # verify-go and verify-scripts
 make go-tidy           # go mod tidy + go mod verify
-make audit-deps        # govulncheck over every package (network required); also runs in CI and as a pre-commit hook on go.mod/go.sum changes
+make audit-deps        # govulncheck -test over every package (network required); also runs in CI and as a pre-commit hook on go.mod/go.sum changes
 make check             # pre-commit on all files
 make check-stage       # pre-commit on the staging area only
 ```
@@ -92,121 +104,185 @@ Single test:
 go test ./internal/edid -run TestParse -v
 ```
 
-The Makefile pulls shared snippets from `leinardi/make-common@v1` into `.mk/` on first run. To refresh: `make mk-common-update`.
-Repo-local make targets live in `.mk/cross.mk` and `.mk/audit-deps.mk`, never as recipes in the Makefile.
+The Makefile pulls shared snippets from `leinardi/make-common@v1` into `.mk/` on first run. To
+refresh: `make mk-common-update`. Repo-local make targets live in `.mk/cross.mk`,
+`.mk/audit-deps.mk` and `.mk/verify.mk`, never as recipes in the Makefile.
+
+### Generated or fetched: never hand-edit
+
+- `internal/catalog/models_gen.go` and the region of `docs/compatibility.md` between the
+  `BEGIN GENERATED` and `END GENERATED` markers: edit `internal/catalog/models.yaml`, then
+  `make go-generate`.
+- `.mk/help.mk`, `.mk/go.mk`, `.mk/pre-commit.mk`, `.mk/.mk-common-version` and
+  `scripts/bootstrap-mk-common.sh`: fetched from make-common; refresh with `make mk-common-update`,
+  and port a change upstream.
+
+## Validation matrix
+
+Run before considering an edit done. `make check` applies to every row.
+
+| You edited | Run |
+| --- | --- |
+| `**/*.go` | `make verify-go`, then `make check-stage` |
+| `internal/backend/ddcutil`, `internal/backend/m1ddc`, `internal/backend/select`, or a shared file they use | `make go-build-cross`, `make go-vet-cross`, `make go-lint-cross` (in `verify-go`) |
+| `internal/catalog/models.yaml`, the generator, `internal/catalog/internal/input` | `make go-generate`, commit what it renders, then `make go-test` |
+| `go.mod`, `go.sum` | `make go-tidy`, `make audit-deps` (network), `go test ./test/toolchain/` |
+| `test/**` | `go test -count=1 ./test/...` |
+| `scripts/check-license-headers.sh`, `scripts/check-suppressions.sh`, `scripts/lib/**`, their `*.test.sh` | `make verify-scripts`, and the script itself over the tree |
+| `.github/workflows/**` | `pre-commit run actionlint --all-files`, `go test ./test/toolchain/` (pins, vacuous flags) |
+| `.pre-commit-config.yaml`, `Makefile`, `.mk/**` | `make check`, `go test ./test/toolchain/`, `make help` |
+| `.goreleaser.yaml` | the `release-config` CI job (`goreleaser check`) |
+| `**/*.md` | `go test -count=1 ./test/docs/` (relative links and anchors); prose wraps at 100 columns |
+| `scripts/hooks/gofmt-on-edit.sh`, `.claude/settings.json` | shellcheck (in `make check`); edit a `.go` file in Claude Code once |
 
 ## Package map
 
-- `cmd/monmux` — cobra commands: `info`, `switch`, `catalog list`, `catalog show`, `doctor`, `version`, `completion`. Owns flags, config loading, output formatting, and exit codes.
-- `internal/refusal` — the one typed refusal error used by every layer, with the reason enum and the rendered message.
+- `cmd/monmux` — cobra commands: `info`, `switch`, `catalog list`, `catalog show`, `doctor`,
+  `version`, `completion`. Owns flags, config loading, output formatting, and exit codes.
+- `internal/refusal` — the one typed refusal error used by every layer, with the reason enum and the
+  rendered message.
 - `internal/edid` — EDID block-0 parser producing an `Identity`. Carries no raw EDID bytes.
-- `internal/catalog` — the supported-monitor catalog, the `Input` name (a connector kind plus an optional port number), the `Kind`,
-  `Mechanism` and `Grade` enums, and the opaque `Operation` (a mechanism plus a 16-bit value). The catalog is written in
-  `models.yaml` and rendered into the committed `models_gen.go` by `make go-generate`; a test fails the build if the two
-  disagree. `internal/catalog/internal/generate` is that
-  renderer, and it deliberately does not import `internal/catalog`, so a deleted or corrupt `models_gen.go` can still be
-  regenerated. `internal/catalog/internal/generate/cmd/relnotes` sits in the same tree and on the same rule: it compares two
-  `models.yaml` files and prints the catalog section of the release notes, plus the `enabled=` line the release workflow turns
-  into the "a catalog enabling is never a patch" rule — [`docs/release.md`](docs/release.md).
-- `internal/catalog/internal/input` — the grammar of an input name: the closed list of connector kinds, the parser, the labels
-  and the ordering. A shared leaf, imported by both `internal/catalog` and the generator, so the two agree on what a name is
-  without the generator importing the package whose source it writes.
-- `internal/policy` — pure decision logic: displays plus request in, `Decision` or refusal out. No I/O. It holds the assume
-  path too: `Request.AssumeModel` is what `--unsafe-model` sets, and `Decision.Assumed` is what makes the CLI warn.
-- `internal/backend` — the `Backend` interface plus the `Display`, `Command` and `Check` types, the shared tool-path trust check
-  (`toolpath.go`), the shared doctor check helpers (`check.go`) and the `Fake` backend the app and CLI tests drive. Imports no
-  backend subpackage.
-- `internal/backend/exec` — the `Runner` interface, the real runner (with the no-exec guard) and the recording fake.
+- `internal/catalog` — the supported-monitor catalog, the `Input` name (a connector kind plus an
+  optional port number), the `Kind`, `Mechanism` and `Grade` enums, and the opaque `Operation` (a
+  mechanism plus a 16-bit value). The catalog is written in `models.yaml` and rendered into the
+  committed `models_gen.go` by `make go-generate`; a test fails the build if the two disagree.
+  `internal/catalog/internal/generate` is that renderer, and it deliberately does not import
+  `internal/catalog`, so a deleted or corrupt `models_gen.go` can still be regenerated.
+  `internal/catalog/internal/generate/cmd/relnotes` sits in the same tree and on the same rule: it
+  compares two `models.yaml` files and prints the catalog section of the release notes, plus the
+  `enabled=` line the release workflow turns into the "a catalog enabling is never a patch" rule —
+  [`docs/release.md`](docs/release.md).
+- `internal/catalog/internal/input` — the grammar of an input name: the closed list of connector
+  kinds, the parser, the labels and the ordering. A shared leaf, imported by both `internal/catalog`
+  and the generator, so the two agree on what a name is without the generator importing the package
+  whose source it writes.
+- `internal/policy` — pure decision logic: displays plus request in, `Decision` or refusal out. No
+  I/O. It holds the assume path too: `Request.AssumeModel` is what `--unsafe-model` sets, and
+  `Decision.Assumed` is what makes the CLI warn.
+- `internal/backend` — the `Backend` interface plus the `Display`, `Command` and `Check` types, the
+  shared tool-path trust check (`toolpath.go`), the shared doctor check helpers (`check.go`) and the
+  `Fake` backend the app and CLI tests drive. Imports no backend subpackage.
+- `internal/backend/exec` — the `Runner` interface, the real runner (with the no-exec guard) and the
+  recording fake.
 - `internal/backend/select` — picks the backend by `runtime.GOOS`.
 - `internal/backend/ddcutil` — Linux backend (`//go:build linux`).
-- `internal/backend/m1ddc` — macOS backend (`//go:build darwin`), with the output parser and every decision taken from it in
-  tag-free `parse.go` and `decide.go`, unit-tested on Linux.
-- `internal/app` — orchestration: preflight, enumerate, resolve, ready, plan, execute; and `Info`, which never writes.
-- `internal/config` — the three-key configuration file (`serial`, `ddcutil_path`, `m1ddc_path`). Unknown keys are an error.
+- `internal/backend/m1ddc` — macOS backend (`//go:build darwin`), with the output parser and every
+  decision taken from it in tag-free `parse.go` and `decide.go`, unit-tested on Linux.
+- `internal/app` — orchestration: preflight, enumerate, resolve, ready, plan, execute; and `Info`,
+  which never writes.
+- `internal/config` — the three-key configuration file (`serial`, `ddcutil_path`, `m1ddc_path`).
+  Unknown keys are an error.
 
 ## Fail-closed invariants
 
 Do not weaken any of these. They are the reason the tool exists.
 
-1. **Identify before writing.** A write requires an exact catalog match on the parsed EDID identity — manufacturer and product code,
-   plus the EDID model name where an identity pins one, which is how two models sharing a reused product code are told apart.
-   Unknown, ambiguous, or multiple candidate monitors are refused — never guessed at, never defaulted. The one documented
-   exception is `--unsafe-model`, where the user names the catalog entry to assume and the EDID is not consulted at all; it is
-   still refused when more than one attached display is writable, because an override that picked for you would write an
-   unverified value to the wrong monitor.
-2. **Enabled inputs only.** An input is writable only if the matched model explicitly enables it, with recorded evidence. A model with no
-   identities is never matched and therefore never written to. `--unsafe-model` is the documented exception here too: it reaches
-   `Model.UnsafeOperation`, which ignores `write_enabled`. It ignores nothing else — an input the named entry does not record
+1. **Identify before writing.** A write requires an exact catalog match on the parsed EDID identity
+   — manufacturer and product code, plus the EDID model name where an identity pins one, which is
+   how two models sharing a reused product code are told apart. Unknown, ambiguous, or multiple
+   candidate monitors are refused — never guessed at, never defaulted. The one documented exception
+   is `--unsafe-model`, where the user names the catalog entry to assume and the EDID is not
+   consulted at all; it is still refused when more than one attached display is writable, because an
+   override that picked for you would write an unverified value to the wrong monitor.
+2. **Enabled inputs only.** An input is writable only if the matched model explicitly enables it,
+   with recorded evidence. A model with no identities is never matched and therefore never written
+   to. `--unsafe-model` is the documented exception here too: it reaches `Model.UnsafeOperation`,
+   which ignores `write_enabled`. It ignores nothing else — an input the named entry does not record
    has no value at all, and is still refused with `input-not-enabled`.
-3. **Re-verify at the last moment.** `Execute` re-reads the identity (sysfs EDID and bus on Linux, `display list detailed` on macOS) and
-   refuses with `identity-changed` if anything moved since enumeration.
-4. **Refuse loudly, write never.** Every refusal path returns a `refusal.Refusal` whose message ends with `No DDC write was performed.`
-   and exits with code 2. Only code 1 (tool/exec error) may leave the write status unknown, and it says so explicitly.
-5. **Never fall back.** If the chosen mechanism is not implemented by the backend, refuse with `invalid-operation`. Do not try another
-   mechanism, another VCP code, or another value.
-6. **Redact by default.** Serial numbers, serial strings, raw EDID hex and macOS UUIDs are masked in all output unless `--show-serial`
-   is passed.
+3. **Re-verify at the last moment.** `Execute` re-reads the identity (sysfs EDID and bus on Linux,
+   `display list detailed` on macOS) and refuses with `identity-changed` if anything moved since
+   enumeration.
+4. **Refuse loudly, write never.** Every refusal path returns a `refusal.Refusal` whose message ends
+   with `No DDC write was performed.` and exits with code 2. Only code 1 (tool/exec error) may leave
+   the write status unknown, and it says so explicitly.
+5. **Never fall back.** If the chosen mechanism is not implemented by the backend, refuse with
+   `invalid-operation`. Do not try another mechanism, another VCP code, or another value.
+6. **Redact by default.** Serial numbers, serial strings, raw EDID hex and macOS UUIDs are masked in
+   all output unless `--show-serial` is passed.
 
 ## Two rules that keep the blast radius small
 
-**Never add a raw VCP command.** No code path may take a VCP code or value from a flag, a config file, an environment variable, or any
-other input. `--unsafe-model` does not weaken this: it selects a compiled-in entry by name and cannot invent one, so the bytes
-still come from the catalog, and no configuration key can arm it. The only bytes that reach a monitor come from a `catalog.Operation` built by the catalog's package-private constructor from
-a compiled-in table entry with graded evidence. Adding an input or a model means editing `internal/catalog/models.yaml`, supplying
-the evidence, and running `make go-generate` to re-render `models_gen.go` — commit both — see
-[`docs/adding-a-monitor.md`](docs/adding-a-monitor.md). A new connector *kind* is the one exception: the kinds are a closed list
-in `internal/catalog/internal/input`, so a monitor with an input nobody has named yet is a Go change there, added with the first
-model that needs it. A new *port* of a kind that already exists (`hdmi3`, `usb-c2`) is only a YAML edit. The YAML is a build input read at development time only: the binary contains no
-catalog parser and reads no catalog file at run time.
+**Never add a raw VCP command.** No code path may take a VCP code or value from a flag, a config
+file, an environment variable, or any other input. `--unsafe-model` does not weaken this: it selects
+a compiled-in entry by name and cannot invent one, so the bytes still come from the catalog, and no
+configuration key can arm it. The only bytes that reach a monitor come from a `catalog.Operation`
+built by the catalog's package-private constructor from a compiled-in table entry with graded
+evidence. Adding an input or a model means editing `internal/catalog/models.yaml`, supplying the
+evidence, and running `make go-generate` to re-render `models_gen.go` — commit both — see
+[`docs/adding-a-monitor.md`](docs/adding-a-monitor.md). A new connector *kind* is the one exception:
+the kinds are a closed list in `internal/catalog/internal/input`, so a monitor with an input nobody
+has named yet is a Go change there, added with the first model that needs it. A new *port* of a kind
+that already exists (`hdmi3`, `usb-c2`) is only a YAML edit. The YAML is a build input read at
+development time only: the binary contains no catalog parser and reads no catalog file at run time.
 
-A `Mechanism` is added the same way, together with the first model that needs it, and a **disabled** record counts as that model:
-the point is that the mechanism arrives with evidence attached, not that the first entry using it is trusted. Until a model using
-a mechanism is write-enabled, that backend path is unproven — `vcp-input-source` is in that state today: it has reached one
-monitor, through m1ddc under `--unsafe-model`, and none through ddcutil. Enabling that first model is the first enabling of the
-mechanism, done with the [`docs/testing.md`](docs/testing.md) checklist, not a
+A `Mechanism` is added the same way, together with the first model that needs it, and a **disabled**
+record counts as that model: the point is that the mechanism arrives with evidence attached, not
+that the first entry using it is trusted. Until a model using a mechanism is write-enabled, that
+backend path is unproven — `vcp-input-source` is in that state today: it has reached one monitor,
+through m1ddc under `--unsafe-model`, and none through ddcutil. Enabling that first model is the
+first enabling of the mechanism, done with the [`docs/testing.md`](docs/testing.md) checklist, not a
 routine catalog flip.
 
-**Backends only execute a `Command` produced by `Plan`.** `Command` is returned by `Plan` for display only and is never accepted as
-input by any method. `Execute` takes the `catalog.Operation`, not a `Command`, and rebuilds the invocation through the same private
-planner that `Plan` uses, so no caller can hand a backend an arbitrary executable or arguments. What `--dry-run` prints is what a real
-run executes, by construction.
+**Backends only execute a `Command` produced by `Plan`.** `Command` is returned by `Plan` for
+display only and is never accepted as input by any method. `Execute` takes the `catalog.Operation`,
+not a `Command`, and rebuilds the invocation through the same private planner that `Plan` uses, so
+no caller can hand a backend an arbitrary executable or arguments. What `--dry-run` prints is what a
+real run executes, by construction.
 
 ## Conventions worth knowing
 
-- Go style is enforced by `.golangci.yaml` (golangci-lint v2, `default: all`). The rules are written out in
-  `.agents/skills/go-style-guide/SKILL.md`; read it before writing Go.
-- Only the two backends carry build tags. Everything else must compile for both `GOOS=linux` and `GOOS=darwin`; keep OS-independent
-  logic (parsers especially) in tag-free files so it can be unit-tested on either host.
-- Version strings (`version`, `commit`, `date`) live in `cmd/monmux/version.go` and are filled by `-ldflags -X main.version=...` from
-  `GO_LDFLAGS` in `.mk/go.mk`.
-- Every Go file starts with the Apache 2.0 header from `.idea/copyright/Apache_2_0.xml`.
-- Test fixtures contain synthetic serials and UUIDs only, from a fixed allowlist that a test enforces. Never commit a real serial.
-  The whitespace pre-commit hooks skip `testdata/`, so a capture keeps the bytes the real tool produced.
-- Exit codes are part of the interface: `0` sent, `2` refused with nothing written, `1` the tool ran and failed or the request
-  could not be made. Only a refusal may promise that nothing was written.
-- A read-only command that fails is worded as a diagnostic, not as a refused write: `info` and `doctor` print their report and
-  then one line naming the check that stopped them.
+- Go style is enforced by `.golangci.yaml` (golangci-lint v2, `default: all`). The rules are written
+  out in `.agents/skills/go-style-guide/SKILL.md`; read it before writing Go.
+- Only the two backends carry build tags. Everything else must compile for both `GOOS=linux` and
+  `GOOS=darwin`; keep OS-independent logic (parsers especially) in tag-free files so it can be
+  unit-tested on either host.
+- Version strings (`version`, `commit`, `date`) live in `cmd/monmux/version.go` and are filled by
+  `-ldflags -X main.version=...` from `GO_LDFLAGS` in `.mk/go.mk`.
+- Every Go and shell file, the Makefile and the repo-local `.mk` fragments start with the Apache 2.0
+  header from `.idea/copyright/Apache_2_0.xml`, dated by the file's first commit.
+  `scripts/check-license-headers.sh` enforces it as an always-run pre-commit hook; make-common's
+  fetched files are exempt.
+- In-file suppressions (`//nolint:<linter>`, `# shellcheck disable=`) are ratcheted per rule
+  against `.suppressions-baseline` by `scripts/check-suppressions.sh`. Adding one is allowed, but
+  never silently: run `scripts/check-suppressions.sh --update` and commit the baseline with it. A
+  count that falls below its baseline fails the same way.
+- The meta-tests under `test/` (the Go line and linter pins, flags that make a gate pass on
+  nothing, Markdown links) read files only. The hook scripts are tested by shell tests against
+  scratch git repositories (`make verify-scripts`), because no Go test starts a process.
+- Test fixtures contain synthetic serials and UUIDs only, from a fixed allowlist that a test
+  enforces. Never commit a real serial. The whitespace pre-commit hooks skip `testdata/`, so a
+  capture keeps the bytes the real tool produced.
+- Exit codes are part of the interface: `0` sent, `2` refused with nothing written, `1` the tool ran
+  and failed or the request could not be made. Only a refusal may promise that nothing was written.
+- A read-only command that fails is worded as a diagnostic, not as a refused write: `info` and
+  `doctor` print their report and then one line naming the check that stopped them.
 
 ## Project skills
 
-Skills live in `.agents/skills/` (symlinked as `.claude/skills`). Load them before the work, not after review:
+Skills live in `.agents/skills/` (symlinked as `.claude/skills`). Load them before the work, not
+after review:
 
 - `go-style-guide` — before any `.go` edit.
 - `adversarial-review` — for any review request ("review my diff", "is this ready to merge").
 
 ## Commit messages
 
-All commits MUST be Conventional Commits 1.0.0 **with a scope**: `<type>(<scope>)[!]: <description>`, optional blank-line body and
-footers. Enforced by the `conventional-pre-commit` `commit-msg` hook (`--force-scope`) and by the `conventional-commits` CI job.
-Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`, `style`, `revert`. Breaking changes use `!` before
-`:` or a `BREAKING CHANGE:` footer. goreleaser builds the changelog from these subjects: `feat`/`fix` with the `catalog` scope go
-under "Catalog", other `feat` under "Features", other `fix` under "Bug fixes", and `docs`, `chore`, `ci`, `test` and `style` are
-left out. Examples: `feat(cli): add switch --json`, `fix(release): emit postflight_steps in the Homebrew cask`.
+All commits MUST be Conventional Commits 1.0.0 **with a scope**:
+`<type>(<scope>)[!]: <description>`, optional blank-line body and footers. Enforced by the
+`conventional-pre-commit` `commit-msg` hook (`--force-scope`) and by the `conventional-commits` CI
+job. Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`, `style`,
+`revert`. Breaking changes use `!` before `:` or a `BREAKING CHANGE:` footer. goreleaser builds the
+changelog from these subjects: `feat`/`fix` with the `catalog` scope go under "Catalog", other
+`feat` under "Features", other `fix` under "Bug fixes", and `docs`, `chore`, `ci`, `test` and
+`style` are left out. Examples: `feat(cli): add switch --json`,
+`fix(release): emit postflight_steps in the Homebrew cask`.
 
-The cask commit goreleaser pushes to `leinardi/homebrew-tap` (`chore(cask): ...` in `.goreleaser.yaml`) must stay conventional and
-scoped too: the tap's history is checked the same way.
+The cask commit goreleaser pushes to `leinardi/homebrew-tap` (`chore(cask): ...` in
+`.goreleaser.yaml`) must stay conventional and scoped too: the tap's history is checked the same
+way.
 
-Release versions are derived by `svu` from the commits since the last tag, so a wrong type ships a wrong version:
+Release versions are derived by `svu` from the commits since the last tag, so a wrong type ships a
+wrong version:
 
 | Release | Commit | Example |
 | --- | --- | --- |
@@ -215,12 +291,14 @@ Release versions are derived by `svu` from the commits since the last tag, so a 
 | patch | `fix` | `fix(release): emit postflight_steps in the Homebrew cask` |
 | none | everything else: `perf`, `refactor`, `build`, `ci`, `chore`, `docs`, `style`, `test`, `revert` | `perf(backend): ...` |
 
-The highest bump among the commits wins; with only "none" commits since the last tag, a release with no version fails with
-"nothing to bump".
+The highest bump among the commits wins; with only "none" commits since the last tag, a release with
+no version fails with "nothing to bump".
 
-**Pick the type by whether the change should ship, not by what kind of change it is.** Anything that changes the shipped binary and
-that users should receive is `fix` (or `feat`), even when it is a performance improvement, a refactor or a revert. Use `perf`,
-`refactor`, `style` and `revert` only when the commit is deliberately not meant to trigger a release on its own. A `revert` of a
-shipped `feat` or `fix` is itself a `fix`. `svu` matches `feat`/`fix` anywhere in the subject (e.g. `prefix:` counts as `fix:`), so
-avoid a word ending in `feat` or `fix` directly before a colon in other subjects. PRs land as merge commits, so every commit counts,
-not just the PR title. See [`docs/release.md`](docs/release.md).
+**Pick the type by whether the change should ship, not by what kind of change it is.** Anything that
+changes the shipped binary and that users should receive is `fix` (or `feat`), even when it is a
+performance improvement, a refactor or a revert. Use `perf`, `refactor`, `style` and `revert` only
+when the commit is deliberately not meant to trigger a release on its own. A `revert` of a shipped
+`feat` or `fix` is itself a `fix`. `svu` matches `feat`/`fix` anywhere in the subject (e.g.
+`prefix:` counts as `fix:`), so avoid a word ending in `feat` or `fix` directly before a colon in
+other subjects. PRs land as merge commits, so every commit counts, not just the PR title. See
+[`docs/release.md`](docs/release.md).

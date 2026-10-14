@@ -1,38 +1,43 @@
 # Contributing
 
-monmux writes to hardware. The rules below are stricter than a typical Go project's for that reason, and one of them is
-absolute — read [The rule](#the-rule-no-ai-agent-writes-to-a-monitor) first.
+monmux writes to hardware. The rules below are stricter than a typical Go project's for that reason,
+and one of them is absolute — read [The rule](#the-rule-no-ai-agent-writes-to-a-monitor) first.
 
 ## Prerequisites
 
 - Go 1.26+
 - [`pre-commit`](https://pre-commit.com/) — install the hooks once with `make pre-commit-install`
-- For running monmux against real hardware: `ddcutil` 2.2+ on Linux, or `m1ddc` on macOS. Neither is needed to build or test.
+- For running monmux against real hardware: `ddcutil` 2.2+ on Linux, or `m1ddc` on macOS. Neither is
+  needed to build or test.
 
-Development works from either operating system. `make go-build-cross` and `make go-vet-cross` compile-check and vet both OS
-backends whichever host you are on, and everything that is not a backend is tag-free and tested on both. Note that your local
-linter only ever sees your host's backend — see [docs/testing.md](docs/testing.md). CI closes that gap: it runs the tests on a
-Linux and a macOS runner, and lints both backends natively, one job per OS — [docs/release.md](docs/release.md).
+Development works from either operating system. `make go-build-cross` and `make go-vet-cross`
+compile-check and vet both OS backends whichever host you are on, and everything that is not a
+backend is tag-free and tested on both. Note that your local linter only ever sees your host's
+backend — see [docs/testing.md](docs/testing.md). CI closes that gap: it runs the tests on a Linux
+and a macOS runner, and lints both backends natively, one job per OS —
+[docs/release.md](docs/release.md).
 
 ## The rule: no AI agent writes to a monitor
 
-**AI agents are welcome to work on monmux. What no AI agent may do is run a command that writes to a monitor.**
+**AI agents are welcome to work on monmux. What no AI agent may do is run a command that writes to a
+monitor.**
 
-The restriction is on one class of command, not on who contributes. An assistant in an editor, a coding agent, a subagent, a
-review bot or any other tool-driven automation may write, refactor, test and review this project like any other Go codebase —
-during implementation and during review alike. It must stop at the point where a command would change a monitor's state. Only a
-human runs a writing command, by hand, deliberately.
+The restriction is on one class of command, not on who contributes. An assistant in an editor, a
+coding agent, a subagent, a review bot or any other tool-driven automation may write, refactor, test
+and review this project like any other Go codebase — during implementation and during review alike.
+It must stop at the point where a command would change a monitor's state. Only a human runs a
+writing command, by hand, deliberately.
 
-Forbidden for agents: `ddcutil setvcp …`, any `ddcutil` invocation with `--i2c-source-addr`, `m1ddc … set …`, `monmux switch`
-without `--dry-run`, `i2cset`, `i2ctransfer`, any direct write to `/dev/i2c-*`, and any test or script that executes the real
-`ddcutil` or `m1ddc` binary.
+Forbidden for agents: `ddcutil setvcp …`, any `ddcutil` invocation with `--i2c-source-addr`,
+`m1ddc … set …`, `monmux switch` without `--dry-run`, `i2cset`, `i2ctransfer`, any direct write to
+`/dev/i2c-*`, and any test or script that executes the real `ddcutil` or `m1ddc` binary.
 
-Allowed for agents, all read-only: reading `/sys/class/drm`, `ddcutil --version`, `ddcutil --help`, `ddcutil detect`,
-`monmux info`, `monmux doctor`, `monmux switch … --dry-run`.
+Allowed for agents, all read-only: reading `/sys/class/drm`, `ddcutil --version`, `ddcutil --help`,
+`ddcutil detect`, `monmux info`, `monmux doctor`, `monmux switch … --dry-run`.
 
-**Tests never write to a monitor and never execute any external binary at all.** That is enforced from inside the runner and by
-a repository test — see [docs/testing.md](docs/testing.md). Hardware validation is a checklist a human runs, and the result
-becomes evidence in the catalog.
+**Tests never write to a monitor and never execute any external binary at all.** That is enforced
+from inside the runner and by a repository test — see [docs/testing.md](docs/testing.md). Hardware
+validation is a checklist a human runs, and the result becomes evidence in the catalog.
 
 ## Building and testing
 
@@ -45,6 +50,7 @@ make go-vet-cross      # and vet both, their build-tagged tests included
 make go-lint-cross     # and lint both, which `make check` does not
 make check             # the full pre-commit suite
 make check-stage       # the same, on staged files only
+make verify            # build, tests, vet and lint for both backends, plus the hook-script tests
 ```
 
 A single test:
@@ -53,73 +59,88 @@ A single test:
 go test ./internal/edid -run TestParse -v
 ```
 
-The Makefile pulls shared snippets from `leinardi/make-common@v1` into `.mk/` on first run; `make mk-common-update` refreshes
-them. Repo-local targets live in `.mk/cross.mk`.
+The Makefile pulls shared snippets from `leinardi/make-common@v1` into `.mk/` on first run;
+`make mk-common-update` refreshes them. Repo-local targets live in `.mk/cross.mk`.
 
 ## The catalog is evidence, not configuration
 
-`internal/catalog/models.yaml` decides which bytes may reach which monitor. Edit it, run `make go-generate` to re-render
-`internal/catalog/models_gen.go` and the marked region of [`docs/compatibility.md`](docs/compatibility.md), and commit all
-three: the YAML is the readable source of truth, the generated Go is what the binary compiles, and the document is the copy a
-reader sees. A test per rendered file fails the build if any of them disagrees with the YAML, so every byte is still reviewable
-in a diff, and the rendering happens at development time — the shipped binary has no catalog parser and reads no catalog file at
-run time.
+`internal/catalog/models.yaml` decides which bytes may reach which monitor. Edit it, run
+`make go-generate` to re-render `internal/catalog/models_gen.go` and the marked region of
+[`docs/compatibility.md`](docs/compatibility.md), and commit all three: the YAML is the readable
+source of truth, the generated Go is what the binary compiles, and the document is the copy a reader
+sees. A test per rendered file fails the build if any of them disagrees with the YAML, so every byte
+is still reviewable in a diff, and the rendering happens at development time — the shipped binary
+has no catalog parser and reads no catalog file at run time.
 
-**A model becomes write-enabled when somebody with that monitor in front of them switched it with that value and wrote down what
-happened.** Not because the manufacturer is the same, not because the product family is similar, not because a value is
-documented somewhere. Evidence is recorded per input, because a model can have one verified input and one that is merely
-reported elsewhere.
+**A model becomes write-enabled when somebody with that monitor in front of them switched it with
+that value and wrote down what happened.** Not because the manufacturer is the same, not because the
+product family is similar, not because a value is documented somewhere. Evidence is recorded per
+input, because a model can have one verified input and one that is merely reported elsewhere.
 
-If you have values but no unit to test them on, contribute the entry disabled, with a source. That is a real contribution: it
-stops the next person guessing.
+If you have values but no unit to test them on, contribute the entry disabled, with a source. That
+is a real contribution: it stops the next person guessing.
 
-Every model that is recorded but not write-enabled has one open `Help verify: <Vendor> <Model>` issue, labelled `help wanted`
-and `catalog`, whose body repeats the model's recorded values. Those tables are copies, so they are kept in step with
-`models.yaml` by hand: a pull request that enables a model closes its issue with `Closes #N`; one that records a new disabled
-model, or changes, adds or removes a recorded value, says so in its summary so the issue can be opened or edited when it merges.
+Every model that is recorded but not write-enabled has one open `Help verify: <Vendor> <Model>`
+issue, labelled `help wanted` and `catalog`, whose body repeats the model's recorded values. Those
+tables are copies, so they are kept in step with `models.yaml` by hand: a pull request that enables
+a model closes its issue with `Closes #N`; one that records a new disabled model, or changes, adds
+or removes a recorded value, says so in its summary so the issue can be opened or edited when it
+merges.
 
 The full procedure, including how to sanitize a fixture and what belongs in the pull request, is in
 [docs/adding-a-monitor.md](docs/adding-a-monitor.md).
 
 Related rules that no change may weaken:
 
-- **Never add a raw VCP command.** No code path may take a VCP code or value from a flag, a configuration file, an environment
-  variable or any other input. The only bytes that reach a monitor come from a `catalog.Operation`, built by the catalog's
-  package-private constructor from a compiled-in entry.
-- **Never fall back.** A mechanism is a per-model property. A backend that does not implement one refuses; it does not try
-  another mechanism, another VCP code or another value.
-- **Never claim more than was done.** A successful write is reported as a command sent, not as a monitor switched.
+- **Never add a raw VCP command.** No code path may take a VCP code or value from a flag, a
+  configuration file, an environment variable or any other input. The only bytes that reach a
+  monitor come from a `catalog.Operation`, built by the catalog's package-private constructor from a
+  compiled-in entry.
+- **Never fall back.** A mechanism is a per-model property. A backend that does not implement one
+  refuses; it does not try another mechanism, another VCP code or another value.
+- **Never claim more than was done.** A successful write is reported as a command sent, not as a
+  monitor switched.
 
-The six fail-closed invariants are listed in [AGENTS.md](AGENTS.md), and the reasoning behind them is in
-[docs/architecture.md](docs/architecture.md).
+The six fail-closed invariants are listed in [AGENTS.md](AGENTS.md), and the reasoning behind them
+is in [docs/architecture.md](docs/architecture.md).
 
 ## Code style
 
-Go style is enforced by `.golangci.yaml` (golangci-lint v2, `default: all`). The conventions are written out in
-`.agents/skills/go-style-guide/SKILL.md` — read it before writing Go. A few that come up constantly:
+Go style is enforced by `.golangci.yaml` (golangci-lint v2, `default: all`). The conventions are
+written out in `.agents/skills/go-style-guide/SKILL.md` — read it before writing Go. A few that come
+up constantly:
 
-- Only the two backends carry build tags. Everything else compiles for both `GOOS=linux` and `GOOS=darwin`; keep
-  OS-independent logic — parsers especially — in tag-free files so it is unit-tested on either host.
-- Every Go file starts with the Apache 2.0 header.
-- Comments explain why, not what. A comment that restates the code is noise; a comment explaining why a check exists is the
-  reason somebody will not delete it in six months.
+- Only the two backends carry build tags. Everything else compiles for both `GOOS=linux` and
+  `GOOS=darwin`; keep OS-independent logic — parsers especially — in tag-free files so it is
+  unit-tested on either host.
+- Every Go and shell file, the Makefile and the repo-local `.mk` fragments start with the Apache 2.0
+  header; the `check-license-headers` hook says which file lacks it.
+- A new `//nolint` or `# shellcheck disable=` needs `scripts/check-suppressions.sh --update`,
+  committed with it: the `check-suppressions` hook refuses a suppression the baseline does not
+  record.
+- Comments explain why, not what. A comment that restates the code is noise; a comment explaining
+  why a check exists is the reason somebody will not delete it in six months.
 
 ## Branches, commits and pull requests
 
 - Branch names: `feat/<short-description>`, `fix/<short-description>`, `chore/<short-description>`.
-- Commit messages follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) **with a scope**:
-  `<type>(<scope>)[!]: <description>`, e.g. `feat(cli): add switch --json`, `fix(release): emit postflight_steps in the Homebrew
-  cask`, `docs(catalog): ...`. Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`, `style`,
-  `revert`. If the change affects what reaches a monitor, say so in the body, explicitly. The `conventional-pre-commit` hook
-  checks this at commit time (`make pre-commit-install` wires up the `commit-msg` stage), and a CI job checks every commit in a
-  pull request.
-- **Commit types decide the next version.** The release workflow derives it from the commits since the last tag: `feat` is a
-  minor, `fix` is a patch, `!` or a `BREAKING CHANGE:` footer is a major; `build`, `chore`, `ci`, `docs`, `perf`, `refactor`,
-  `revert`, `style` and `test` bump nothing. A release that enables a model or an input is never less than a minor, whatever the
-  commits say — [docs/release.md](docs/release.md).
-- Pick the type by whether the change should ship, not by what kind of change it is. A performance improvement, a refactor or a
-  revert that changes the shipped binary and that users should receive is a `fix` (or a `feat`). Use `perf`, `refactor`,
-  `style` and `revert` only when the commit is deliberately not meant to trigger a release on its own.
+- Commit messages follow [Conventional Commits
+  1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) **with a scope**:
+  `<type>(<scope>)[!]: <description>`, e.g. `feat(cli): add switch --json`,
+  `fix(release): emit postflight_steps in the Homebrew cask`, `docs(catalog): ...`. Types: `feat`,
+  `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`, `style`, `revert`. If the
+  change affects what reaches a monitor, say so in the body, explicitly. The
+  `conventional-pre-commit` hook checks this at commit time (`make pre-commit-install` wires up the
+  `commit-msg` stage), and a CI job checks every commit in a pull request.
+- **Commit types decide the next version.** The release workflow derives it from the commits since
+  the last tag: `feat` is a minor, `fix` is a patch, `!` or a `BREAKING CHANGE:` footer is a major;
+  `build`, `chore`, `ci`, `docs`, `perf`, `refactor`, `revert`, `style` and `test` bump nothing. A
+  release that enables a model or an input is never less than a minor, whatever the commits say —
+  [docs/release.md](docs/release.md).
+- Pick the type by whether the change should ship, not by what kind of change it is. A performance
+  improvement, a refactor or a revert that changes the shipped binary and that users should receive
+  is a `fix` (or a `feat`). Use `perf`, `refactor`, `style` and `revert` only when the commit is
+  deliberately not meant to trigger a release on its own.
 - Keep pull requests focused: one logical change each.
 - All checks must pass before merge.
 

@@ -16,7 +16,8 @@ redaction exists to keep out of a public issue.
 
 * [ ] I have checked that there are no duplicate active or recent issues describing this problem.
 * [ ] I am using the latest release, or have reproduced this on `main`.
-* [ ] If this is about a monitor that is not in the catalog, I am filing a **Monitor report** instead.
+* [ ] If this is about a monitor that is not in the catalog, I am filing a **Monitor report**
+  instead.
 
 ## Step 2: Describe your environment
 
@@ -67,6 +68,9 @@ $
 
 ### Anything else
 
-<!-- Whether the monitor changed input, whether it came back, what the OSD showed, and anything else that helps. -->
+<!--
+Whether the monitor changed input, whether it came back, what the OSD showed, and anything else
+that helps.
+-->
 
 *

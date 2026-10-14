@@ -1,59 +1,73 @@
 # Compatibility
 
-This page is the human-readable copy of the supported-monitor catalog in `internal/catalog/models.yaml`. The catalog is what the
-binary uses. The two sections between the `BEGIN GENERATED` and `END GENERATED` markers — the table and the per-model notes —
-are rendered from that file by `make go-generate`: edit the catalog, regenerate, and commit both. Everything outside the markers
-is written by hand. Three tests check the result, so the page and the catalog cannot drift apart without failing the build:
-`TestCompatibilityDocumentMatchesTheGenerator` compares this file against a fresh rendering, and
-`TestCompatibilityDocumentMatchesTheCatalog` and `TestCompatibilityDocumentCarriesEveryNoteAndSource` read it back and compare
-it against the compiled catalog, which is the copy the binary actually uses.
+This page is the human-readable copy of the supported-monitor catalog in
+`internal/catalog/models.yaml`. The catalog is what the binary uses. The two sections between the
+`BEGIN GENERATED` and `END GENERATED` markers — the table and the per-model notes — are rendered
+from that file by `make go-generate`: edit the catalog, regenerate, and commit both. Everything
+outside the markers is written by hand. Three tests check the result, so the page and the catalog
+cannot drift apart without failing the build: `TestCompatibilityDocumentMatchesTheGenerator`
+compares this file against a fresh rendering, and `TestCompatibilityDocumentMatchesTheCatalog` and
+`TestCompatibilityDocumentCarriesEveryNoteAndSource` read it back and compare it against the
+compiled catalog, which is the copy the binary actually uses.
 
-One model is write-enabled so far. Apart from one row tested on the unit through `--unsafe-model`, the G95NC's DisplayPort,
-everything else in the table is a report somebody else published: recorded because it is useful
-to a contributor who owns that monitor, disabled, and without an EDID fingerprint, so it can never match a display, and
-`monmux switch` will not write to it. The one way to send a recorded value is `--unsafe-model`, where the user names the entry
-to assume instead of the EDID identifying it — that is what a contributor with the monitor uses to turn a report into evidence,
-and it is described in [adding-a-monitor.md](adding-a-monitor.md) and [security.md](security.md). A model is listed here whether or not monmux will write to it, because "we know about this monitor and
-deliberately will not touch it" is information a reader needs.
+One model is write-enabled so far. Apart from one row tested on the unit through `--unsafe-model`,
+the G95NC's DisplayPort, everything else in the table is a report somebody else published: recorded
+because it is useful to a contributor who owns that monitor, disabled, and without an EDID
+fingerprint, so it can never match a display, and `monmux switch` will not write to it. The one way
+to send a recorded value is `--unsafe-model`, where the user names the entry to assume instead of
+the EDID identifying it — that is what a contributor with the monitor uses to turn a report into
+evidence, and it is described in [adding-a-monitor.md](adding-a-monitor.md) and
+[security.md](security.md). A model is listed here whether or not monmux will write to it, because
+"we know about this monitor and deliberately will not touch it" is information a reader needs.
 
-monmux implements two mechanisms. `lg-alt-input` is the LG side channel, and every model recorded with it is an LG;
-`vcp-input-source` is the standard Input Source feature, `VCP 0x60`, and is what every other vendor here uses, plus three LGs
-whose reports went through it. Every `vcp-input-source` row is disabled, and monmux has switched one monitor over it: a Samsung
-G95NC, to DisplayPort, through m1ddc under `--unsafe-model`. The ddcutil path has not reached a monitor yet. "Standard" is a name, not a promise: which values a model accepts, and whether it accepts the write at all, are still
-per-model facts with per-input evidence, and the values recorded under it range from the specification's 0x0F/0x11 to 0x05,
-0x09, 0x13 and 0x00.
+monmux implements two mechanisms. `lg-alt-input` is the LG side channel, and every model recorded
+with it is an LG; `vcp-input-source` is the standard Input Source feature, `VCP 0x60`, and is what
+every other vendor here uses, plus three LGs whose reports went through it. Every `vcp-input-source`
+row is disabled, and monmux has switched one monitor over it: a Samsung G95NC, to DisplayPort,
+through m1ddc under `--unsafe-model`. The ddcutil path has not reached a monitor yet. "Standard" is
+a name, not a promise: which values a model accepts, and whether it accepts the write at all, are
+still per-model facts with per-input evidence, and the values recorded under it range from the
+specification's 0x0F/0x11 to 0x05, 0x09, 0x13 and 0x00.
 
 ## What the columns mean
 
-- **Identities** — the EDID fingerprints, as `manufacturer/product code`, that match this model. A model can have several: the
-  tested LG reports a different product code depending on which input it is currently displaying. A model with no identity
-  recorded can never match a display, so `monmux switch` reaches it only when `--unsafe-model` names it and identification is
-  bypassed altogether. A fingerprint may also pin the EDID model name, written
-  after the code as `GSM/0x7707 "LG HDR 4K"`; that is only used where two models share a reused product code, and no entry
-  needs it today.
-- **Input** — the symbolic input, as typed on the command line: a connector kind (`dp`, `hdmi`, `usb-c`, `dvi`, `vga`,
-  `thunderbolt`) plus an optional port number, as in `hdmi2`. A kind is written bare when the model has one port of it and
-  numbered when it has several, never both.
-- **Value** — the value written for that input, up to 16 bits. A SetVCP carries an SH/SL pair; most recorded values fit in the low byte, and one does not.
-- **Mechanism** — how it is written. `lg-alt-input` is the LG side channel: source address `0x50`, VCP `0xF4`, no verification.
-  `vcp-input-source` is the standard Input Source feature: the ordinary source address, VCP `0x60`, no verification. A mechanism
-  is a per-model property and never a fallback — a backend that does not implement a model's mechanism refuses rather than
-  trying the other one.
-- **Enabled** — whether monmux will actually perform this switch. A row with `no` is recorded for reference only.
-- **Grade** — how strong the evidence is. `verified` is a direct test on the unit, by this project or by a contributor running
-  monmux for a `Help verify` issue, and is the only grade that may be enabled; `documented` is the manufacturer's own documentation with no field report behind it; `reported` is somebody
-  reporting that switching that named input with that value worked; `quoted` is a report that quotes the values and says they
-  work, without saying which inputs were tried individually.
-- **Evidence** — why anyone believes that value does that thing on that model, composed from the fields the catalog records so
-  that every row of one grade reads the same way.
+- **Identities** — the EDID fingerprints, as `manufacturer/product code`, that match this model. A
+  model can have several: the tested LG reports a different product code depending on which input it
+  is currently displaying. A model with no identity recorded can never match a display, so
+  `monmux switch` reaches it only when `--unsafe-model` names it and identification is bypassed
+  altogether. A fingerprint may also pin the EDID model name, written after the code as
+  `GSM/0x7707 "LG HDR 4K"`; that is only used where two models share a reused product code, and no
+  entry needs it today.
+- **Input** — the symbolic input, as typed on the command line: a connector kind (`dp`, `hdmi`,
+  `usb-c`, `dvi`, `vga`, `thunderbolt`) plus an optional port number, as in `hdmi2`. A kind is
+  written bare when the model has one port of it and numbered when it has several, never both.
+- **Value** — the value written for that input, up to 16 bits. A SetVCP carries an SH/SL pair; most
+  recorded values fit in the low byte, and one does not.
+- **Mechanism** — how it is written. `lg-alt-input` is the LG side channel: source address `0x50`,
+  VCP `0xF4`, no verification. `vcp-input-source` is the standard Input Source feature: the ordinary
+  source address, VCP `0x60`, no verification. A mechanism is a per-model property and never a
+  fallback — a backend that does not implement a model's mechanism refuses rather than trying the
+  other one.
+- **Enabled** — whether monmux will actually perform this switch. A row with `no` is recorded for
+  reference only.
+- **Grade** — how strong the evidence is. `verified` is a direct test on the unit, by this project
+  or by a contributor running monmux for a `Help verify` issue, and is the only grade that may be
+  enabled; `documented` is the manufacturer's own documentation with no field report behind it;
+  `reported` is somebody reporting that switching that named input with that value worked; `quoted`
+  is a report that quotes the values and says they work, without saying which inputs were tried
+  individually.
+- **Evidence** — why anyone believes that value does that thing on that model, composed from the
+  fields the catalog records so that every row of one grade reads the same way.
 
-The table is ordered the way the catalog file is written: the models monmux will write to first, then by vendor, then by model
-name. The generator enforces that order on the file, so the two cannot drift apart.
+The table is ordered the way the catalog file is written: the models monmux will write to first,
+then by vendor, then by model name. The generator enforces that order on the file, so the two cannot
+drift apart.
 
 ## The same table, offline
 
-`monmux catalog` prints this catalog from the binary itself, which is the copy that decides what a switch does. It is the
-answer to "what does *this* build know?", where this page is the answer for whatever revision you happen to be reading:
+`monmux catalog` prints this catalog from the binary itself, which is the copy that decides what a
+switch does. It is the answer to "what does *this* build know?", where this page is the answer for
+whatever revision you happen to be reading:
 
 ```sh
 monmux catalog list              # every entry, in the order of the table below
@@ -63,10 +77,13 @@ monmux catalog show AOC/Q27P1B   # one entry in full: identities, evidence, note
 monmux catalog list --json       # the same, for scripts
 ```
 
-Neither subcommand opens a backend, reads the configuration file or touches a monitor. The `INPUTS` column lists what an entry
-*records*, not what it enables, which is the point: a recorded input that `monmux switch` refuses is exactly what a
-contributor with that monitor is looking for, and `--unsafe-model` is how they try it — see
-[adding-a-monitor.md](adding-a-monitor.md).
+Neither subcommand opens a backend, reads the configuration file or touches a monitor. The `INPUTS`
+column lists what an entry *records*, not what it enables, which is the point: a recorded input that
+`monmux switch` refuses is exactly what a contributor with that monitor is looking for, and
+`--unsafe-model` is how they try it — see [adding-a-monitor.md](adding-a-monitor.md).
+
+<!-- The generated notes are copied verbatim from models.yaml, one line per note. -->
+<!-- markdownlint-disable line-length -->
 
 <!-- BEGIN GENERATED: edit internal/catalog/models.yaml, then run make go-generate -->
 
@@ -923,55 +940,65 @@ Sources:
 
 <!-- END GENERATED -->
 
+<!-- markdownlint-enable line-length -->
+
 ## What is deliberately not here
 
-The table records what monmux could be taught to do. Several things people have published cannot be written down in it at all,
-and the reasons are worth stating, because "it is not in the table" is otherwise indistinguishable from "nobody looked".
+The table records what monmux could be taught to do. Several things people have published cannot be
+written down in it at all, and the reasons are worth stating, because "it is not in the table" is
+otherwise indistinguishable from "nobody looked".
 
-**A report with no named input.** `vcp-input-source` now exists, so a `VCP 0x60` report is representable — the Samsung Odyssey
-G9 is the first one recorded. What is still left out is the bulk of what people publish about `0x60`: ddccontrol-db and the
-reports about the LG 34UM88C-P, 32GK650F-B, 29UM57-P and 27UD88-W give values without saying which socket each one lit up on
-the unit that was tested, and a value with no input name has nothing to key an entry on. The rules below have not moved: a
-mechanism existing is not evidence that a model uses it.
+**A report with no named input.** `vcp-input-source` now exists, so a `VCP 0x60` report is
+representable — the Samsung Odyssey G9 is the first one recorded. What is still left out is the bulk
+of what people publish about `0x60`: ddccontrol-db and the reports about the LG 34UM88C-P,
+32GK650F-B, 29UM57-P and 27UD88-W give values without saying which socket each one lit up on the
+unit that was tested, and a value with no input name has nothing to key an entry on. The rules below
+have not moved: a mechanism existing is not evidence that a model uses it.
 
-**More than one write.** A 34WP75C is reported switching to USB-C with `0xD1`, but only when the command is sent twice: the
-first write bounces back to DisplayPort. monmux performs exactly one write, so a row for it would not reproduce the reported
-switch.
+**More than one write.** A 34WP75C is reported switching to USB-C with `0xD1`, but only when the
+command is sent twice: the first write bounces back to DisplayPort. monmux performs exactly one
+write, so a row for it would not reproduce the reported switch.
 
-**An input named only by its value.** "0x90 works" says which byte was sent, not which socket lit up. The 35WN75C-B, 27BP85UN,
-27GR83Q-B, 34GP63A-B, 32UN880P-B, 34WN650, 32UN650K, 32QN55T and 39GX950B reports stop there, so there is nothing to key an
-entry on.
+**An input named only by its value.** "0x90 works" says which byte was sent, not which socket lit
+up. The 35WN75C-B, 27BP85UN, 27GR83Q-B, 34GP63A-B, 32UN880P-B, 34WN650, 32UN650K, 32QN55T and
+39GX950B reports stop there, so there is nothing to key an entry on.
 
-**A conflict with no way to resolve it.** The 34GL750 is reported working over the side channel in one place and reported to
-need `0x60` in another; it is omitted entirely rather than recorded on a coin flip. The USB-C value of the 28MQ780-B is
-omitted for the same reason, and its entry says so.
+**A conflict with no way to resolve it.** The 34GL750 is reported working over the side channel in
+one place and reported to need `0x60` in another; it is omitted entirely rather than recorded on a
+coin flip. The USB-C value of the 28MQ780-B is omitted for the same reason, and its entry says so.
 
-**A source nobody else can open.** A blog post reports a 27GP95RP switching to DisplayPort with `0xD0` through
-amdddc-windows on Windows. No stable link to it could be established, and the only citable page about that model, in ddcutil
-issue #100, is about the 27GP95R — a different model name — and reports that it did not respond at all. An entry whose bytes
-rest on a citation a reader cannot check is worse than no entry, so there is none.
+**A source nobody else can open.** A blog post reports a 27GP95RP switching to DisplayPort with
+`0xD0` through amdddc-windows on Windows. No stable link to it could be established, and the only
+citable page about that model, in ddcutil issue #100, is about the 27GP95R — a different model name
+— and reports that it did not respond at all. An entry whose bytes rest on a citation a reader
+cannot check is worse than no entry, so there is none.
 
-**A negative result.** There is no slot for "this model is known not to switch". The 27GP850P-B, 27GN850-B, 27GN950, 34GN850-B,
-38WN95C-W, 43UN700-B, 27UL600, 27GP95R, 40BP95C-W, the 2016 29UM69G-B and one 2025 45GX950A have all been reported as not
-switching over this channel, and one 38WN95CP-W was bricked by an unrelated DDC write. Those reports are written into the notes
-above where they touch an entry, and nowhere else. Treat this page as "no evidence of a problem", never as "known good".
+**A negative result.** There is no slot for "this model is known not to switch". The 27GP850P-B,
+27GN850-B, 27GN950, 34GN850-B, 38WN95C-W, 43UN700-B, 27UL600, 27GP95R, 40BP95C-W, the 2016 29UM69G-B
+and one 2025 45GX950A have all been reported as not switching over this channel, and one 38WN95CP-W
+was bricked by an unrelated DDC write. Those reports are written into the notes above where they
+touch an entry, and nowhere else. Treat this page as "no evidence of a problem", never as "known
+good".
 
-**Not a model.** "LG HDR WQHD" and "LG UltraFine" are EDID model strings shared by many products. A report that names only one
-of those, or only a serial number, cannot be attached to a model.
+**Not a model.** "LG HDR WQHD" and "LG UltraFine" are EDID model strings shared by many products. A
+report that names only one of those, or only a serial number, cannot be attached to a model.
 
 ## EDID product codes are reused
 
-LG assigns the same EDID product code to more than one product. ddccontrol-db maps `GSM 0x7706` to the 27UK850-W family and
-`GSM 0x7707` to the 32UD99 and the 27UN880-B, while the 32BL95U service manual assigns `0x7706`, `0x7707` and `0x7722` to that
-model's HDMI, DisplayPort and Thunderbolt inputs.
+LG assigns the same EDID product code to more than one product. ddccontrol-db maps `GSM 0x7706` to
+the 27UK850-W family and `GSM 0x7707` to the 32UD99 and the 27UN880-B, while the 32BL95U service
+manual assigns `0x7706`, `0x7707` and `0x7722` to that model's HDMI, DisplayPort and Thunderbolt
+inputs.
 
-The catalog requires one identity to match one model, and the matcher refuses a display that several models claim: an ambiguous
-match must never turn into a write. An identity may therefore pin the EDID model name — descriptor `0xFC` on Linux, the
-`Product name` m1ddc prints on macOS — and two identities collide only when the manufacturer and the product code are equal
-**and** either pins no name, or both pin the same one. So two models may share a reused code, provided both pin, with different
-names.
+The catalog requires one identity to match one model, and the matcher refuses a display that several
+models claim: an ambiguous match must never turn into a write. An identity may therefore pin the
+EDID model name — descriptor `0xFC` on Linux, the `Product name` m1ddc prints on macOS — and two
+identities collide only when the manufacturer and the product code are equal **and** either pins no
+name, or both pin the same one. So two models may share a reused code, provided both pin, with
+different names.
 
-A bare identity beside a pinned one with the same code is rejected, because the bare one matches every display with that code
-and would shadow the pinned entry. That makes bringing a real EDID for one of these models a change to the other entry as well
-as to yours: read [adding-a-monitor.md](adding-a-monitor.md) before collecting one, and say so in the pull request rather than
-working around it. No entry pins a name today.
+A bare identity beside a pinned one with the same code is rejected, because the bare one matches
+every display with that code and would shadow the pinned entry. That makes bringing a real EDID for
+one of these models a change to the other entry as well as to yours: read
+[adding-a-monitor.md](adding-a-monitor.md) before collecting one, and say so in the pull request
+rather than working around it. No entry pins a name today.

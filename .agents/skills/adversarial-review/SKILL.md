@@ -65,7 +65,11 @@ clean, review the branch against `main` (third row).
 
 Also read `git log --oneline` for the range and any linked issue/PR body — the stated
 **intent** is what you check the code against. A change that works but does something other
-than what it claims is a finding.
+than what it claims is a finding, and so is a commit whose type ships the wrong version: `svu`
+derives the release from Conventional Commits, so a change users should receive typed `chore`,
+`docs`, `refactor` or `perf` never ships, a stray `!` cuts a major, and a word ending in `feat` or
+`fix` right before a colon anywhere in a subject counts as that type. PRs land as merge commits, so
+every commit in the range counts, not just the title (`AGENTS.md`, `docs/release.md`).
 
 Read every changed file in full, not just the hunks. A hunk looks correct in isolation and
 wrong against the 40 lines above it that git didn't show you. For non-trivial changes, also
@@ -91,7 +95,15 @@ are findings even when lint is green. Load only what the diff touches.
 | `internal/config`, `cmd/monmux` flags | `docs/configuration.md` | three keys only, unknown keys are an error, flag-over-file precedence |
 | `cmd/monmux` output, exit codes | `README.md`, `docs/troubleshooting.md`, `docs/json.md` | redaction by default, exit-code contract, read-only commands worded as diagnostics, JSON fields and the outcome/writeStatus pair |
 | tests or test infrastructure | `docs/testing.md` | no-exec enforcement, fake runner only, synthetic serials |
+| `test/**` meta-tests, `scripts/check-*.sh` and their `*.test.sh` | the comment heading each test | a meta-test that can no longer fail is a finding (see below) |
 | release, packaging, CI | `docs/release.md`, `.github/`, `.mk/` | documented-but-unimplemented versus accidentally changed |
+
+A meta-test guards a claim about the repository rather than the product: the Go line and the
+golangci-lint pin agree everywhere (`test/toolchain`), no gate passes on nothing, every Markdown
+link resolves (`test/docs`), and the licence-header and suppression scripts refuse what they say
+they refuse (their shell tests). Try to make the guarded thing go wrong and see whether the test
+still notices. A test that passes because its input is empty, its walk found no files, its
+allowlist entry outlived the line it excused, or its rule never ran is a false pass.
 
 No matching document (bash, Makefile, plain YAML, Markdown)? Fall back to `AGENTS.md`, the
 invariants in §3 and the passes in §4. **Same rigor** — an unmatched area is not a lighter
@@ -104,14 +116,14 @@ command*, *Backends only execute a `Command` produced by `Plan`*) are the checkl
 there, not from memory. Weakening any of them is normally **critical**. What each looks like in
 a diff:
 
-- **The `--unsafe-model` exception.** It is the only way past invariants 1 and 2: the EDID is
-  not consulted and `write_enabled` is ignored (`Model.UnsafeOperation`, reached only from the
+- **The `--unsafe-model` exception.** It is the only way past invariants 1 and 2: the EDID is not
+  consulted and `write_enabled` is ignored (`Model.UnsafeOperation`, reached only from the
   `policy.assume` path). It still refuses when no display is writable, refuses more than one
-  writable display with `multiple-candidates` (pin one with `--serial`), refuses an input the
-  named entry does not record (`input-not-enabled`), takes the value from the compiled-in
-  catalog, and still re-verifies at `Execute`. No configuration key or environment variable can arm it. A second
-  caller of `UnsafeOperation`, a non-flag way to set `Request.AssumeModel`, or an assume path
-  that picks among writable displays is critical.
+  writable display with `multiple-candidates` (pin one with `--serial`), refuses an input the named
+  entry does not record (`input-not-enabled`), takes the value from the compiled-in catalog, and
+  still re-verifies at `Execute`. No configuration key or environment variable can arm it. A second
+  caller of `UnsafeOperation`, a non-flag way to set `Request.AssumeModel`, or an assume path that
+  picks among writable displays is critical.
 - **Catalog changes.** A new or edited entry in `internal/catalog/models.yaml` carries
   evidence, and both rendered files — `internal/catalog/models_gen.go` and the marked region of
   `docs/compatibility.md` — were regenerated in the same commit, never hand-edited.
@@ -253,7 +265,9 @@ intent was. If one exists, is the diff removing exactly what that line retires a
 ### (c) A new suppression has to show its work
 
 Any new `//nolint:` or `# shellcheck disable=` is a standing decision to let a linter stay
-silent, and nothing in this repo ratchets their number. So demand the attempt: for a complexity
+silent. `scripts/check-suppressions.sh` counts them per rule against `.suppressions-baseline` and
+refuses a commit that adds one without changing the baseline, so a raised count is visible; the
+review is where it is accepted or not. So demand the attempt: for a complexity
 or length rule, was the obvious extraction tried and what broke? For `wrapcheck`, why is wrapping
 wrong here? For `varnamelen`, why does the name have to be short? A suppression whose reason
 comment restates the rule instead of explaining why the fix does not apply is a finding, and so is
@@ -265,9 +279,9 @@ a suppression with no reason comment at all. The same holds for a new exclusion 
 
 Before accepting a new helper, search for the one that already exists — in `internal/**` and
 `cmd/**`, by *behaviour*, not by the name the author chose. The *Reuse before writing* table in
-`go-style-guide` lists the helpers that already exist (the tool-path trust check, refusals,
-doctor checks, redaction, catalog lookups, the fakes). Two implementations of the same rule drift apart, and the one the reviewer
-did not read is the one that keeps the bug.
+`go-style-guide` lists the helpers that already exist (the tool-path trust check, refusals, doctor
+checks, redaction, catalog lookups, the fakes). Two implementations of the same rule drift apart,
+and the one the reviewer did not read is the one that keeps the bug.
 
 ### (e) Docs drift
 
@@ -298,7 +312,9 @@ monitor.
 | `internal/backend/ddcutil`, `internal/backend/m1ddc`, `select`, or any shared file | additionally `make go-build-cross`, `make go-vet-cross` and `make go-lint-cross` — `make check` lints only the host's backend |
 | `go.mod`, `go.sum`, or dependencies | additionally `make go-tidy` and `make audit-deps` (govulncheck; network required) |
 | `internal/catalog` or `docs/compatibility.md` | `make go-test` — the compatibility test is the gate |
-| build, Makefile, `.mk/`, or CI | `make go-build` and `make check` |
+| build, Makefile, `.mk/`, or CI | `make go-build`, `go test ./test/toolchain/` and `make check` |
+| `test/**` | `go test -count=1 ./test/...` |
+| `scripts/check-*.sh`, `scripts/lib/`, `.suppressions-baseline` | `make verify-scripts` |
 | docs or skill only | `make check` and inspect the rendered content and links |
 
 The suite is fast, isolated and hermetic, so a source change normally warrants the full suite

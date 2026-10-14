@@ -65,7 +65,8 @@ paste it as it was printed, redaction included.
 * [ ] I ran this on Linux
 * [ ] I ran this on macOS
 * [ ] I own this monitor and ran every value above on it myself
-* [ ] I have read [docs/adding-a-monitor.md](https://github.com/leinardi/monmux/blob/main/docs/adding-a-monitor.md)
+* [ ] I have read
+  [docs/adding-a-monitor.md](https://github.com/leinardi/monmux/blob/main/docs/adding-a-monitor.md)
 
 ## Anything else
 

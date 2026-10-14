@@ -1,150 +1,173 @@
 # Security
 
-monmux writes to hardware. The failure that matters is not a crash: it is sending a value a monitor was never verified to accept,
-to a monitor that is not the one monmux thought it was addressing. Every design decision below exists for that reason.
+monmux writes to hardware. The failure that matters is not a crash: it is sending a value a monitor
+was never verified to accept, to a monitor that is not the one monmux thought it was addressing.
+Every design decision below exists for that reason.
 
-There is prior art for the consequences. A monitor that stops displaying anything after an unexpected manufacturer-specific
-write is not recoverable by software, which is why the default in this project is always to refuse.
+There is prior art for the consequences. A monitor that stops displaying anything after an
+unexpected manufacturer-specific write is not recoverable by software, which is why the default in
+this project is always to refuse.
 
 ## Threat model
 
 ### Wrong values
 
-**Risk.** A value that means "switch to USB-C" on one model means something else on another, and manufacturer-specific
-registers are not a documented, portable interface.
+**Risk.** A value that means "switch to USB-C" on one model means something else on another, and
+manufacturer-specific registers are not a documented, portable interface.
 
-**Mitigation.** A value can only reach a monitor if it is written in the catalog next to evidence that someone tested it on that
-exact model. The catalog is `internal/catalog/models.yaml`, rendered by `make go-generate` into the committed
-`internal/catalog/models_gen.go` that the binary compiles. That rendering is a development-time step, so the shipped binary has
-no catalog parser and reads no catalog file at run time; both files appear in the same diff, and a test fails the build if they
-disagree, so the bytes a reviewer approved are the bytes that ship. The generator refuses a file that leaves a product code or
-a value out rather than defaulting it to zero, refuses a key it does not know, and refuses a second YAML document, so no value
-reaches the generated catalog that the file did not spell out. `catalog.Operation` has unexported fields and a package-private constructor, so no value that is
-not in the catalog can exist as an operation at all; the zero value is invalid and every backend rejects it. The CLI accepts
-symbolic inputs only — a connector kind such as `dp` or `hdmi`, optionally numbered such as `hdmi2` — and has no flag that takes
-a VCP code or a raw value (requirement 9.5).
-An input nobody has tested on a model is not enabled for it, and asking for it is refused. The one documented way past that
-gate is `--unsafe-model`, below, which still takes its value from the same compiled-in entry.
+**Mitigation.** A value can only reach a monitor if it is written in the catalog next to evidence
+that someone tested it on that exact model. The catalog is `internal/catalog/models.yaml`, rendered
+by `make go-generate` into the committed `internal/catalog/models_gen.go` that the binary compiles.
+That rendering is a development-time step, so the shipped binary has no catalog parser and reads no
+catalog file at run time; both files appear in the same diff, and a test fails the build if they
+disagree, so the bytes a reviewer approved are the bytes that ship. The generator refuses a file
+that leaves a product code or a value out rather than defaulting it to zero, refuses a key it does
+not know, and refuses a second YAML document, so no value reaches the generated catalog that the
+file did not spell out. `catalog.Operation` has unexported fields and a package-private constructor,
+so no value that is not in the catalog can exist as an operation at all; the zero value is invalid
+and every backend rejects it. The CLI accepts symbolic inputs only — a connector kind such as `dp`
+or `hdmi`, optionally numbered such as `hdmi2` — and has no flag that takes a VCP code or a raw
+value (requirement 9.5). An input nobody has tested on a model is not enabled for it, and asking for
+it is refused. The one documented way past that gate is `--unsafe-model`, below, which still takes
+its value from the same compiled-in entry.
 
 ### Stale identity, and a bus that moved
 
-**Risk.** Displays are enumerated at one moment and written at another. In between, a monitor can be unplugged, another plugged
-in, or an I²C bus rebound to a different connector — so the display monmux identified is not the one that receives the write.
+**Risk.** Displays are enumerated at one moment and written at another. In between, a monitor can be
+unplugged, another plugged in, or an I²C bus rebound to a different connector — so the display
+monmux identified is not the one that receives the write.
 
-**Mitigation.** The identity is re-verified immediately before the write. On Linux the connector's EDID is re-read and compared
-byte for byte with what enumeration saw, and the `ddc` link is re-resolved to the same bus; on macOS the display list is
-re-read and the UUID must still carry the same identity. Any difference is `identity-changed`, and nothing is sent. The Linux
-write then selects the display by its full 256-character EDID rather than by a bus number, so `ddcutil` itself refuses if the
-monitor on that bus changed in the remaining instant.
+**Mitigation.** The identity is re-verified immediately before the write. On Linux the connector's
+EDID is re-read and compared byte for byte with what enumeration saw, and the `ddc` link is
+re-resolved to the same bus; on macOS the display list is re-read and the UUID must still carry the
+same identity. Any difference is `identity-changed`, and nothing is sent. The Linux write then
+selects the display by its full 256-character EDID rather than by a bus number, so `ddcutil` itself
+refuses if the monitor on that bus changed in the remaining instant.
 
 ### Display reordering
 
-**Risk.** "Display 2" is a position in a list, and the list changes when a monitor is plugged in or wakes up. Addressing a
-monitor by its position means eventually addressing a different monitor.
+**Risk.** "Display 2" is a position in a list, and the list changes when a monitor is plugged in or
+wakes up. Addressing a monitor by its position means eventually addressing a different monitor.
 
-**Mitigation.** A list position is never used as a selector. On Linux the handle is the DRM connector name; on macOS it is the
-display's system UUID, and monmux checks that what it was given is actually UUID-shaped before using it — `m1ddc` accepts a list
-index in the same argument position, so a non-UUID value there would silently mean "whichever display is second". A display with
-no usable UUID is reported with status `no-uuid` and is never written to. Enumeration order is never proof of identity
-(requirement 9.9).
+**Mitigation.** A list position is never used as a selector. On Linux the handle is the DRM
+connector name; on macOS it is the display's system UUID, and monmux checks that what it was given
+is actually UUID-shaped before using it — `m1ddc` accepts a list index in the same argument
+position, so a non-UUID value there would silently mean "whichever display is second". A display
+with no usable UUID is reported with status `no-uuid` and is never written to. Enumeration order is
+never proof of identity (requirement 9.9).
 
 ### Forged commands
 
-**Risk.** If any part of monmux could hand a backend an arbitrary program and argument list, every other check would be
-decoration.
+**Risk.** If any part of monmux could hand a backend an arbitrary program and argument list, every
+other check would be decoration.
 
-**Mitigation.** `Backend.Plan` returns a `Command`; no method on the `Backend` interface accepts one, and a reflection test
-enforces that no method ever will. `Execute` takes the `catalog.Operation` and rebuilds the invocation through the same private
-planner `Plan` used, so what `--dry-run` shows is what a real run performs, and neither can be substituted for something else.
-The tool path is resolved once during preflight and executed directly, with no `PATH` lookup at execution time.
+**Mitigation.** `Backend.Plan` returns a `Command`; no method on the `Backend` interface accepts
+one, and a reflection test enforces that no method ever will. `Execute` takes the
+`catalog.Operation` and rebuilds the invocation through the same private planner `Plan` used, so
+what `--dry-run` shows is what a real run performs, and neither can be substituted for something
+else. The tool path is resolved once during preflight and executed directly, with no `PATH` lookup
+at execution time.
 
 ### Configuration as an injection vector
 
-**Risk.** A configuration file is user data that a program acts on. If it could enable a monitor, enable an input, choose a
-mechanism or pick a backend, then editing a YAML file would be enough to write anything anywhere.
+**Risk.** A configuration file is user data that a program acts on. If it could enable a monitor,
+enable an input, choose a mechanism or pick a backend, then editing a YAML file would be enough to
+write anything anywhere.
 
-**Mitigation.** It cannot do any of those things. The file has three keys — a serial to pin to, and the two tool paths. The one
-override that does weaken the write rules, `--unsafe-model`, has no key on purpose and can only be typed on a command line. The
-catalog is compiled in, and `models.yaml` is a build input that a running monmux never opens; the backend is chosen by the
-operating system with no override. An unknown key is an error rather than
-something ignored, so a typo cannot silently disable a pin the user believes is protecting them.
+**Mitigation.** It cannot do any of those things. The file has three keys — a serial to pin to, and
+the two tool paths. The one override that does weaken the write rules, `--unsafe-model`, has no key
+on purpose and can only be typed on a command line. The catalog is compiled in, and `models.yaml` is
+a build input that a running monmux never opens; the backend is chosen by the operating system with
+no override. An unknown key is an error rather than something ignored, so a typo cannot silently
+disable a pin the user believes is protecting them.
 
 ### The `--unsafe-model` override
 
-**What it is.** `monmux switch <input> --unsafe-model VENDOR/MODEL` treats the attached display as that catalog entry instead
-of identifying it from its EDID, and skips the write-enabled gate. Seventy of the seventy-one entries are recorded from
-somebody else's report and are refused without it; this is how the person who owns one of those monitors produces the evidence
-that would enable it, and it is why it exists at all.
+**What it is.** `monmux switch <input> --unsafe-model VENDOR/MODEL` treats the attached display as
+that catalog entry instead of identifying it from its EDID, and skips the write-enabled gate.
+Seventy of the seventy-one entries are recorded from somebody else's report and are refused without
+it; this is how the person who owns one of those monitors produces the evidence that would enable
+it, and it is why it exists at all.
 
 **What it deliberately weakens**, stated plainly rather than buried:
 
-- *Identification.* The EDID is not consulted. The user asserts the model; nothing proves it. That is the whole point, and it
-  is why the flag says `unsafe` in its name.
+- *Identification.* The EDID is not consulted. The user asserts the model; nothing proves it. That
+  is the whole point, and it is why the flag says `unsafe` in its name.
 - *The write-enabled gate.* An input whose evidence is merely `reported` becomes writable, through
-  `Model.UnsafeOperation` — the one function in the catalog that ignores `write_enabled`, named so it cannot be called by
-  accident.
+  `Model.UnsafeOperation` — the one function in the catalog that ignores `write_enabled`, named so
+  it cannot be called by accident.
 
 **What it does not weaken**, which is everything else:
 
-- *No raw VCP.* The value still comes from a `catalog.Operation` built by the catalog's package-private constructor from a
-  compiled-in entry. The flag selects an existing entry by name; it cannot invent one, and there is still no flag, key or
-  environment variable that carries a code or a value.
-- *An input still has to be recorded.* An input the named entry does not record has no value at all, and is refused with
-  `input-not-enabled`.
-- *One display, or none.* More than one writable display is refused with `multiple-candidates`; the override never picks for
-  you, because picking would mean sending an unverified value to whichever monitor was listed first. Pin with `--serial`.
-- *Re-verify at the last moment.* `Execute` still re-reads the identity and refuses `identity-changed` if the display moved.
-  That check compares against what enumeration saw, not against the catalog, so the override does not touch it.
-- *Refuse loudly.* Every refusal on this path is still a refusal, still ends with `No DDC write was performed.`, and still
-  exits 2.
-- *No arming from a file.* There is no configuration key, and there will not be one: a weakening that persists is a weakening
-  you stop noticing. It is a flag, on the one command you typed.
+- *No raw VCP.* The value still comes from a `catalog.Operation` built by the catalog's
+  package-private constructor from a compiled-in entry. The flag selects an existing entry by name;
+  it cannot invent one, and there is still no flag, key or environment variable that carries a code
+  or a value.
+- *An input still has to be recorded.* An input the named entry does not record has no value at all,
+  and is refused with `input-not-enabled`.
+- *One display, or none.* More than one writable display is refused with `multiple-candidates`; the
+  override never picks for you, because picking would mean sending an unverified value to whichever
+  monitor was listed first. Pin with `--serial`.
+- *Re-verify at the last moment.* `Execute` still re-reads the identity and refuses
+  `identity-changed` if the display moved. That check compares against what enumeration saw, not
+  against the catalog, so the override does not touch it.
+- *Refuse loudly.* Every refusal on this path is still a refusal, still ends with
+  `No DDC write was performed.`, and still exits 2.
+- *No arming from a file.* There is no configuration key, and there will not be one: a weakening
+  that persists is a weakening you stop noticing. It is a flag, on the one command you typed.
 
-**What it is guarded by.** A warning on stderr, printed once the display has been selected and before anything is planned or
-written — in a dry run too — naming the display, the assumed model with its evidence grade, and the value about to be sent. A
-switch whose warning could not be printed does not happen. There is no interactive prompt: the flag's name and the banner are
-the guard, and a prompt would break the scripting the flag exists to allow. The result line then says the identification was
-bypassed, so scrollback shows it later.
+**What it is guarded by.** A warning on stderr, printed once the display has been selected and
+before anything is planned or written — in a dry run too — naming the display, the assumed model
+with its evidence grade, and the value about to be sent. A switch whose warning could not be printed
+does not happen. There is no interactive prompt: the flag's name and the banner are the guard, and a
+prompt would break the scripting the flag exists to allow. The result line then says the
+identification was bypassed, so scrollback shows it later.
 
-Seventy of the seventy-one entries use `vcp-input-source`, which has reached one monitor so far, through m1ddc, and none
-through ddcutil. Every `--unsafe-model` run against one of them is a first run of that entry's values, and the first from Linux is
-also the first hardware run of the ddcutil path: both belong with the checklist in [testing.md](testing.md), with `--dry-run`
-first and the monitor's OSD within reach.
+Seventy of the seventy-one entries use `vcp-input-source`, which has reached one monitor so far,
+through m1ddc, and none through ddcutil. Every `--unsafe-model` run against one of them is a first
+run of that entry's values, and the first from Linux is also the first hardware run of the ddcutil
+path: both belong with the checklist in [testing.md](testing.md), with `--dry-run` first and the
+monitor's OSD within reach.
 
 ### Serial and UUID leakage
 
-**Risk.** Diagnostic output ends up in bug reports and pastebins, and a monitor's serial number and a Mac's display UUID are
-identifying data.
+**Risk.** Diagnostic output ends up in bug reports and pastebins, and a monitor's serial number and
+a Mac's display UUID are identifying data.
 
-**Mitigation.** Every output redacts them by default: `info`, `info --json`, `doctor`, refusal messages, `switch --json` -
-whose `command`, `display.handle` and `refusal.detected` go through the same masking - and the command printed by `--dry-run`,
-whose EDID hex identifies a physical unit just as precisely as a serial does. `--show-serial` prints them
-verbatim, and is the only way to see them. Test fixtures carry synthetic identifiers only, and a test fails the build if any
-other value appears in one.
+**Mitigation.** Every output redacts them by default: `info`, `info --json`, `doctor`, refusal
+messages, `switch --json` - whose `command`, `display.handle` and `refusal.detected` go through the
+same masking - and the command printed by `--dry-run`, whose EDID hex identifies a physical unit
+just as precisely as a serial does. `--show-serial` prints them verbatim, and is the only way to see
+them. Test fixtures carry synthetic identifiers only, and a test fails the build if any other value
+appears in one.
 
 ## Trust boundaries
 
 Two things monmux does **not** defend against, stated plainly rather than listed as mitigated:
 
-**The tool it runs.** monmux resolves `ddcutil` or `m1ddc` from `PATH`, or from the absolute path in the configuration, and
-checks that the resolved file is a regular file that neither it nor its directory allows anyone but its owner to rewrite. That
-is all it can check. **monmux cannot tell a genuine `ddcutil` from a maliciously replaced one with correct ownership and
-permissions.** Anyone who can write to that binary — or to a directory on your `PATH` ahead of it — can make monmux run whatever
-they like. `monmux doctor` prints the resolved path and its SHA-256 so the binary can be identified; comparing it against a
-known-good value is the user's job, not monmux's.
+**The tool it runs.** monmux resolves `ddcutil` or `m1ddc` from `PATH`, or from the absolute path in
+the configuration, and checks that the resolved file is a regular file that neither it nor its
+directory allows anyone but its owner to rewrite. That is all it can check. **monmux cannot tell a
+genuine `ddcutil` from a maliciously replaced one with correct ownership and permissions.** Anyone
+who can write to that binary — or to a directory on your `PATH` ahead of it — can make monmux run
+whatever they like. `monmux doctor` prints the resolved path and its SHA-256 so the binary can be
+identified; comparing it against a known-good value is the user's job, not monmux's.
 
-**The kernel and the tool's own behaviour.** monmux does not open `/dev/i2c-*` and does not speak DDC. What the external tool
-puts on the wire once it is invoked, and what a driver does with it, is outside monmux's control.
+**The kernel and the tool's own behaviour.** monmux does not open `/dev/i2c-*` and does not speak
+DDC. What the external tool puts on the wire once it is invoked, and what a driver does with it, is
+outside monmux's control.
 
 ### The install path
 
 Where the binary came from is its own trust boundary, and it is not the same one on every platform.
 
-**Everything is signed at the source.** Every release attaches `checksums.txt`, covering every artifact including the `.deb` and
-the `.rpm`, and `checksums.txt.sigstore.json`: a keyless [cosign](https://docs.sigstore.dev/) signature made with the release
-workflow's own GitHub OIDC identity. There is no private signing key anywhere, so there is none to steal. The archives, the
-packages and the checksum file also carry a build provenance attestation. What that proves is which workflow, on which commit,
-in which repository, produced those exact bytes — not that the bytes are correct. Verify with:
+**Everything is signed at the source.** Every release attaches `checksums.txt`, covering every
+artifact including the `.deb` and the `.rpm`, and `checksums.txt.sigstore.json`: a keyless
+[cosign](https://docs.sigstore.dev/) signature made with the release workflow's own GitHub OIDC
+identity. There is no private signing key anywhere, so there is none to steal. The archives, the
+packages and the checksum file also carry a build provenance attestation. What that proves is which
+workflow, on which commit, in which repository, produced those exact bytes — not that the bytes are
+correct. Verify with:
 
 ```sh
 cosign verify-blob checksums.txt \
@@ -157,54 +180,64 @@ gh attestation verify <file> \
   --source-ref refs/heads/main
 ```
 
-**A Linux package install trusts Cloudsmith as well as GitHub.** The apt and rpm repositories are hosted by Cloudsmith, and the
-repository metadata is signed with **Cloudsmith's** key, not with a key monmux controls — that is what `gpgkey=` in the setup
-instructions points at. So `apt install monmux` trusts Cloudsmith to serve the package that was uploaded to it. The packages
-themselves are byte-for-byte the ones attached to the GitHub release, and `checksums.txt` there covers them, so anyone who wants
-to trust only GitHub can download the `.deb` or `.rpm` from the release page, verify it against the signed checksum file, and
-install it directly with `dpkg -i` or `rpm -i`.
+**A Linux package install trusts Cloudsmith as well as GitHub.** The apt and rpm repositories are
+hosted by Cloudsmith, and the repository metadata is signed with **Cloudsmith's** key, not with a
+key monmux controls — that is what `gpgkey=` in the setup instructions points at. So
+`apt install monmux` trusts Cloudsmith to serve the package that was uploaded to it. The packages
+themselves are byte-for-byte the ones attached to the GitHub release, and `checksums.txt` there
+covers them, so anyone who wants to trust only GitHub can download the `.deb` or `.rpm` from the
+release page, verify it against the signed checksum file, and install it directly with `dpkg -i` or
+`rpm -i`.
 
-**The macOS cask strips the download quarantine.** monmux's binaries carry no Apple Developer ID signature, and Homebrew
-quarantines everything a cask downloads, so Gatekeeper would refuse to run the binary at all. The cask therefore runs
-`xattr -dr com.apple.quarantine` on the installed binary in a `postflight_steps` block. That is a real bypass, stated plainly:
-it removes the attribute that would otherwise make Gatekeeper refuse an unsigned, unnotarized binary, and it does so because
-the alternative is a cask that never runs.
+**The macOS cask strips the download quarantine.** monmux's binaries carry no Apple Developer ID
+signature, and Homebrew quarantines everything a cask downloads, so Gatekeeper would refuse to run
+the binary at all. The cask therefore runs `xattr -dr com.apple.quarantine` on the installed binary
+in a `postflight_steps` block. That is a real bypass, stated plainly: it removes the attribute that
+would otherwise make Gatekeeper refuse an unsigned, unnotarized binary, and it does so because the
+alternative is a cask that never runs.
 
-The trust it replaces is the one you extended by tapping the repository. If you would rather Gatekeeper had its say, do not
-install the cask: download the `darwin_arm64` tarball from the release page, verify it against the signed `checksums.txt` above,
-and place the binary yourself. Signing with an Apple Developer ID would remove the question entirely; it is out of scope today.
+The trust it replaces is the one you extended by tapping the repository. If you would rather
+Gatekeeper had its say, do not install the cask: download the `darwin_arm64` tarball from the
+release page, verify it against the signed `checksums.txt` above, and place the binary yourself.
+Signing with an Apple Developer ID would remove the question entirely; it is out of scope today.
 
 ## What monmux never does
 
-- Never writes to a monitor it has not positively identified as a catalog model, or for an input that model does not enable —
-  unless `--unsafe-model` was typed on that command line, which is the one documented exception and is described above.
+- Never writes to a monitor it has not positively identified as a catalog model, or for an input
+  that model does not enable — unless `--unsafe-model` was typed on that command line, which is the
+  one documented exception and is described above.
 - Never exposes a raw VCP code or value to the user (9.5).
-- Never probes: no trying values to see what happens, no scanning VCP codes, no brute-forcing source addresses. All discovery
-  is read-only (9.6).
+- Never probes: no trying values to see what happens, no scanning VCP codes, no brute-forcing source
+  addresses. All discovery is read-only (9.6).
 - Never falls back to standard Input Source `VCP 0x60` because a monitor happens to read it (9.7).
 - Never decides anything from `get input` or `get input-alt` (9.8).
 - Never retries a write, and never loops until the picture changes (9.11).
-- Never claims a monitor switched. It reports that a command was sent, and says in the same sentence that the switch was not
-  independently confirmed (9.12).
+- Never claims a monitor switched. It reports that a command was sent, and says in the same sentence
+  that the switch was not independently confirmed (9.12).
 
 ## The rule for contributors and agents
 
-**No AI agent — an assistant in an editor, a coding agent, a subagent, a review bot, any tool-driven automation — may run a
-command that writes to a monitor.** Only a human runs a writing command, by hand, deliberately.
+**No AI agent — an assistant in an editor, a coding agent, a subagent, a review bot, any tool-driven
+automation — may run a command that writes to a monitor.** Only a human runs a writing command, by
+hand, deliberately.
 
-For agents this means: no `ddcutil setvcp`, no `ddcutil` invocation with `--i2c-source-addr`, no `m1ddc … set …`, no
-`monmux switch` without `--dry-run` — `--unsafe-model` included, since bypassing identification makes it more of a write and
-not less — no `i2cset`, no `i2ctransfer`, no writes to `/dev/i2c-*`, and no test or script that executes the real `ddcutil` or
-`m1ddc` binary at all. Read-only work is fine: reading `/sys/class/drm`, `ddcutil --version`, `ddcutil detect`, `monmux info`,
-`monmux doctor`, `monmux catalog list`, `monmux catalog show …`, `monmux switch … --dry-run`, `--unsafe-model` included.
+For agents this means: no `ddcutil setvcp`, no `ddcutil` invocation with `--i2c-source-addr`, no
+`m1ddc … set …`, no `monmux switch` without `--dry-run` — `--unsafe-model` included, since bypassing
+identification makes it more of a write and not less — no `i2cset`, no `i2ctransfer`, no writes to
+`/dev/i2c-*`, and no test or script that executes the real `ddcutil` or `m1ddc` binary at all.
+Read-only work is fine: reading `/sys/class/drm`, `ddcutil --version`, `ddcutil detect`,
+`monmux info`, `monmux doctor`, `monmux catalog list`, `monmux catalog show …`,
+`monmux switch … --dry-run`, `--unsafe-model` included.
 
-The rule is enforced in code as well as written down. The real runner refuses to start any process while a test binary is
-running or when `MONMUX_NO_EXEC=1` is set, and a repository test fails the build if any test file imports `os/exec` or so much
-as names the real runner's constructor. Hardware validation for a new model is done by a human, and the evidence is recorded in
-the catalog in the same commit.
+The rule is enforced in code as well as written down. The real runner refuses to start any process
+while a test binary is running or when `MONMUX_NO_EXEC=1` is set, and a repository test fails the
+build if any test file imports `os/exec` or so much as names the real runner's constructor. Hardware
+validation for a new model is done by a human, and the evidence is recorded in the catalog in the
+same commit.
 
 ## Reporting a problem
 
-Please report security issues privately through GitHub's [security advisories](https://github.com/leinardi/monmux/security/advisories/new)
-rather than in a public issue. A report that includes `monmux info` output is welcome; run it without `--show-serial` unless the
-serial is the point, since the default output is already redacted.
+Please report security issues privately through GitHub's [security
+advisories](https://github.com/leinardi/monmux/security/advisories/new) rather than in a public
+issue. A report that includes `monmux info` output is welcome; run it without `--show-serial` unless
+the serial is the point, since the default output is already redacted.
