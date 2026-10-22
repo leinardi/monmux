@@ -53,8 +53,9 @@ wakes up. Addressing a monitor by its position means eventually addressing a dif
 connector name; on macOS it is the display's system UUID, and monmux checks that what it was given
 is actually UUID-shaped before using it — `m1ddc` accepts a list index in the same argument
 position, so a non-UUID value there would silently mean "whichever display is second". A display
-with no usable UUID is reported with status `no-uuid` and is never written to. Enumeration order is
-never proof of identity (requirement 9.9).
+with no usable UUID is reported with status `no-uuid` and is never written to, and a Mac's own panel,
+which `m1ddc` lists with a UUID like any other display, is reported as `built-in` and never written
+to either. Enumeration order is never proof of identity (requirement 9.9).
 
 ### Forged commands
 

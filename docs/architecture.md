@@ -120,7 +120,8 @@ Both backends produce the same `edid.Identity`, which is what lets one catalog s
 | Handle | the DRM connector name, e.g. `card1-DP-1` | the display's system UUID — private data, masked in output |
 
 A display monmux cannot address is still reported, with a status saying why: `no-ddc-channel`,
-`edid-unreadable`, `no-uuid`. `info` lists it; policy can never select it.
+`edid-unreadable`, `no-uuid`, or `built-in` for a Mac's own panel. `info` lists it; policy can never
+select it.
 
 A catalog entry matches on the manufacturer and the product code. The serials never take part: they
 identify a unit, not a model. The model name normally does not either — it is context in `info` and

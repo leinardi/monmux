@@ -63,8 +63,10 @@ func (b *Backend) Doctor(ctx context.Context) []backend.Check {
 	for index := range records {
 		current := &records[index].display
 		checks = append(checks, backend.Check{
-			Name:   current.Label,
-			OK:     current.Writable,
+			Name: current.Label,
+			// The Mac's own panel is never a target, and that is not a fault:
+			// failing its check would put a FAIL on every MacBook's report.
+			OK:     current.Writable || current.Status == backend.StatusBuiltIn,
 			Detail: current.Status,
 		})
 	}

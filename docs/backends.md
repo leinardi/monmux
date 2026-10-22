@@ -125,6 +125,14 @@ position, and that index changes when a monitor is plugged in or wakes up, so mo
 handle it holds is actually UUID-shaped before using it. A display with no usable UUID is reported
 with status `no-uuid` and is never written to.
 
+`m1ddc` 1.2.0 lists a MacBook's **built-in panel** too, with a system UUID, next to the external
+displays. monmux recognises it by its `IO Location`: the panel's IORegistry path has a `disp0@`
+segment, and an external display's has `dispext0@`, `dispext1@` and so on. It is reported with
+status `built-in` and is never written to — the panel has no inputs to switch. The segment was the
+same on the two layouts captured so far, `…/AppleT600xIO/disp0@8A000000/AppleCLCD2` and
+`…/AppleH16GFamilyIO/disp0@0/IOMobileFramebufferShim` (an M4 Max), while the vendor number is
+Apple's, which Apple's external displays share, and the model number differs from Mac to Mac.
+
 Because the UUID identifies a physical unit, it is masked in output unless `--show-serial` is given.
 
 ### m1ddc permissions
@@ -158,10 +166,9 @@ the switch is refused as `identity-changed`.
 - `m1ddc`'s help lists USB-C as `210` among its common values. The unit in the catalog switches to
   USB-C on `0xD1` (209), which is what was tested on it. The catalog is the evidence; the help text
   is a general hint.
-- `m1ddc` 1.2.0 lists a MacBook's built-in panel with a system UUID, so monmux counts it as
-  writable. It never matches a catalog entry, so a normal switch is unaffected, but `--unsafe-model`
-  counts every writable display and refuses with `multiple-candidates` until the external monitor is
-  pinned — [troubleshooting.md](troubleshooting.md#multiple-candidates).
+- `m1ddc` 1.2.0 lists a MacBook's built-in panel with a system UUID. monmux reports it as
+  `built-in` and never counts it as a target, so `--unsafe-model` on a laptop with one external
+  monitor has one writable display, not two. `monmux doctor` passes it rather than failing it.
 - Both the no-display message and the field labels are pinned in constants and covered by fixtures,
   so an upstream change to either fails a test rather than silently changing behaviour.
 

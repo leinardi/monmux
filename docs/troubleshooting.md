@@ -79,6 +79,7 @@ status:
   another one.
 - `no-uuid` — macOS gave the display no system UUID, which is the only way monmux can address it
   there.
+- `built-in` — the Mac's own panel. It has no inputs to switch, so it is never a target.
 
 With `--unsafe-model` this is also what an unidentified display is refused with, naming each display
 and its status: the catalog is not consulted on that path, so the answer that is actually true of
@@ -140,19 +141,11 @@ Writable: card1-DP-1, card1-HDMI-A-1. An assumed model identifies nothing, so mo
 Pinning is the answer there too. An override that picked the first display would send an unverified
 value to whichever monitor happened to be listed first.
 
-**On a MacBook, the built-in panel counts.** `m1ddc` 1.2.0 lists the laptop's own panel with a
-system UUID, so monmux treats it as writable: `monmux info` shows it as an `APP` display with
-`"writable": true`. A normal switch is not affected, because the panel never matches a catalog
-entry, but under `--unsafe-model` a laptop with one external monitor already has two writable
-displays and is refused. In order of preference:
-
-1. Pin the external monitor with `--serial`, as above.
-2. If the monitor exposes no alphanumeric serial it cannot be pinned (see
-   [`serial-mismatch`](#serial-mismatch)). Close the lid with power and an external keyboard
-   attached, so that macOS takes the built-in panel offline, and run `monmux info` before switching:
-   go ahead only when the external monitor is the one writable display listed.
-3. Or run the test from another computer connected to another input of the monitor, Linux with
-   `ddcutil` included.
+**On a MacBook, older releases counted the built-in panel.** `m1ddc` lists the laptop's own panel
+with a system UUID, and older releases treated it as writable, so under `--unsafe-model` a laptop
+with one external monitor had two writable displays and was refused. monmux now reports the panel as
+`built-in` and never counts it. If `monmux info` still shows an `APP` display with
+`"writable": true` next to your monitor, upgrade — or pin the external monitor with `--serial`.
 
 ### `input-not-enabled`
 

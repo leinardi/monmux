@@ -195,7 +195,7 @@ It writes nothing.
 | `displays[].label` | How the display is named in every message. |
 | `displays[].handle` | The backend's address. Masked unless `--show-serial` when `handlePrivate` is `true`. |
 | `displays[].writable` | Whether the backend could write to it at all — before any catalog question. |
-| `displays[].status` | `ok`, `no-ddc-channel`, `edid-unreadable`, `no-uuid`. |
+| `displays[].status` | `ok`, `no-ddc-channel`, `edid-unreadable`, `no-uuid`, `built-in`. |
 | `displays[].identity` | The parsed EDID identity. `serialNumber` and `serialString` are redacted unless `--show-serial`. |
 | `displays[].match` | `exact`, `none` or `ambiguous`. |
 | `displays[].model` | The matched entry's full name, empty when `match` is not `exact`. |

@@ -70,7 +70,22 @@ const (
 	fieldModel        = "Model"
 	fieldSerialNumber = "Serial"
 	fieldUUID         = "System UUID"
+	fieldLocation     = "IO Location"
 )
+
+// builtInSegment opens the IORegistry path segment of an Apple Silicon Mac's
+// own panel. m1ddc 1.2.0 lists that panel next to the external displays, with a
+// system UUID, so without this check it would look writable. The externals sit
+// under dispext0@, dispext1@ and so on; the built-in one is always disp0@. It
+// was seen in two layouts, whose parent nodes, addresses and leaves all differ:
+//
+//	…/AppleT600xIO/disp0@8A000000/AppleCLCD2
+//	…/AppleH16GFamilyIO/disp0@0/IOMobileFramebufferShim
+//
+// Neither the vendor nor the model can stand in for it: the panel reports
+// Apple's vendor number, which Apple's external displays report too, and its
+// model number differs from one Mac to the next.
+const builtInSegment = "disp0@"
 
 // noDisplayMessage is what m1ddc writes, with a non-zero exit status, when the
 // Mac has no external display attached. It is pinned from sources/m1ddc.m, where
@@ -224,11 +239,34 @@ func (b block) record() record {
 		Status:        backend.StatusOK,
 	}
 
-	if !display.Writable {
+	// The built-in panel is checked first, because it is the answer that
+	// stays true: a panel with no UUID is still a panel, and "no-uuid" would
+	// send the user looking for a fault that is not there.
+	switch {
+	case b.builtIn():
+		display.Writable = false
+		display.Status = backend.StatusBuiltIn
+	case !display.Writable:
 		display.Status = backend.StatusNoUUID
 	}
 
 	return record{display: display, number: b.number, uuid: uuid}
+}
+
+// builtIn reports whether the block is the Mac's own panel, from the segments
+// of its IORegistry path. Each segment is checked from its start, so that an
+// external display's dispext0@ is never mistaken for it. A false positive is the
+// safe direction - an external display refused, never written to - and a missed
+// panel is no worse than before the check existed: a normal switch never
+// matches it, and only --unsafe-model could count it.
+func (b block) builtIn() bool {
+	for segment := range strings.SplitSeq(b.fields[fieldLocation], "/") {
+		if strings.HasPrefix(segment, builtInSegment) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // identity maps m1ddc's fields onto the identity the catalog is matched on.
