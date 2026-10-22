@@ -328,11 +328,16 @@ func (i Identity) String() string {
 // what value to write, and the evidence for that value. Evidence is per input,
 // not per model, because a model can have one verified input and one that is
 // merely reported elsewhere.
+//
+// caveat is a condition under which a matching unit may not do what the value
+// says - a firmware version that needs another value, say - printed whenever the
+// input is switched. It is prose, and it never reaches an [Operation].
 type inputOp struct {
 	mechanism Mechanism
 	value     uint16
 	grade     Grade
 	evidence  string
+	caveat    string
 }
 
 // Model is one catalog entry.
@@ -451,6 +456,19 @@ func (m Model) InputEvidence(input Input) (string, bool) {
 	}
 
 	return op.evidence, true
+}
+
+// InputCaveat returns the caveat recorded for an input. The second result is
+// false when the model does not record the input, or records it with no caveat.
+//
+//nolint:gocritic // hugeParam: a value receiver keeps Model usable where it is not addressable
+func (m Model) InputCaveat(input Input) (string, bool) {
+	op, ok := m.Inputs[input]
+	if !ok || op.caveat == "" {
+		return "", false
+	}
+
+	return op.caveat, true
 }
 
 // InputGrade returns the grade of the evidence recorded for an input.

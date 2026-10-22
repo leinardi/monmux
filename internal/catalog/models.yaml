@@ -57,6 +57,12 @@
 # `notes` is per-model prose: negative reports, conflicts, aliases and quirks.
 # It is rendered under the model in docs/compatibility.md and is never an
 # Operation, so nothing written there can reach a monitor.
+#
+# `caveat` is optional per-input prose: one sentence, at most 200 bytes, naming
+# a known condition under which a matching unit may not do what the value says,
+# such as a firmware version that needs another value. `monmux switch` prints it
+# after sending, and it is never an Operation either. Leave the key out when
+# there is nothing to say; `caveat:` or `caveat: ""` is an error.
 
 models:
   # ==========================================================================
@@ -2221,6 +2227,7 @@ models:
           tool: "m1ddc 1.2.0 on macOS, sent directly, firmware M-C9557GGPA-1009.2"
           url: https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843
           note: "0x05 sent through monmux did nothing on the same unit"
+        caveat: "Firmware M-C9557GGPA-1007.0 was reported to switch HDMI 1 with 0x05 instead. If the monitor did not switch, check the firmware version in the OSD."
       hdmi2:
         mechanism: vcp-input-source
         value: 0x12
@@ -2230,6 +2237,7 @@ models:
           tool: "m1ddc 1.2.0 on macOS, sent directly, firmware M-C9557GGPA-1009.2"
           url: https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843
           note: "0x06 sent through monmux did nothing on the same unit"
+        caveat: "Firmware M-C9557GGPA-1007.0 was reported to switch HDMI 2 with 0x06 instead. If the monitor did not switch, check the firmware version in the OSD."
       hdmi3:
         mechanism: vcp-input-source
         value: 0x32
@@ -2238,6 +2246,7 @@ models:
           by: "ema987 (monmux issue 80)"
           tool: "m1ddc 1.2.0 on macOS, sent directly, firmware M-C9557GGPA-1009.2"
           url: https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843
+        caveat: "0x32 is known to work on firmware M-C9557GGPA-1009.2 only. If the monitor did not switch, check the firmware version in the OSD."
       dp:
         mechanism: vcp-input-source
         value: 0x0F

@@ -292,8 +292,8 @@ func (c *changes) inputs(name string, before, after *generate.Model) {
 }
 
 // evidence records the parts of an entry that say why a value is believed,
-// rather than what it is: the per-input evidence, the model notes and the
-// sources. None of it ever reaches a monitor, so none of it enables anything -
+// rather than what it is: the per-input evidence and caveats, the model notes
+// and the sources. None of it ever reaches a monitor, so none of it enables anything -
 // but "no catalog change" has to mean the file is identical, not that the bytes
 // happen to match, so a moved record is reported rather than swallowed.
 //
@@ -313,6 +313,12 @@ func (c *changes) evidence(name string, before, after *generate.Model) {
 
 		if then.Evidence != now.Evidence {
 			moved = append(moved, fmt.Sprintf("the evidence for %#q", key))
+		}
+
+		// A caveat is printed next to a switch and never changes what is sent,
+		// so it is a record like the evidence is.
+		if then.CaveatText() != now.CaveatText() {
+			moved = append(moved, fmt.Sprintf("the caveat for %#q", key))
 		}
 	}
 

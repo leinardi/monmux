@@ -117,6 +117,15 @@ func renderOutcome(out io.Writer, outcome *app.Outcome, showSerial bool) error {
 			bypassed(outcome.Assumed),
 		)
 
+		// After the sent line rather than before it: the caveat is what to check
+		// if the monitor did not follow, which is only a question once it was
+		// sent. It goes to stdout with the rest, because stderr carries only the
+		// --unsafe-model banner.
+		caveat, cautioned := outcome.Model.InputCaveat(outcome.Input)
+		if cautioned {
+			page.linef("Caveat: %s", caveat)
+		}
+
 		return page.err
 	}
 
@@ -129,6 +138,12 @@ func renderOutcome(out io.Writer, outcome *app.Outcome, showSerial bool) error {
 	)
 	page.linef("  Input:   %s (0x%02X)", outcome.Input.Label(), outcome.Operation.Value())
 	page.linef("  Command: %s", outcome.Command.Render(showSerial))
+
+	caveat, cautioned := outcome.Model.InputCaveat(outcome.Input)
+	if cautioned {
+		page.linef("  Caveat:  %s", caveat)
+	}
+
 	page.linef("No DDC write was performed.")
 
 	return page.err
@@ -383,6 +398,9 @@ type (
 		Operation  *jsonOperation     `json:"operation,omitempty"`
 		// Command is the invocation, redacted unless --show-serial.
 		Command string `json:"command,omitempty"`
+		// Caveat is the catalog's caveat for the input, present only for sent
+		// and dry-run, and only when the catalog records one.
+		Caveat string `json:"caveat,omitempty"`
 		// Assumed reports that identification was bypassed with --unsafe-model.
 		Assumed bool `json:"assumed"`
 		// Refusal is present only when Outcome is refused.
@@ -488,6 +506,7 @@ func fillJSONDecision(document *jsonSwitch, outcome *app.Outcome, showSerial boo
 		ValueHex:  fmt.Sprintf("0x%02X", outcome.Operation.Value()),
 	}
 	document.Command = outcome.Command.Render(showSerial)
+	document.Caveat, _ = outcome.Model.InputCaveat(outcome.Input)
 }
 
 // asJSONRefusal converts a refusal into the output contract, carrying the same

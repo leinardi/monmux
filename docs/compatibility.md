@@ -63,6 +63,11 @@ The table is ordered the way the catalog file is written: the models monmux will
 then by vendor, then by model name. The generator enforces that order on the file, so the two cannot
 drift apart.
 
+Under each model, the notes section carries the per-model prose and its sources. A model with an
+input that has a known condition under which the unit may not follow — a firmware version that needs
+another value, say — also lists a **Caveats** block between the two: one line per input, and exactly
+the sentence `monmux switch` prints after it sends to that input.
+
 ## The same table, offline
 
 `monmux catalog` prints this catalog from the binary itself, which is the copy that decides what a
@@ -875,6 +880,12 @@ Sources:
 - The monitor answers DDC only on the input it is showing: once it leaves an input, every m1ddc call over that cable fails, reads included. A machine can switch the monitor away from itself but not back; the way back is the other source, or the OSD.
 - EDID, as text only: manufacturer `SAM`, model name `Odyssey G95NC`, product code 0x7476 over DisplayPort and 0x73D0 over HDMI 2. HDMI 1 and HDMI 3 have not been captured. These become identities when the model is enabled, not before.
 - With DisplayPort and HDMI both connected to the same Mac, the monitor is listed twice with the same alphanumeric serial, so `--serial` cannot pick one; unplug one cable.
+
+Caveats:
+
+- `hdmi1`: Firmware M-C9557GGPA-1007.0 was reported to switch HDMI 1 with 0x05 instead. If the monitor did not switch, check the firmware version in the OSD.
+- `hdmi2`: Firmware M-C9557GGPA-1007.0 was reported to switch HDMI 2 with 0x06 instead. If the monitor did not switch, check the firmware version in the OSD.
+- `hdmi3`: 0x32 is known to work on firmware M-C9557GGPA-1009.2 only. If the monitor did not switch, check the firmware version in the OSD.
 
 Sources:
 

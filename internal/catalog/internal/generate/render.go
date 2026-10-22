@@ -47,8 +47,8 @@ const licenseHeader = `/*
  * limitations under the License.
  */`
 
-// linesPerInput is how many lines renderInputs emits for one recorded input.
-const linesPerInput = 6
+// linesPerInput is the most lines renderInputs emits for one recorded input.
+const linesPerInput = 7
 
 // generatedMarker is the line that tells go and the linters this file is not
 // written by hand.
@@ -186,8 +186,16 @@ func renderInputs(model *Model) ([]string, error) {
 			fmt.Sprintf("value: 0x%02X,", *entry.Value),
 			fmt.Sprintf("grade: %s,", gradeNames[entry.Evidence.Grade]),
 			fmt.Sprintf("evidence: %q,", evidence),
-			"},",
 		)
+
+		// An input with no caveat renders no line, so that "nothing to warn
+		// about" is what the Go says rather than an empty string.
+		caveat := entry.CaveatText()
+		if caveat != "" {
+			lines = append(lines, fmt.Sprintf("caveat: %q,", caveat))
+		}
+
+		lines = append(lines, "},")
 	}
 
 	return append(lines, "},"), nil

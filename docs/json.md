@@ -38,8 +38,8 @@ Stable, and changed only with a deliberate note in the release:
 
 Not stable, and not to be parsed:
 
-- prose fields — `explanation`, `detail`, `evidence`, `error`, a check's `detail`, and the rendered
-  `command`,
+- prose fields — `explanation`, `detail`, `evidence`, `caveat`, `error`, a check's `detail`, and the
+  rendered `command`,
 - the order of `displays`, `checks` and `models` beyond what the text output already promises,
 - anything printed on stderr.
 
@@ -100,6 +100,7 @@ being announced as a completed switch.
 | `inputLabel` | a decision was reached | The human name monmux prints, e.g. `USB-C`. |
 | `operation` | a decision was reached | `mechanism`, `value`, `valueHex` — from the compiled-in catalog. |
 | `command` | a decision was reached | The invocation, redacted unless `--show-serial`. Prose: do not parse it. |
+| `caveat` | a decision was reached, and the catalog records a caveat for the input | A condition under which the monitor may not follow, e.g. a firmware version that needs another value. Prose: do not parse it. |
 | `refusal` | `outcome` is `refused` | See below. |
 | `error` | `outcome` is `failed` | The failure text. Prose: do not parse it. |
 
@@ -253,7 +254,8 @@ write to.
 `inputs[]` is what the entry **records**, which is not the same as what monmux will write: only a
 `writeEnabled` entry can be switched, and only to an input it records. `label` is the human name
 monmux itself prints for that input, so a client can show what monmux shows without inventing a
-spelling of its own. `grade` is the evidence grade, and `evidence` is the prose behind it.
+spelling of its own. `grade` is the evidence grade, and `evidence` is the prose behind it. `caveat`
+is present only on an input that has one, and is the same prose `switch` prints after it sends.
 
 ## `version --json`
 

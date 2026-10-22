@@ -2066,18 +2066,21 @@ var models = []Model{
 				value:     0x11,
 				grade:     GradeReported,
 				evidence:  "Reported working on the exact G95NC by ema987 (monmux issue 80) (m1ddc 1.2.0 on macOS, sent directly, firmware M-C9557GGPA-1009.2): switching to HDMI 1 with 0x11 over the standard Input Source feature (VCP 0x60) succeeded; 0x05 sent through monmux did nothing on the same unit; not verified here: https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843",
+				caveat:    "Firmware M-C9557GGPA-1007.0 was reported to switch HDMI 1 with 0x05 instead. If the monitor did not switch, check the firmware version in the OSD.",
 			},
 			"hdmi2": {
 				mechanism: MechanismInputSource,
 				value:     0x12,
 				grade:     GradeReported,
 				evidence:  "Reported working on the exact G95NC by ema987 (monmux issue 80) (m1ddc 1.2.0 on macOS, sent directly, firmware M-C9557GGPA-1009.2): switching to HDMI 2 with 0x12 over the standard Input Source feature (VCP 0x60) succeeded; 0x06 sent through monmux did nothing on the same unit; not verified here: https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843",
+				caveat:    "Firmware M-C9557GGPA-1007.0 was reported to switch HDMI 2 with 0x06 instead. If the monitor did not switch, check the firmware version in the OSD.",
 			},
 			"hdmi3": {
 				mechanism: MechanismInputSource,
 				value:     0x32,
 				grade:     GradeReported,
 				evidence:  "Reported working on the exact G95NC by ema987 (monmux issue 80) (m1ddc 1.2.0 on macOS, sent directly, firmware M-C9557GGPA-1009.2): switching to HDMI 3 with 0x32 over the standard Input Source feature (VCP 0x60) succeeded; not verified here: https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843",
+				caveat:    "0x32 is known to work on firmware M-C9557GGPA-1009.2 only. If the monitor did not switch, check the firmware version in the OSD.",
 			},
 		},
 		Notes: []string{

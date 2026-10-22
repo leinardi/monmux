@@ -296,6 +296,7 @@ func TestRecordKeepingChangesAreReportedWithoutEnablingAnything(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]struct {
+		before string
 		after  string
 		wanted string
 	}{
@@ -318,13 +319,32 @@ func TestRecordKeepingChangesAreReportedWithoutEnablingAnything(t *testing.T) {
 			),
 			wanted: "- `Testco/MX100` — changed: the sources",
 		},
+		"a caveat added": {
+			after:  withCaveat("Check the firmware."),
+			wanted: "- `Testco/MX100` — changed: the caveat for `dp`",
+		},
+		"a caveat reworded": {
+			before: withCaveat("Check the firmware."),
+			after:  withCaveat("Check the firmware version in the OSD."),
+			wanted: "- `Testco/MX100` — changed: the caveat for `dp`",
+		},
+		"a caveat removed": {
+			before: withCaveat("Check the firmware."),
+			after:  enabledEntry,
+			wanted: "- `Testco/MX100` — changed: the caveat for `dp`",
+		},
 	}
 
 	for name, test := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			comparison := compare(parse(t, enabledEntry), parse(t, test.after))
+			before := test.before
+			if before == "" {
+				before = enabledEntry
+			}
+
+			comparison := compare(parse(t, before), parse(t, test.after))
 
 			if comparison.enabling() {
 				t.Errorf("changing the %s was reported as an enabling change", name)
@@ -422,6 +442,16 @@ func TestRunReportsAMalformedCatalog(t *testing.T) {
 	if !errors.Is(err, generate.ErrMalformed) {
 		t.Errorf("run() error = %v, want ErrMalformed", err)
 	}
+}
+
+// withCaveat returns enabledEntry with a caveat on its dp input.
+func withCaveat(caveat string) string {
+	return strings.Replace(
+		enabledEntry,
+		`          note: "switched on the unit"`,
+		`          note: "switched on the unit"`+"\n        caveat: \""+caveat+"\"",
+		1,
+	)
 }
 
 // release runs the tool over two catalog files the way the workflow does, and

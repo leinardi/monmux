@@ -110,6 +110,12 @@ var (
 	// ErrBadText reports text that cannot be rendered where the documentation
 	// puts it: a Markdown table cell, or a single bullet.
 	ErrBadText = errors.New("generate: text holds a pipe or a line break")
+	// ErrBadCaveat reports a caveat that was written and says nothing usable:
+	// null, empty, blank, untrimmed, not a string, too long to print on one
+	// line of a switch, or holding a pipe or a line break. Leaving the key out
+	// is how an input says it has no caveat; writing it empty is a mistake, and
+	// it is reported rather than read as the absence it looks like.
+	ErrBadCaveat = errors.New("generate: bad caveat")
 )
 
 // The mechanisms. They mirror catalog.Mechanisms().
@@ -176,6 +182,11 @@ var requiredEvidence = map[string][]string{
 	gradeReported:   {fieldBy, fieldTool, fieldURL},
 	gradeQuoted:     {fieldBy, fieldTool, fieldURL},
 }
+
+// caveatLength is the longest a caveat may be. It is printed after the line
+// that says a switch was sent, so it has to stay one sentence a user reads at
+// that moment rather than a paragraph; the reasoning goes in the notes.
+const caveatLength = 200
 
 // urlScheme is the only scheme a recorded reference may use.
 const urlScheme = "https://"
@@ -274,10 +285,29 @@ type Identity struct {
 // wide because a SetVCP carries an SH/SL pair, and it is a pointer for the same
 // reason as [Identity.ProductCode]: a value nobody wrote must not default to
 // 0x0000.
+//
+// Caveat is a known condition under which a matching unit may not do what the
+// value says, printed whenever the input is switched. It is decoded as a node
+// rather than as a string because yaml.v3 decodes `caveat:`, `caveat: null` and
+// a missing key into the same empty string, and only the last one means "no
+// caveat"; [Input.CaveatText] reads it once [Document.Validate] has checked it.
 type Input struct {
-	Mechanism string   `yaml:"mechanism"`
-	Value     *uint16  `yaml:"value"`
-	Evidence  Evidence `yaml:"evidence"`
+	Mechanism string    `yaml:"mechanism"`
+	Value     *uint16   `yaml:"value"`
+	Evidence  Evidence  `yaml:"evidence"`
+	Caveat    yaml.Node `yaml:"caveat"`
+}
+
+// CaveatText returns the input's caveat, or the empty string when it has none.
+// Anything the file wrote that is not a string reads as none here, which is why
+// it is only called on a document [Document.Validate] accepted.
+func (i *Input) CaveatText() string {
+	text, _, isText := optionalText(&i.Caveat)
+	if !isText {
+		return ""
+	}
+
+	return text
 }
 
 // Evidence is why anyone believes a value does what the entry says it does. It
@@ -590,6 +620,13 @@ func (m *Model) validateInputs() []error {
 		}
 
 		problems = append(problems, m.validateEvidence(name, &entry)...)
+
+		_, present, problem := boundedText(&entry.Caveat, caveatLength)
+		if present && problem != "" {
+			problems = append(problems, fmt.Errorf(
+				"%w: %q records a caveat for %q that is %s", ErrBadCaveat, m.Name, name, problem,
+			))
+		}
 	}
 
 	err := input.CheckNumbering(parsed)
@@ -708,6 +745,50 @@ func (m *Model) validateSources() []error {
 
 // nullTag is the YAML tag of a document, or a node, that holds nothing.
 const nullTag = "!!null"
+
+// stringTag is the YAML tag of a scalar that decoded as a string.
+const stringTag = "!!str"
+
+// optionalText reads a scalar the file may leave out. present is false only when
+// the key was never written - yaml.v3 leaves a node it never visited at its zero
+// Kind, and gives `key:`, `key: null` and `key: ~` the null tag instead - and
+// isText is true only for a string.
+func optionalText(node *yaml.Node) (text string, present, isText bool) {
+	if node.Kind == 0 {
+		return "", false, false
+	}
+
+	if node.Kind != yaml.ScalarNode || node.Tag != stringTag {
+		return "", true, false
+	}
+
+	return node.Value, true, true
+}
+
+// boundedText reads optional text that is printed on one line, and says what is
+// wrong with it when something is. A key that was written has to hold a
+// non-blank, trimmed string of at most limit bytes that a table cell and a
+// bullet can carry; problem is empty when it does, and when the key is absent.
+func boundedText(node *yaml.Node, limit int) (text string, present bool, problem string) {
+	text, present, isText := optionalText(node)
+
+	switch {
+	case !present:
+		return "", false, ""
+	case !isText:
+		return "", true, "not a string (null, empty or another type)"
+	case strings.TrimSpace(text) == "":
+		return text, true, "blank"
+	case text != strings.TrimSpace(text):
+		return text, true, "not trimmed"
+	case !renderable(text):
+		return text, true, "holding a pipe or a line break"
+	case len(text) > limit:
+		return text, true, fmt.Sprintf("longer than %d bytes", limit)
+	default:
+		return text, true, ""
+	}
+}
 
 // emptyDocument reports whether a decoded document carries nothing. A file may
 // open or close with a `---` marker, which yields a document whose only child is

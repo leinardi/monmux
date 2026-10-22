@@ -345,3 +345,56 @@ func TestRenderDocumentValidatesBeforeItRenders(t *testing.T) {
 		t.Fatalf("error is %v, want ErrMissing", err)
 	}
 }
+
+// A caveat is listed under the notes and above the sources, one bullet per input
+// in catalog order whatever order the file writes them in, and a model with
+// none gets no block at all.
+func TestRenderDocumentListsCaveatsBetweenNotesAndSources(t *testing.T) {
+	t.Parallel()
+
+	plain := render(t, oneModel, surround(""))
+	if strings.Contains(plain, "Caveats:") {
+		t.Errorf("a model with no caveat got a block:\n%s", plain)
+	}
+
+	source := strings.Replace(
+		oneModel,
+		"          url: https://example.invalid/report\n",
+		"          url: https://example.invalid/report\n"+
+			"        caveat: \"Second, see https://example.invalid/firmware for why.\"\n"+
+			"      hdmi1:\n"+
+			"        mechanism: vcp-input-source\n"+
+			"        value: 0x12\n"+
+			"        caveat: \"First.\"\n"+
+			"        evidence:\n"+
+			"          grade: reported\n"+
+			"          by: \"somebody\"\n"+
+			"          tool: \"ddcutil\"\n"+
+			"          url: https://example.invalid/report\n",
+		1,
+	)
+
+	lines := strings.Split(render(t, source, surround("")), "\n")
+
+	note := indexOfPrefix(lines, "- A note that links")
+	heading := indexOfPrefix(lines, "Caveats:")
+	first := indexOfPrefix(lines, "- `hdmi1`: First.")
+	second := indexOfPrefix(
+		lines,
+		"- `hdmi2`: Second, see <https://example.invalid/firmware> for why.",
+	)
+	sources := indexOfPrefix(lines, "Sources:")
+
+	if note < 0 || heading < 0 || first < 0 || second < 0 || sources < 0 ||
+		note >= heading || heading >= first || first >= second || second >= sources {
+		t.Errorf(
+			"the caveats are missing or out of place (note %d, heading %d, hdmi1 %d, hdmi2 %d, sources %d):\n%s",
+			note,
+			heading,
+			first,
+			second,
+			sources,
+			strings.Join(lines, "\n"),
+		)
+	}
+}

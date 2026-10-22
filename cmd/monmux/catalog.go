@@ -334,6 +334,7 @@ func renderCatalogModel(out io.Writer, entry *catalog.Model) error {
 	page.linef("  Identities:    %s", modelIdentities(entry))
 
 	renderModelInputs(page, entry)
+	renderModelList(page, "Caveats", modelCaveats(entry))
 	renderModelList(page, "Notes", entry.Notes)
 	renderModelList(page, "Sources", entry.Sources)
 
@@ -384,6 +385,21 @@ func renderModelInputs(page *printer, entry *catalog.Model) {
 	for _, row := range rows {
 		page.linef("    %s", renderRow(row, widths))
 	}
+}
+
+// modelCaveats renders an entry's caveats, one line per input that has one, in
+// listing order.
+func modelCaveats(entry *catalog.Model) []string {
+	var lines []string
+
+	for _, input := range entry.RecordedInputs() {
+		caveat, cautioned := entry.InputCaveat(input)
+		if cautioned {
+			lines = append(lines, input.String()+": "+caveat)
+		}
+	}
+
+	return lines
 }
 
 // renderModelList prints a titled list of prose lines, and nothing at all when
@@ -552,6 +568,8 @@ type (
 		ValueHex string `json:"valueHex"`
 		Grade    string `json:"grade"`
 		Evidence string `json:"evidence"`
+		// Caveat is present only when the catalog records one for the input.
+		Caveat string `json:"caveat,omitempty"`
 	}
 )
 
@@ -611,6 +629,7 @@ func asJSONCatalogModel(entry *catalog.Model) jsonCatalogModel {
 		value, _ := entry.InputValue(input)
 		grade, _ := entry.InputGrade(input)
 		evidence, _ := entry.InputEvidence(input)
+		caveat, _ := entry.InputCaveat(input)
 
 		document.Inputs = append(document.Inputs, jsonCatalogInput{
 			Name:      input.String(),
@@ -620,6 +639,7 @@ func asJSONCatalogModel(entry *catalog.Model) jsonCatalogModel {
 			ValueHex:  fmt.Sprintf("0x%02X", value),
 			Grade:     grade.String(),
 			Evidence:  evidence,
+			Caveat:    caveat,
 		})
 	}
 

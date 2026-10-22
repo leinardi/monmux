@@ -178,6 +178,7 @@ model of a vendor.
               date: "2026-01-01"
               tool: Linux (ddcutil)
               note: switched from USB-C to DisplayPort
+          # caveat: "One sentence printed whenever this input is switched."   # optional
   notes:
       - "Anything a reader needs that the table has no column for: a negative report, a conflict, an alias, a quirk."
   sources:
@@ -198,6 +199,17 @@ way and nobody can talk a weak report up in prose. The grades, and what each one
 `note` is optional free text for every grade but `verified`, where it says what was switched.
 `notes` is per-model prose and is rendered under the model in [compatibility.md](compatibility.md);
 it is documentation and never an operation, so nothing written there can reach a monitor.
+
+`caveat` is optional, per input, and is for a known condition under which a unit that matches the
+entry may not do what the value says: a firmware version that needs another value is the case it
+was added for, because monmux cannot read the firmware. `switch` prints it after the line saying the
+command was sent, and in the dry-run block, and `catalog show` lists it. Keep it to one sentence
+that tells the user what to check; the reasoning, the reports and the quirks belong in `notes`. Leave
+the key out when there is nothing to say — writing it empty is an error, not an absence.
+
+There is no model-level caveat. When an entry needs one, add it to the generator, and print it
+together with the input's caveat, never instead of it: an input-level caveat is the more specific
+warning, and a model-level one must not be able to hide it.
 
 Then re-render the Go the binary actually compiles, and commit both files:
 
@@ -239,6 +251,9 @@ Rules the generator refuses and the invariant tests re-check:
 - No text the documentation renders — `by`, `tool`, `date`, `url`, `note`, a `notes` entry or a
   source — holds a `|` or a line break, because the document test reads Markdown table cells and
   single-line bullets.
+- A `caveat`, when the key is written, is a non-empty string of at most 200 bytes with no leading
+  or trailing whitespace, no `|` and no line break. `caveat:`, `caveat: null` and `caveat: ""` are
+  all refused rather than read as "no caveat".
 - The models are written in catalog order: write-enabled first, then by vendor, then by model name.
 - Every model names at least one source.
 - Every identity writes a `product_code`, and every input writes a `value`. Leaving one out is an
@@ -267,9 +282,9 @@ A disabled entry is not a lesser contribution. It is the thing that stops the ne
 ## 7. Update the documentation and the fixtures
 
 - The table and the `### Vendor Model` sections of [compatibility.md](compatibility.md) are
-  generated: `make go-generate` writes them from your `notes` and `sources`, so there are no rows to
-  type and nothing to keep byte-identical by hand. Commit the regenerated file. Anything you want to
-  say that is not in those two lists belongs outside the markers, or in the YAML.
+  generated: `make go-generate` writes them from your `notes`, caveats and `sources`, so there are no
+  rows to type and nothing to keep byte-identical by hand. Commit the regenerated file. Anything you
+  want to say that the YAML has no field for belongs outside the markers.
 - If you add a fixture — a captured EDID, or captured tool output — **sanitize it first**. Replace
   every serial and UUID with the synthetic values in `internal/backend/testdata/README.md`,
   recompute the EDID checksum, and check that the allowlist test passes. It fails the build if any

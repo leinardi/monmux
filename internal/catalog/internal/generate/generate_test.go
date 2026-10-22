@@ -750,3 +750,87 @@ func TestTheRenderedCatalogIsAlreadyFormatted(t *testing.T) {
 		t.Error("the rendered catalog is not gofmt-clean")
 	}
 }
+
+// caveated returns valid with a caveat written on its one input, exactly as the
+// value is spelled in the file, quotes and all.
+func caveated(written string) string {
+	return strings.Replace(
+		valid,
+		"          note: switched from HDMI 1 to DisplayPort\n",
+		"          note: switched from HDMI 1 to DisplayPort\n        caveat: "+written+"\n",
+		1,
+	)
+}
+
+// An input says it has no caveat by leaving the key out, and that renders no
+// line at all; a caveat it does write reaches the generated catalog verbatim.
+func TestACaveatIsRenderedOnlyWhereItIsWritten(t *testing.T) {
+	t.Parallel()
+
+	rendered, err := generate.Generate([]byte(valid))
+	if err != nil {
+		t.Fatalf("a valid catalog was rejected: %v", err)
+	}
+
+	if strings.Contains(string(rendered), "caveat:") {
+		t.Errorf("an input with no caveat rendered one:\n%s", rendered)
+	}
+
+	rendered, err = generate.Generate([]byte(caveated(`"Check the firmware version."`)))
+	if err != nil {
+		t.Fatalf("a catalog with a caveat was rejected: %v", err)
+	}
+
+	if !strings.Contains(string(rendered), `caveat:    "Check the firmware version.",`) {
+		t.Errorf("the caveat was not rendered:\n%s", rendered)
+	}
+}
+
+// yaml.v3 decodes `caveat:`, `caveat: null` and `caveat: ~` into the same
+// empty string a missing key gives, so a check on the decoded string alone
+// would read every one of them as "no caveat". The rows below pin the
+// decoder's behavior as well as the rule: if an upgrade of the library stops
+// telling them apart, this fails rather than the generator going quiet.
+func TestABadCaveatIsRejected(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]string{
+		"an empty value":           "",
+		"null":                     "null",
+		"a tilde":                  "~",
+		"an empty string":          `""`,
+		"a blank string":           `"   "`,
+		"leading whitespace":       `" Check the firmware."`,
+		"trailing whitespace":      `"Check the firmware. "`,
+		"a number":                 "123",
+		"a boolean":                "true",
+		"a map":                    "{text: Check the firmware.}",
+		"a list":                   "[Check the firmware.]",
+		"a pipe":                   `"Check | the firmware."`,
+		"a line break":             `"Check the\nfirmware."`,
+		"one byte over the length": `"` + strings.Repeat("x", 201) + `"`,
+	}
+
+	for name, written := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := generate.Generate([]byte(caveated(written)))
+			if !errors.Is(err, generate.ErrBadCaveat) {
+				t.Errorf("caveat: %s gave %v, want %v", written, err, generate.ErrBadCaveat)
+			}
+		})
+	}
+}
+
+// The limit is inclusive, and a string that merely spells a null is a string.
+func TestACaveatAtTheLimitIsAccepted(t *testing.T) {
+	t.Parallel()
+
+	for _, written := range []string{`"` + strings.Repeat("x", 200) + `"`, `"null"`} {
+		_, err := generate.Generate([]byte(caveated(written)))
+		if err != nil {
+			t.Errorf("caveat: %s was rejected: %v", written, err)
+		}
+	}
+}

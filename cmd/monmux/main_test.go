@@ -1643,3 +1643,168 @@ func TestSwitchJSONSaysWhenIdentificationWasBypassed(t *testing.T) {
 		t.Errorf("a --json run printed no warning:\n%s", stderr)
 	}
 }
+
+// --- caveats ---
+
+// caveated is the one catalog entry that records caveats.
+const caveated = "Samsung/G95NC"
+
+// caveatOf is the caveat the compiled-in catalog records for one input of the
+// caveated entry. The tests read it from the catalog rather than repeat the
+// text, so a reworded caveat changes the catalog and not every test that prints
+// one.
+func caveatOf(t *testing.T, input catalog.Input) string {
+	t.Helper()
+
+	entry, found := catalog.Find(caveated)
+	if !found {
+		t.Fatalf("no catalog entry is named %q", caveated)
+	}
+
+	caveat, cautioned := entry.InputCaveat(input)
+	if !cautioned {
+		t.Fatalf("%s records no caveat for %s", caveated, input)
+	}
+
+	return caveat
+}
+
+// The caveat is what to check when the monitor did not follow, so it comes
+// right after the line saying the command was sent, on stdout.
+func TestASwitchPrintsTheCaveatAfterTheSentLine(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(strange())
+
+	stdout, stderr, code := world.run("switch", "hdmi1", "--unsafe-model", "Samsung/G95NC")
+	if code != exitSent {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	want := "Input-switch command sent (HDMI 1, 0x11) to Samsung G95NC via ddcutil " +
+		"(identification bypassed). Switch not independently confirmed.\n" +
+		"Caveat: " + caveatOf(t, "hdmi1") + "\n"
+	equal(t, "switch hdmi1", stdout, want)
+
+	if strings.Contains(stderr, "Caveat") {
+		t.Errorf("the caveat reached stderr, which carries only the banner:\n%s", stderr)
+	}
+
+	executed := world.driver.Executed()
+	if len(executed) != 1 || executed[0].Value() != 0x11 {
+		t.Errorf("the backend executed %v, want one 0x11", executed)
+	}
+}
+
+func TestADryRunPrintsTheCaveat(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(strange())
+
+	stdout, stderr, code := world.run(
+		"switch", "hdmi3", "--unsafe-model", "Samsung/G95NC", "--dry-run",
+	)
+	if code != exitSent {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	want := "  Caveat:  " + caveatOf(t, "hdmi3") + "\n" +
+		"No DDC write was performed.\n"
+	if !strings.HasSuffix(stdout, want) {
+		t.Errorf("the dry run does not end with the caveat and the promise:\n%s", stdout)
+	}
+
+	if world.wrote() {
+		t.Error("a dry run wrote to a monitor")
+	}
+}
+
+// An input with no caveat prints exactly what it printed before caveats existed.
+func TestASwitchWithNoCaveatPrintsNone(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(strange())
+
+	stdout, stderr, code := world.run("switch", "dp", "--unsafe-model", "Samsung/G95NC")
+	if code != exitSent {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	if strings.Contains(stdout, "Caveat") {
+		t.Errorf("an input with no caveat printed one:\n%s", stdout)
+	}
+
+	jsonOut, _, _ := newWorld(strange()).run(
+		"switch", "dp", "--unsafe-model", "Samsung/G95NC", "--json",
+	)
+	if strings.Contains(jsonOut, `"caveat"`) {
+		t.Errorf("an input with no caveat has the field:\n%s", jsonOut)
+	}
+}
+
+func TestSwitchJSONCarriesTheCaveat(t *testing.T) {
+	t.Parallel()
+
+	for _, args := range [][]string{
+		{"switch", "hdmi2", "--unsafe-model", "Samsung/G95NC", "--json"},
+		{"switch", "hdmi2", "--unsafe-model", "Samsung/G95NC", "--json", "--dry-run"},
+	} {
+		stdout, _, code := newWorld(strange()).run(args...)
+		if code != exitSent {
+			t.Fatalf("%v: exit = %d", args, code)
+		}
+
+		var document jsonSwitch
+
+		err := json.Unmarshal([]byte(stdout), &document)
+		if err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, stdout)
+		}
+
+		if document.Caveat != caveatOf(t, "hdmi2") {
+			t.Errorf("%v: caveat = %q", args, document.Caveat)
+		}
+	}
+}
+
+func TestCatalogShowListsTheCaveats(t *testing.T) {
+	t.Parallel()
+
+	stdout, _, code := newWorld().run("catalog", "show", "Samsung/G95NC")
+	if code != exitSent {
+		t.Fatalf("exit = %d", code)
+	}
+
+	want := "  Caveats:\n" +
+		"    - hdmi1: " + caveatOf(t, "hdmi1") + "\n" +
+		"    - hdmi2: " + caveatOf(t, "hdmi2") + "\n" +
+		"    - hdmi3: " + caveatOf(t, "hdmi3") + "\n" +
+		"  Notes:\n"
+	if !strings.Contains(stdout, want) {
+		t.Errorf("catalog show does not list the caveats before the notes:\n%s", stdout)
+	}
+
+	stdout, _, _ = newWorld().run("catalog", "show", "Samsung/G95NC", "--json")
+
+	var document jsonCatalogModel
+
+	err := json.Unmarshal([]byte(stdout), &document)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, stdout)
+	}
+
+	entry, _ := catalog.Find("Samsung/G95NC")
+
+	for _, input := range document.Inputs {
+		caveat, _ := entry.InputCaveat(catalog.Input(input.Name))
+
+		if input.Caveat != caveat {
+			t.Errorf("input %s: caveat = %q, want %q", input.Name, input.Caveat, caveat)
+		}
+	}
+
+	shown, _, _ := newWorld().run("catalog", "show", "LG/38WR85QC-W")
+	if strings.Contains(shown, "Caveats") {
+		t.Errorf("an entry with no caveat lists the heading:\n%s", shown)
+	}
+}

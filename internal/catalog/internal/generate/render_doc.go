@@ -61,6 +61,10 @@ const (
 // reads the document back splits a section on.
 const sourcesHeading = "Sources:"
 
+// caveatsHeading introduces a model's per-input caveats, between its notes and
+// its sources. It is written only for a model that has one.
+const caveatsHeading = "Caveats:"
+
 // noIdentities is what the Identities column says for an entry that records no
 // EDID fingerprint, and so can never match a display.
 const noIdentities = "none"
@@ -108,9 +112,14 @@ func RenderDocument(document Document) ([]string, error) {
 		return nil, err
 	}
 
+	notes, err := renderNotes(document)
+	if err != nil {
+		return nil, err
+	}
+
 	// A leading blank keeps a blank line between the begin marker and the first
 	// heading, which is what Markdown wants around a heading.
-	lines := slices.Concat([]string{""}, table, renderNotes(document))
+	lines := slices.Concat([]string{""}, table, notes)
 
 	err = checkMarkers(lines)
 	if err != nil {
@@ -204,10 +213,10 @@ func renderIdentityList(identities []Identity) string {
 	return strings.Join(rendered, ", ")
 }
 
-// renderNotes renders one subsection per model, carrying the prose and the
-// references the catalog file records. Neither is ever an operation: nothing
-// here reaches a monitor.
-func renderNotes(document Document) []string {
+// renderNotes renders one subsection per model, carrying the prose, the
+// caveats and the references the catalog file records. None of it is ever an
+// operation: nothing here reaches a monitor.
+func renderNotes(document Document) ([]string, error) {
 	lines := []string{notesHeading, ""}
 
 	for index := range document.Models {
@@ -219,6 +228,12 @@ func renderNotes(document Document) []string {
 			lines = append(lines, "- "+autolink(note))
 		}
 
+		caveats, err := renderCaveats(model)
+		if err != nil {
+			return nil, err
+		}
+
+		lines = append(lines, caveats...)
 		lines = append(lines, "", sourcesHeading, "")
 
 		for _, source := range model.Sources {
@@ -230,7 +245,35 @@ func renderNotes(document Document) []string {
 		lines = append(lines, "")
 	}
 
-	return lines
+	return lines, nil
+}
+
+// renderCaveats renders a model's caveats as a titled list, one bullet per input
+// in catalog order, or nothing for a model that has none. The table has no
+// column for a caveat: it is rare, and a column that is empty on almost every
+// row would only widen the table.
+func renderCaveats(model *Model) ([]string, error) {
+	names, err := sortedInputNames(model)
+	if err != nil {
+		return nil, err
+	}
+
+	var bullets []string
+
+	for _, name := range names {
+		entry := model.Inputs[name.String()]
+
+		caveat := entry.CaveatText()
+		if caveat != "" {
+			bullets = append(bullets, fmt.Sprintf("- %#q: %s", name, autolink(caveat)))
+		}
+	}
+
+	if len(bullets) == 0 {
+		return nil, nil
+	}
+
+	return slices.Concat([]string{"", caveatsHeading, ""}, bullets), nil
 }
 
 // FullName is how the documentation names a model, and how the test that reads
