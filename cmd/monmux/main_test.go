@@ -2107,3 +2107,30 @@ func TestAnIdentifiedG95NCSwitchPrintsTheCaveat(t *testing.T) {
 		t.Errorf("DisplayPort has no caveat but printed one:\n%s", plain)
 	}
 }
+
+// The banner names the risk that is true of the run: a verified value was run
+// on that model, so what is unproven is only that this display is one.
+func TestTheUnsafeBannerDoesNotCallAVerifiedValueUnverified(t *testing.T) {
+	t.Parallel()
+
+	_, stderr, code := newWorld(strange()).run(
+		"switch", "dp", "--unsafe-model", "LG/38WR85QC-W", "--dry-run",
+	)
+	if code != exitSent {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	for _, wanted := range []string{
+		"evidence: verified",
+		"The value was verified on that model,\nbut nothing checked that this display is one.",
+		"OSD",
+	} {
+		if !strings.Contains(stderr, wanted) {
+			t.Errorf("the warning does not say %q:\n%s", wanted, stderr)
+		}
+	}
+
+	if strings.Contains(stderr, "never verified") {
+		t.Errorf("the warning calls a verified value unverified:\n%s", stderr)
+	}
+}

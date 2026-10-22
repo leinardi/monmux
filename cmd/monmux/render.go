@@ -178,10 +178,22 @@ func renderUnsafeWarning(
 		assumedGrade(assumed, input),
 	)
 	page.linef("  Input:   %s", assumedInput(assumed, input))
-	page.linef("The display above was not identified, and the value was never verified on")
-	page.linef("this model by this project. A wrong value can leave the monitor on an input")
-	page.linef("with no signal; recover with the monitor's own OSD or by unplugging the")
-	page.linef("other inputs.")
+
+	// The risk named is the one that is true of this run. A verified value
+	// was run on that model, so what is unproven is only that this display is
+	// one; saying it was never verified would contradict the evidence line
+	// just above, and teach the reader to skip the banner.
+	grade, recorded := assumed.InputGrade(input)
+	if recorded && grade == catalog.GradeVerified {
+		page.linef("The display above was not identified. The value was verified on that model,")
+		page.linef("but nothing checked that this display is one.")
+	} else {
+		page.linef("The display above was not identified, and the value was never verified on")
+		page.linef("this model by this project.")
+	}
+
+	page.linef("A wrong value can leave the monitor on an input with no signal; recover with")
+	page.linef("the monitor's own OSD or by unplugging the other inputs.")
 
 	return page.err
 }
