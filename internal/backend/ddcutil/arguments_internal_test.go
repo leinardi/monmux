@@ -54,9 +54,8 @@ func TestArgumentsAreTheSetvcpInvocation(t *testing.T) {
 			},
 		},
 		// The standard feature goes to the ordinary DDC/CI source address, so
-		// there is no --i2c-source-addr. No end-to-end Plan golden test for this
-		// mechanism is possible until a model using it is write-enabled; the
-		// first pull request that enables one adds it.
+		// there is no --i2c-source-addr. The end-to-end golden test for it is
+		// TestGoldenCommandForTheG95NC.
 		"the standard Input Source feature": {
 			mechanism: catalog.MechanismInputSource,
 			value:     0x0F,

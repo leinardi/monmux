@@ -33,7 +33,7 @@ import (
 var errUnknownModel = errors.New("no catalog entry is named")
 
 // The two spellings of one entry, used wherever a message has to show what a
-// name looks like. They name the one write-enabled model, so an example a reader
+// name looks like. They name a write-enabled model, so an example a reader
 // copies is an entry that exists.
 const (
 	exampleModelName = "LG/38WR85QC-W"

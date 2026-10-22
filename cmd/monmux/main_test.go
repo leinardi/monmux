@@ -1808,3 +1808,302 @@ func TestCatalogShowListsTheCaveats(t *testing.T) {
 		t.Errorf("an entry with no caveat lists the heading:\n%s", shown)
 	}
 }
+
+// --- the Samsung G95NC: caveats and a refused identity, end to end ---
+
+// g95nc is the Samsung G95NC reporting productCode, identified and writable.
+// 0x7476 is DisplayPort, 0x73D0 is any HDMI input, and 0x747A is DisplayPort
+// with Picture-by-Picture on, which the catalog refuses.
+func g95nc(productCode uint16) backend.Display {
+	return backend.Display{
+		Identity: edid.Identity{
+			Manufacturer: "SAM",
+			ProductCode:  productCode,
+			SerialNumber: 0x01020304,
+			SerialString: "TESTSERIAL01",
+			ModelName:    "Odyssey G95NC",
+		},
+		Handle:   "card1-DP-1",
+		Label:    "card1-DP-1",
+		Writable: true,
+		Status:   backend.StatusOK,
+	}
+}
+
+// pbpReason is the reason the catalog refuses the G95NC's PBP identity with.
+func pbpReason(t *testing.T) string {
+	t.Helper()
+
+	entry, _ := catalog.Find(caveated)
+
+	reason, refused := entry.IdentityRefusal(g95nc(0x747A).Identity)
+	if !refused {
+		t.Fatal("the G95NC no longer refuses its Picture-by-Picture identity")
+	}
+
+	return reason
+}
+
+// planned reports whether the backend was asked to plan or execute anything.
+func (w *world) planned() bool {
+	calls := w.driver.Calls()
+
+	return slices.Contains(calls, backend.CallPlan) || slices.Contains(calls, backend.CallExecute)
+}
+
+// The PBP identity is recognized, and refused for its mode before anything is
+// planned, whatever the input - one the model enables included.
+func TestSwitchRefusesTheG95NCInPictureByPicture(t *testing.T) {
+	t.Parallel()
+
+	for _, input := range []string{"dp", "hdmi1"} {
+		world := newWorld(g95nc(0x747A))
+
+		stdout, stderr, code := world.run("switch", input)
+		if code != exitRefused || stdout != "" {
+			t.Fatalf(
+				"%s: exit = %d, stdout = %q, want %d and nothing",
+				input,
+				code,
+				stdout,
+				exitRefused,
+			)
+		}
+
+		for _, wanted := range []string{
+			"Refusing to switch input.",
+			"The monitor is recognized, but monmux does not switch it in the state it reports.",
+			pbpReason(t),
+			"Product ID:   0x747A",
+			"No DDC write was performed.",
+		} {
+			if !strings.Contains(stderr, wanted) {
+				t.Errorf("%s: the refusal does not say %q:\n%s", input, wanted, stderr)
+			}
+		}
+
+		if strings.Contains(stderr, "TESTSERIAL01") {
+			t.Errorf("%s: the refusal leaked the serial:\n%s", input, stderr)
+		}
+
+		if world.planned() || world.wrote() {
+			t.Errorf("%s: a refused switch reached the backend: %v", input, world.driver.Calls())
+		}
+	}
+}
+
+func TestSwitchJSONRefusesTheG95NCInPictureByPicture(t *testing.T) {
+	t.Parallel()
+
+	for _, showSerial := range []bool{false, true} {
+		args := []string{"switch", "dp", "--json"}
+		if showSerial {
+			args = append(args, "--show-serial")
+		}
+
+		world := newWorld(g95nc(0x747A))
+
+		stdout, _, code := world.run(args...)
+		if code != exitRefused {
+			t.Fatalf("%v: exit = %d", args, code)
+		}
+
+		checkPBPRefusal(t, stdout, showSerial)
+
+		if world.planned() || world.wrote() {
+			t.Errorf("%v: a refused switch reached the backend: %v", args, world.driver.Calls())
+		}
+	}
+}
+
+// checkPBPRefusal checks one `switch --json` document refusing the PBP identity.
+func checkPBPRefusal(t *testing.T, stdout string, showSerial bool) {
+	t.Helper()
+
+	var document jsonSwitch
+
+	err := json.Unmarshal([]byte(stdout), &document)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, stdout)
+	}
+
+	if document.Outcome != outcomeRefused || document.WriteStatus != writeStatusNone ||
+		document.Refusal == nil || document.Refusal.Reason != "unsupported-mode" ||
+		document.Refusal.Detail != pbpReason(t) || document.Caveat != "" {
+		t.Fatalf("document = %s", stdout)
+	}
+
+	detected := document.Refusal.Detected
+	if len(detected) != 1 || detected[0].ProductCode != 0x747A ||
+		(detected[0].SerialString == "TESTSERIAL01") != showSerial {
+		t.Errorf("detected = %+v (--show-serial %t)", detected, showSerial)
+	}
+}
+
+// --unsafe-model skips identification, and the refusal with it: that is the
+// override, and it still warns and still dry-runs first.
+func TestUnsafeModelOverridesThePictureByPictureRefusal(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(g95nc(0x747A))
+
+	stdout, stderr, code := world.run(
+		"switch", "dp", "--unsafe-model", "Samsung/G95NC", "--dry-run",
+	)
+	if code != exitSent {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	if !strings.Contains(stderr, "WARNING: identification bypassed by --unsafe-model.") ||
+		!strings.Contains(stderr, "Display: card1-DP-1 (SAM 0x747A (Odyssey G95NC))") {
+		t.Errorf("the override did not warn about the display:\n%s", stderr)
+	}
+
+	if !strings.Contains(stdout, "Input:   DisplayPort (0x0F)") ||
+		!strings.Contains(stdout, "No DDC write was performed.") {
+		t.Errorf("the dry run is not the expected one:\n%s", stdout)
+	}
+
+	if world.wrote() {
+		t.Error("a dry run wrote to a monitor")
+	}
+}
+
+func TestInfoReportsTheG95NCPictureByPictureRefusal(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(g95nc(0x747A))
+
+	stdout, _, code := world.run("info")
+	if code != exitSent {
+		t.Fatalf("exit = %d", code)
+	}
+
+	for _, wanted := range []string{
+		"  Model:   Samsung G95NC\n",
+		"  Inputs:  none\n",
+		"  Refused: " + pbpReason(t) + "\n",
+	} {
+		if !strings.Contains(stdout, wanted) {
+			t.Errorf("info does not say %q:\n%s", wanted, stdout)
+		}
+	}
+
+	stdout, _, _ = world.run("info", "--json")
+
+	var document jsonReport
+
+	err := json.Unmarshal([]byte(stdout), &document)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, stdout)
+	}
+
+	display := document.Displays[0]
+	if display.Match != "exact" || display.Model != "Samsung G95NC" ||
+		len(display.EnabledInputs) != 0 || display.Refused != pbpReason(t) ||
+		display.Identity.SerialString != "" {
+		t.Errorf("info --json = %+v", display)
+	}
+
+	if world.planned() || world.wrote() {
+		t.Errorf("info reached the write path: %v", world.driver.Calls())
+	}
+}
+
+// An identity the model allows reports no refusal, and the full set of inputs.
+func TestInfoReportsTheG95NCOverHDMIAsSwitchable(t *testing.T) {
+	t.Parallel()
+
+	stdout, _, _ := newWorld(g95nc(0x73D0)).run("info", "--json")
+
+	var document jsonReport
+
+	err := json.Unmarshal([]byte(stdout), &document)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, stdout)
+	}
+
+	display := document.Displays[0]
+	if display.Refused != "" ||
+		!slices.Equal(display.EnabledInputs, []string{"dp", "hdmi1", "hdmi2", "hdmi3"}) {
+		t.Errorf("info --json = %+v", display)
+	}
+
+	if strings.Contains(stdout, `"refused"`) {
+		t.Errorf("an allowed identity carries the field:\n%s", stdout)
+	}
+}
+
+func TestCatalogShowListsTheRefusedIdentity(t *testing.T) {
+	t.Parallel()
+
+	stdout, _, _ := newWorld().run("catalog", "show", caveated)
+
+	for _, wanted := range []string{
+		"  Write-enabled: yes\n",
+		"  Identities:    SAM/0x7476, SAM/0x73D0\n",
+		"  Refused identities:\n    - SAM/0x747A: " + pbpReason(t) + "\n",
+	} {
+		if !strings.Contains(stdout, wanted) {
+			t.Errorf("catalog show does not say %q:\n%s", wanted, stdout)
+		}
+	}
+
+	if strings.Contains(stdout, "Not write-enabled") {
+		t.Errorf("catalog show calls an enabled entry disabled:\n%s", stdout)
+	}
+
+	stdout, _, _ = newWorld().run("catalog", "show", caveated, "--json")
+
+	var document jsonCatalogModel
+
+	err := json.Unmarshal([]byte(stdout), &document)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, stdout)
+	}
+
+	want := []jsonRefusedIdentity{{Identity: "SAM/0x747A", Reason: pbpReason(t)}}
+	if !reflect.DeepEqual(document.RefusedIdentities, want) ||
+		!slices.Equal(document.Identities, []string{"SAM/0x7476", "SAM/0x73D0"}) {
+		t.Errorf("catalog show --json = %+v", document)
+	}
+
+	stdout, _, _ = newWorld().run("catalog", "show", "LG/38WR85QC-W", "--json")
+	if !strings.Contains(stdout, `"refusedIdentities": []`) {
+		t.Errorf("an entry with no refused identity lacks the empty list:\n%s", stdout)
+	}
+}
+
+// Identified rather than assumed: the caveat follows the sent line, the bytes
+// are the catalog's, and nothing says identification was bypassed.
+func TestAnIdentifiedG95NCSwitchPrintsTheCaveat(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(g95nc(0x73D0))
+
+	stdout, stderr, code := world.run("switch", "hdmi1")
+	if code != exitSent || stderr != "" {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+
+	want := "Input-switch command sent (HDMI 1, 0x11) to Samsung G95NC via ddcutil. " +
+		"Switch not independently confirmed.\n" +
+		"Caveat: " + caveatOf(t, "hdmi1") + "\n"
+	equal(t, "switch hdmi1", stdout, want)
+
+	executed := world.driver.Executed()
+	if len(executed) != 1 || executed[0].Value() != 0x11 ||
+		executed[0].Mechanism() != catalog.MechanismInputSource {
+		t.Errorf("the backend executed %v, want one 0x11 over vcp-input-source", executed)
+	}
+
+	dry, _, _ := newWorld(g95nc(0x73D0)).run("switch", "hdmi1", "--dry-run")
+	if !strings.Contains(dry, "  Caveat:  "+caveatOf(t, "hdmi1")+"\n") {
+		t.Errorf("the dry run does not carry the caveat:\n%s", dry)
+	}
+
+	plain, _, _ := newWorld(g95nc(0x7476)).run("switch", "dp")
+	if strings.Contains(plain, "Caveat") {
+		t.Errorf("DisplayPort has no caveat but printed one:\n%s", plain)
+	}
+}

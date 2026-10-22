@@ -46,12 +46,15 @@ they still assert that execution is refused.
 tested directly. The backends are tested through a recording fake runner that answers from captured
 output and records what it was asked to run.
 
-**Golden command tests.** Each backend has a test pinning the exact arguments it produces for the
-catalog's model, byte for byte:
+**Golden command tests.** Each backend has a test pinning the exact arguments it produces for each
+write-enabled model, byte for byte — the LG on `lg-alt-input`, and the Samsung G95NC on
+`vcp-input-source`, the latter end to end from the enumerated display through the policy decision:
 
 ```text
 ddcutil --edid <256 hex> setvcp 0xF4 0xD1 --i2c-source-addr=0x50 --noverify
 m1ddc display <UUID> set input-alt 209
+ddcutil --edid <256 hex> setvcp 0x60 0x11 --noverify
+m1ddc display <UUID> set input 17
 ```
 
 These exist so that a refactor cannot quietly change what reaches a monitor. If the bytes change,
@@ -62,7 +65,10 @@ mechanism and a value — the `vcp-input-source` invocation, and the one catalog
 fit in a byte. That table can render argv the catalog does not enable, which is deliberately less
 power than it sounds: there is still no exported way to build a `catalog.Operation`, so a test can
 print an invocation and still not make a backend run one. A mechanism with no write-enabled model
-has no end-to-end `Plan` test, and cannot: the first pull request that enables such a model adds it.
+has no end-to-end `Plan` test, and cannot: the first pull request that enables such a model adds it,
+as the G95NC's did for `vcp-input-source`. The ddcutil one runs against a synthetic G95NC EDID,
+the LG fixture with its manufacturer, product code and model name rewritten, because no G95NC EDID
+has been captured.
 
 **Golden CLI output.** `info`, `info --json`, `doctor`, both dry-run renderings and the success
 sentence are compared exactly, including the redaction. Output is an interface too.
@@ -243,9 +249,10 @@ write-enabled model may carry — see [adding-a-monitor.md](adding-a-monitor.md)
 ### The first model of a mechanism
 
 A mechanism enters the catalog with a **disabled** record, so its backend path has never reached a
-monitor. `vcp-input-source` has since reached one, a Samsung G95NC through m1ddc under
-`--unsafe-model`, but not through ddcutil, and no model using it is write-enabled. Enabling the
-first model that uses one is therefore two firsts at once, and needs more than the checklist above:
+monitor. Both existing mechanisms are past their first enabling — `vcp-input-source` with the
+Samsung G95NC, verified through m1ddc only, whose ddcutil path has still not reached a monitor — so
+this applies to the next mechanism added. Enabling the first model that uses one is two firsts at
+once, and needs more than the checklist above:
 
 1. Work through the whole checklist for the model, substituting that mechanism's command line — the
    two are in [backends.md](backends.md). The model is not write-enabled yet, so `monmux switch`

@@ -38,7 +38,8 @@
 # when it has several; never both. The mechanism is a per-model property and
 # never a fallback. Two are implemented: lg-alt-input, the LG side channel
 # (source address 0x50, VCP 0xF4), and vcp-input-source, the standard Input
-# Source feature (VCP 0x60). Only the first has ever reached a monitor.
+# Source feature (VCP 0x60). Both have reached a monitor; vcp-input-source only
+# through m1ddc.
 #
 # An identity may pin `model_name`, the EDID descriptor 0xFC text, because LG
 # assigns one product code to several products. Leave it out unless two models
@@ -112,6 +113,73 @@ models:
     sources:
       - "Direct observation on the tested unit: EDID GSM/0x77D3 (DisplayPort) and GSM/0x77D4 (USB-C), model string LG ULTRAWIDE"
       - https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors
+
+  # --------------------------------------------------------------------------
+  # Samsung
+  # --------------------------------------------------------------------------
+  - name: G95NC
+    vendor: Samsung
+    identities:
+      - manufacturer: SAM
+        product_code: 0x7476
+      - manufacturer: SAM
+        product_code: 0x73D0
+    refused_identities:
+      - manufacturer: SAM
+        product_code: 0x747A
+        reason: "Picture-by-Picture is on: this product code was reported with PBP 50/50 over DisplayPort, and no switch has been tested in that mode. Turn PBP and PIP off in the OSD."
+    write_enabled: true
+    inputs:
+      hdmi1:
+        mechanism: vcp-input-source
+        value: 0x11
+        evidence:
+          grade: verified
+          date: "2026-10-21"
+          tool: "macOS (monmux 0.7.0 with m1ddc 1.2.0), firmware M-C9557GGPA-1009.2"
+          note: "switched from DisplayPort to HDMI 1 under --unsafe-model, reported by ema987 in monmux issue 80"
+        caveat: "Firmware M-C9557GGPA-1007.0 was reported to switch HDMI 1 with 0x05 instead. If the monitor did not switch, check the firmware version in the OSD."
+      hdmi2:
+        mechanism: vcp-input-source
+        value: 0x12
+        evidence:
+          grade: verified
+          date: "2026-10-21"
+          tool: "macOS (monmux 0.7.0 with m1ddc 1.2.0), firmware M-C9557GGPA-1009.2"
+          note: "switched from DisplayPort to HDMI 2 under --unsafe-model, reported by ema987 in monmux issue 80"
+        caveat: "Firmware M-C9557GGPA-1007.0 was reported to switch HDMI 2 with 0x06 instead. If the monitor did not switch, check the firmware version in the OSD."
+      hdmi3:
+        mechanism: vcp-input-source
+        value: 0x32
+        evidence:
+          grade: verified
+          date: "2026-10-21"
+          tool: "macOS (monmux 0.7.0 with m1ddc 1.2.0), firmware M-C9557GGPA-1009.2"
+          note: "switched from DisplayPort to HDMI 3 under --unsafe-model, reported by ema987 in monmux issue 80"
+        caveat: "0x32 is known to work on firmware M-C9557GGPA-1009.2 only. If the monitor did not switch, check the firmware version in the OSD."
+      dp:
+        mechanism: vcp-input-source
+        value: 0x0F
+        evidence:
+          grade: verified
+          date: "2026-10-21"
+          tool: "macOS (monmux 0.6.2 and 0.7.0 with m1ddc 1.2.0), firmware M-C9557GGPA-1009.2"
+          note: "switched from HDMI 2 to DisplayPort under --unsafe-model on 0.6.2 and again on 0.7.0, reported by ema987 in monmux issue 80"
+    notes:
+      - "The Odyssey Neo G9 57 inch; ddcutil issue 397 names model codes LS57CG952NUXEN and LS57CG952NNXZA."
+      - "Enabled on ema987's runs through `--unsafe-model` on macOS, so through m1ddc only. It is the first write-enabled model of the `vcp-input-source` mechanism, and the ddcutil path for that mechanism has not reached this monitor or any other."
+      - "The HDMI values depend on the firmware. On M-C9557GGPA-1009.2, ema987 switched HDMI 1, 2 and 3 with 0x11, 0x12 and 0x32, first from m1ddc and then through monmux 0.7.0, which matches the 0x11 and 0x12 mwd102 lists for 1009.2, while 0x05 and 0x06 sent through monmux did nothing, from either cable. On 1007.0, ema987 and jimmy-tr33 in ddcutil issue 397 switched HDMI 1 and HDMI 2 with 0x05 and 0x06 from ddcutil. monmux cannot tell the two firmware versions apart, so a unit still on 1007.0 matches this entry and is expected to need the old values; every HDMI input carries a caveat saying so."
+      - "HDMI 3 switches with 0x32 on 1009.2. mwd102 reads it back as 0x01, and writing 0x01 does not switch; the ddc-mqtt project configures 7 for it. DisplayPort is 0x0F on both firmware versions. PBP and PIP use vendor codes 0xE2 and 0xE3, which ema987 found absent on firmware 1007.0 and present on 1009.2; out of scope either way."
+      - "The monitor answers DDC only on the input it is showing: once it leaves an input, every m1ddc call over that cable fails, reads included. A machine can switch the monitor away from itself but not back; the way back is the other source, or the OSD."
+      - "Two identities, both observed by ema987 with the EDID model name `Odyssey G95NC`, which is not used for matching: `SAM/0x7476` over DisplayPort and `SAM/0x73D0` over each of HDMI 1, 2 and 3."
+      - "With Picture-by-Picture on at 50/50, the DisplayPort product code becomes 0x747A. That identity is refused rather than left unknown, so that monmux names the monitor and says to turn the mode off: nobody has tested a switch in it. The codes PBP gives over HDMI, and those of the other PBP and PIP layouts, have not been captured, and are not guessed."
+      - "With DisplayPort and HDMI both connected to the same Mac, the monitor is listed twice with the same alphanumeric serial, so `--serial` cannot pick one; unplug one cable."
+    sources:
+      - https://github.com/rockowitz/ddcutil/issues/397
+      - https://github.com/mwd102/g95nc-ddc
+      - https://github.com/moimart/ddc-mqtt
+      - https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843
+      - https://github.com/leinardi/monmux/issues/80#issuecomment-6325587801
 
   # ==========================================================================
   # Recorded only: the models monmux refuses to switch.
@@ -2218,60 +2286,6 @@ models:
       - "A CRG9; the report gives no regional suffix. DP-2 cannot be selected from any input: philipp1992 tried every value from 0 to 30 and pwhelan, on a C49RG9 in the same thread, brute-forced every 16-bit value. Switching to HDMI works but the value is not stated. 0x09 is Tuner-1 in the MCCS specification."
     sources:
       - https://github.com/rockowitz/ddcutil/issues/226
-  - name: G95NC
-    vendor: Samsung
-    identities: []
-    write_enabled: false
-    inputs:
-      hdmi1:
-        mechanism: vcp-input-source
-        value: 0x11
-        evidence:
-          grade: reported
-          by: "ema987 (monmux issue 80)"
-          tool: "m1ddc 1.2.0 on macOS, sent directly, firmware M-C9557GGPA-1009.2"
-          url: https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843
-          note: "0x05 sent through monmux did nothing on the same unit"
-        caveat: "Firmware M-C9557GGPA-1007.0 was reported to switch HDMI 1 with 0x05 instead. If the monitor did not switch, check the firmware version in the OSD."
-      hdmi2:
-        mechanism: vcp-input-source
-        value: 0x12
-        evidence:
-          grade: reported
-          by: "ema987 (monmux issue 80)"
-          tool: "m1ddc 1.2.0 on macOS, sent directly, firmware M-C9557GGPA-1009.2"
-          url: https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843
-          note: "0x06 sent through monmux did nothing on the same unit"
-        caveat: "Firmware M-C9557GGPA-1007.0 was reported to switch HDMI 2 with 0x06 instead. If the monitor did not switch, check the firmware version in the OSD."
-      hdmi3:
-        mechanism: vcp-input-source
-        value: 0x32
-        evidence:
-          grade: reported
-          by: "ema987 (monmux issue 80)"
-          tool: "m1ddc 1.2.0 on macOS, sent directly, firmware M-C9557GGPA-1009.2"
-          url: https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843
-        caveat: "0x32 is known to work on firmware M-C9557GGPA-1009.2 only. If the monitor did not switch, check the firmware version in the OSD."
-      dp:
-        mechanism: vcp-input-source
-        value: 0x0F
-        evidence:
-          grade: verified
-          date: "2026-10-10"
-          tool: "macOS (monmux 0.6.2 with m1ddc 1.2.0), firmware M-C9557GGPA-1009.2"
-          note: "switched from HDMI 2 to DisplayPort under --unsafe-model, reported by ema987 in monmux issue 80"
-    notes:
-      - "The Odyssey Neo G9 57 inch; ddcutil issue 397 names model codes LS57CG952NUXEN and LS57CG952NNXZA."
-      - "The HDMI values depend on the firmware. On M-C9557GGPA-1009.2, ema987 switched HDMI 1, 2 and 3 with 0x11, 0x12 and 0x32 from m1ddc, which matches the 0x11 and 0x12 mwd102 lists for 1009.2, while 0x05 and 0x06 sent through monmux did nothing, from either cable. On 1007.0, ema987 and jimmy-tr33 in ddcutil issue 397 switched HDMI 1 and HDMI 2 with 0x05 and 0x06 from ddcutil. The catalog records the 1009.2 values. monmux cannot tell the two firmware versions apart, so a unit still on 1007.0 is expected to need the old values, and a report verifying this model has to name the firmware version shown in the OSD."
-      - "HDMI 3 switches with 0x32 on 1009.2. mwd102 reads it back as 0x01, and writing 0x01 does not switch; the ddc-mqtt project configures 7 for it. DisplayPort is 0x0F on both firmware versions. PBP and PIP use vendor codes 0xE2 and 0xE3, which ema987 found absent on firmware 1007.0 and present on 1009.2; out of scope either way."
-      - "The monitor answers DDC only on the input it is showing: once it leaves an input, every m1ddc call over that cable fails, reads included. A machine can switch the monitor away from itself but not back; the way back is the other source, or the OSD."
-      - "EDID, as text only: manufacturer `SAM`, model name `Odyssey G95NC`, product code 0x7476 over DisplayPort and 0x73D0 over HDMI 2. HDMI 1 and HDMI 3 have not been captured. These become identities when the model is enabled, not before."
-      - "With DisplayPort and HDMI both connected to the same Mac, the monitor is listed twice with the same alphanumeric serial, so `--serial` cannot pick one; unplug one cable."
-    sources:
-      - https://github.com/rockowitz/ddcutil/issues/397
-      - https://github.com/mwd102/g95nc-ddc
-      - https://github.com/moimart/ddc-mqtt
-      - https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843
   - name: LC49G95T
     vendor: Samsung
     identities: []
@@ -2305,7 +2319,7 @@ models:
           url: https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md
           note: "reading VCP 0x60 back afterwards gives 0x01, which is not the value that selects the input"
     notes:
-      - "The first record of the `vcp-input-source` mechanism, and the first entry that is not an LG. It is disabled and carries no identity like every other unverified entry. The mechanism has since reached one monitor, the Samsung G95NC through m1ddc under `--unsafe-model`, and no model using it is write-enabled: enabling this one belongs in the [testing.md](testing.md) checklist rather than in a routine catalog flip."
+      - "The first record of the `vcp-input-source` mechanism, and the first entry that is not an LG. It is disabled and carries no identity like every other unverified entry. The first model enabled on the mechanism is the Samsung G95NC, verified through m1ddc only; every report for this one comes from ddcutil, a path that has not reached a monitor yet, so enabling it belongs in the [testing.md](testing.md) checklist rather than in a routine catalog flip."
       - "The values the monitor reports back are not the values that select an input. After a switch, reading VCP 0x60 gives 0x03 for DP1, 0x04 for DP2 and 0x01 for HDMI, and writing those back does not switch. That is one reason monmux never confirms a switch by reading a monitor."
       - "DDC/CI answers only on the HDMI input; the DisplayPort inputs do not expose slave address 0x37 at all, so the switch has to be sent from HDMI."
       - "Switching to an input with no signal wedges the monitor's DDC engine until a link reset or a trip through the OSD. Never switch blind: whoever verifies this model needs the target input already connected."

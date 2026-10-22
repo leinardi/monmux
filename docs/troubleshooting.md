@@ -157,8 +157,7 @@ displays and is refused. In order of preference:
 ### `input-not-enabled`
 
 The monitor is supported, but that input is not enabled for it — nobody has tested that value on
-that model. `monmux info` lists the inputs that are enabled. `hdmi1` and `hdmi2` are not enabled for
-any model today.
+that model. `monmux info` lists the inputs that are enabled.
 
 This refusal is not a limitation to work around. Enabling an input means testing it on a real unit
 and recording the evidence.

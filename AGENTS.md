@@ -41,8 +41,9 @@ CI runs no monmux command at all; a workflow that did would be a monitor write b
 a fail-closed policy: a write happens only when the attached monitor is positively identified as a
 model in the built-in supported-monitor catalog *and* the requested input is explicitly enabled for
 that model — except under the `--unsafe-model` override, the one documented exception, which is
-spelled out in invariants 1 and 2 below. One model is verified so far (LG 38WR85QC-W); nothing in
-the code, CLI, or docs is vendor-specific except the catalog entries and the mechanisms they use.
+spelled out in invariants 1 and 2 below. Two models are verified so far (LG 38WR85QC-W and Samsung
+G95NC); nothing in the code, CLI, or docs is vendor-specific except the catalog entries and the
+mechanisms they use.
 
 It wraps `ddcutil` on Linux and `m1ddc` on macOS, permanently. There is no native I²C/IOKit backend
 and there never will be one.
@@ -218,10 +219,11 @@ development time only: the binary contains no catalog parser and reads no catalo
 A `Mechanism` is added the same way, together with the first model that needs it, and a **disabled**
 record counts as that model: the point is that the mechanism arrives with evidence attached, not
 that the first entry using it is trusted. Until a model using a mechanism is write-enabled, that
-backend path is unproven — `vcp-input-source` is in that state today: it has reached one monitor,
-through m1ddc under `--unsafe-model`, and none through ddcutil. Enabling that first model is the
-first enabling of the mechanism, done with the [`docs/testing.md`](docs/testing.md) checklist, not a
-routine catalog flip.
+backend path is unproven, and enabling that first model is the first enabling of the mechanism,
+done with the [`docs/testing.md`](docs/testing.md) checklist, not a routine catalog flip. Both
+mechanisms are past that point: `vcp-input-source` with the Samsung G95NC, verified through m1ddc.
+Its ddcutil path has still not reached a monitor, so the first Linux run of any `vcp-input-source`
+entry is a first too.
 
 **Backends only execute a `Command` produced by `Plan`.** `Command` is returned by `Plan` for
 display only and is never accepted as input by any method. `Execute` takes the `catalog.Operation`,

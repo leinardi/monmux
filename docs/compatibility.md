@@ -10,21 +10,21 @@ compares this file against a fresh rendering, and `TestCompatibilityDocumentMatc
 `TestCompatibilityDocumentCarriesEveryNoteAndSource` read it back and compare it against the
 compiled catalog, which is the copy the binary actually uses.
 
-One model is write-enabled so far. Apart from one row tested on the unit through `--unsafe-model`,
-the G95NC's DisplayPort, everything else in the table is a report somebody else published: recorded
-because it is useful to a contributor who owns that monitor, disabled, and without an EDID
-fingerprint, so it can never match a display, and `monmux switch` will not write to it. The one way
-to send a recorded value is `--unsafe-model`, where the user names the entry to assume instead of
-the EDID identifying it — that is what a contributor with the monitor uses to turn a report into
-evidence, and it is described in [adding-a-monitor.md](adding-a-monitor.md) and
-[security.md](security.md). A model is listed here whether or not monmux will write to it, because
-"we know about this monitor and deliberately will not touch it" is information a reader needs.
+Two models are write-enabled so far, the LG 38WR85QC-W and the Samsung G95NC. Everything else in the
+table is a report somebody else published: recorded because it is useful to a contributor who owns
+that monitor, disabled, and without an EDID fingerprint, so it can never match a display, and
+`monmux switch` will not write to it. The one way to send a recorded value is `--unsafe-model`,
+where the user names the entry to assume instead of the EDID identifying it — that is what a
+contributor with the monitor uses to turn a report into evidence, and it is described in
+[adding-a-monitor.md](adding-a-monitor.md) and [security.md](security.md). A model is listed here
+whether or not monmux will write to it, because "we know about this monitor and deliberately will
+not touch it" is information a reader needs.
 
 monmux implements two mechanisms. `lg-alt-input` is the LG side channel, and every model recorded
 with it is an LG; `vcp-input-source` is the standard Input Source feature, `VCP 0x60`, and is what
-every other vendor here uses, plus three LGs whose reports went through it. Every `vcp-input-source`
-row is disabled, and monmux has switched one monitor over it: a Samsung G95NC, to DisplayPort,
-through m1ddc under `--unsafe-model`. The ddcutil path has not reached a monitor yet. "Standard" is
+every other vendor here uses, plus three LGs whose reports went through it. One `vcp-input-source`
+model is write-enabled, the Samsung G95NC, verified on all four of its inputs through m1ddc under
+`--unsafe-model`; the ddcutil path has not reached a monitor yet. "Standard" is
 a name, not a promise: which values a model accepts, and whether it accepts the write at all, are
 still per-model facts with per-input evidence, and the values recorded under it range from the
 specification's 0x0F/0x11 to 0x05, 0x09, 0x13 and 0x00.
@@ -102,6 +102,10 @@ column lists what an entry *records*, not what it enables, which is the point: a
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | LG 38WR85QC-W | GSM/0x77D3, GSM/0x77D4 | `dp` | `0xD0` | `lg-alt-input` | yes | verified | Direct test on the unit, 2026-09-07, Linux (ddcutil) and macOS (m1ddc): switched from USB-C to DisplayPort |
 | LG 38WR85QC-W | GSM/0x77D3, GSM/0x77D4 | `usb-c` | `0xD1` | `lg-alt-input` | yes | verified | Direct test on the unit, 2026-09-07, Linux (ddcutil) and macOS (m1ddc): switched from DisplayPort to USB-C |
+| Samsung G95NC | SAM/0x7476, SAM/0x73D0, SAM/0x747A (refused) | `dp` | `0x0F` | `vcp-input-source` | yes | verified | Direct test on the unit, 2026-10-21, macOS (monmux 0.6.2 and 0.7.0 with m1ddc 1.2.0), firmware M-C9557GGPA-1009.2: switched from HDMI 2 to DisplayPort under --unsafe-model on 0.6.2 and again on 0.7.0, reported by ema987 in monmux issue 80 |
+| Samsung G95NC | SAM/0x7476, SAM/0x73D0, SAM/0x747A (refused) | `hdmi1` | `0x11` | `vcp-input-source` | yes | verified | Direct test on the unit, 2026-10-21, macOS (monmux 0.7.0 with m1ddc 1.2.0), firmware M-C9557GGPA-1009.2: switched from DisplayPort to HDMI 1 under --unsafe-model, reported by ema987 in monmux issue 80 |
+| Samsung G95NC | SAM/0x7476, SAM/0x73D0, SAM/0x747A (refused) | `hdmi2` | `0x12` | `vcp-input-source` | yes | verified | Direct test on the unit, 2026-10-21, macOS (monmux 0.7.0 with m1ddc 1.2.0), firmware M-C9557GGPA-1009.2: switched from DisplayPort to HDMI 2 under --unsafe-model, reported by ema987 in monmux issue 80 |
+| Samsung G95NC | SAM/0x7476, SAM/0x73D0, SAM/0x747A (refused) | `hdmi3` | `0x32` | `vcp-input-source` | yes | verified | Direct test on the unit, 2026-10-21, macOS (monmux 0.7.0 with m1ddc 1.2.0), firmware M-C9557GGPA-1009.2: switched from DisplayPort to HDMI 3 under --unsafe-model, reported by ema987 in monmux issue 80 |
 | Alienware AW2725DF | none | `dp1` | `0x0F` | `vcp-input-source` | no | reported | Reported working on the exact AW2725DF by markhagemann (display-switch issue 157) (display-switch 1.4.0 on Linux): switching to DisplayPort 1 with 0x0F over the standard Input Source feature (VCP 0x60) succeeded; not verified here: <https://github.com/haimgel/display-switch/issues/157> |
 | Alienware AW2725DF | none | `dp2` | `0x13` | `vcp-input-source` | no | reported | Reported working on the exact AW2725DF by markhagemann (display-switch issue 157) (display-switch 1.4.0 on Linux): switching to DisplayPort 2 with 0x13 over the standard Input Source feature (VCP 0x60) succeeded; the capabilities string lists 0x13 as an unrecognised value; 0x10 does not switch; not verified here: <https://github.com/haimgel/display-switch/issues/157> |
 | Alienware AW2725DF | none | `hdmi` | `0x11` | `vcp-input-source` | no | reported | Reported working on the exact AW2725DF by markhagemann (display-switch issue 157) (display-switch 1.4.0 on Linux): switching to HDMI with 0x11 over the standard Input Source feature (VCP 0x60) succeeded; used as the working alternative before 0x13 was found; not verified here: <https://github.com/haimgel/display-switch/issues/157> |
@@ -275,10 +279,6 @@ column lists what an entry *records*, not what it enables, which is the point: a
 | Philips 49M2C8900L | none | `hdmi1` | `0x11` | `vcp-input-source` | no | reported | Reported working on the exact 49M2C8900L by marclloydjolly (evnia-mac README) (m1ddc set input on an M1 Pro over DisplayPort): switching to HDMI 1 with 0x11 over the standard Input Source feature (VCP 0x60) succeeded; not verified here: <https://github.com/marclloydjolly/evnia-mac> |
 | Philips 49M2C8900L | none | `usb-c` | `0x15` | `vcp-input-source` | no | reported | Reported working on the exact 49M2C8900L by marclloydjolly (evnia-mac README) (m1ddc set input on an M1 Pro over DisplayPort): switching to USB-C with 0x15 over the standard Input Source feature (VCP 0x60) succeeded; not verified here: <https://github.com/marclloydjolly/evnia-mac> |
 | Samsung C49RG94SSU | none | `dp1` | `0x09` | `vcp-input-source` | no | reported | Reported working on the exact C49RG94SSU by philipp1992 (ddcutil issue 226) (ddcutil on Linux): switching to DisplayPort 1 with 0x09 over the standard Input Source feature (VCP 0x60) succeeded; not verified here: <https://github.com/rockowitz/ddcutil/issues/226> |
-| Samsung G95NC | none | `dp` | `0x0F` | `vcp-input-source` | no | verified | Direct test on the unit, 2026-10-10, macOS (monmux 0.6.2 with m1ddc 1.2.0), firmware M-C9557GGPA-1009.2: switched from HDMI 2 to DisplayPort under --unsafe-model, reported by ema987 in monmux issue 80 |
-| Samsung G95NC | none | `hdmi1` | `0x11` | `vcp-input-source` | no | reported | Reported working on the exact G95NC by ema987 (monmux issue 80) (m1ddc 1.2.0 on macOS, sent directly, firmware M-C9557GGPA-1009.2): switching to HDMI 1 with 0x11 over the standard Input Source feature (VCP 0x60) succeeded; 0x05 sent through monmux did nothing on the same unit; not verified here: <https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843> |
-| Samsung G95NC | none | `hdmi2` | `0x12` | `vcp-input-source` | no | reported | Reported working on the exact G95NC by ema987 (monmux issue 80) (m1ddc 1.2.0 on macOS, sent directly, firmware M-C9557GGPA-1009.2): switching to HDMI 2 with 0x12 over the standard Input Source feature (VCP 0x60) succeeded; 0x06 sent through monmux did nothing on the same unit; not verified here: <https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843> |
-| Samsung G95NC | none | `hdmi3` | `0x32` | `vcp-input-source` | no | reported | Reported working on the exact G95NC by ema987 (monmux issue 80) (m1ddc 1.2.0 on macOS, sent directly, firmware M-C9557GGPA-1009.2): switching to HDMI 3 with 0x32 over the standard Input Source feature (VCP 0x60) succeeded; not verified here: <https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843> |
 | Samsung LC49G95T | none | `dp1` | `0x0F` | `vcp-input-source` | no | reported | Reported working on the exact LC49G95T by DimpiM/monitor-switch (hardware-findings.md) (ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input): switching to DisplayPort 1 with 0x0F over the standard Input Source feature (VCP 0x60) succeeded; reading VCP 0x60 back afterwards gives 0x03, which is not the value that selects the input; not verified here: <https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md> |
 | Samsung LC49G95T | none | `dp2` | `0x10` | `vcp-input-source` | no | reported | Reported working on the exact LC49G95T by DimpiM/monitor-switch (hardware-findings.md) (ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input): switching to DisplayPort 2 with 0x10 over the standard Input Source feature (VCP 0x60) succeeded; reading VCP 0x60 back afterwards gives 0x04, which is not the value that selects the input; not verified here: <https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md> |
 | Samsung LC49G95T | none | `hdmi` | `0x11` | `vcp-input-source` | no | reported | Reported working on the exact LC49G95T by DimpiM/monitor-switch (hardware-findings.md) (ddcutil 2.2.0 on a Raspberry Pi Zero 2 W, sent from the HDMI input): switching to HDMI with 0x11 over the standard Input Source feature (VCP 0x60) succeeded; reading VCP 0x60 back afterwards gives 0x01, which is not the value that selects the input; not verified here: <https://github.com/DimpiM/monitor-switch/blob/main/docs/hardware-findings.md> |
@@ -301,6 +301,35 @@ Sources:
 
 - Direct observation on the tested unit: EDID GSM/0x77D3 (DisplayPort) and GSM/0x77D4 (USB-C), model string LG ULTRAWIDE
 - <https://github.com/rockowitz/ddcutil/wiki/Switching-input-source-on-LG-monitors>
+
+### Samsung G95NC
+
+- The Odyssey Neo G9 57 inch; ddcutil issue 397 names model codes LS57CG952NUXEN and LS57CG952NNXZA.
+- Enabled on ema987's runs through `--unsafe-model` on macOS, so through m1ddc only. It is the first write-enabled model of the `vcp-input-source` mechanism, and the ddcutil path for that mechanism has not reached this monitor or any other.
+- The HDMI values depend on the firmware. On M-C9557GGPA-1009.2, ema987 switched HDMI 1, 2 and 3 with 0x11, 0x12 and 0x32, first from m1ddc and then through monmux 0.7.0, which matches the 0x11 and 0x12 mwd102 lists for 1009.2, while 0x05 and 0x06 sent through monmux did nothing, from either cable. On 1007.0, ema987 and jimmy-tr33 in ddcutil issue 397 switched HDMI 1 and HDMI 2 with 0x05 and 0x06 from ddcutil. monmux cannot tell the two firmware versions apart, so a unit still on 1007.0 matches this entry and is expected to need the old values; every HDMI input carries a caveat saying so.
+- HDMI 3 switches with 0x32 on 1009.2. mwd102 reads it back as 0x01, and writing 0x01 does not switch; the ddc-mqtt project configures 7 for it. DisplayPort is 0x0F on both firmware versions. PBP and PIP use vendor codes 0xE2 and 0xE3, which ema987 found absent on firmware 1007.0 and present on 1009.2; out of scope either way.
+- The monitor answers DDC only on the input it is showing: once it leaves an input, every m1ddc call over that cable fails, reads included. A machine can switch the monitor away from itself but not back; the way back is the other source, or the OSD.
+- Two identities, both observed by ema987 with the EDID model name `Odyssey G95NC`, which is not used for matching: `SAM/0x7476` over DisplayPort and `SAM/0x73D0` over each of HDMI 1, 2 and 3.
+- With Picture-by-Picture on at 50/50, the DisplayPort product code becomes 0x747A. That identity is refused rather than left unknown, so that monmux names the monitor and says to turn the mode off: nobody has tested a switch in it. The codes PBP gives over HDMI, and those of the other PBP and PIP layouts, have not been captured, and are not guessed.
+- With DisplayPort and HDMI both connected to the same Mac, the monitor is listed twice with the same alphanumeric serial, so `--serial` cannot pick one; unplug one cable.
+
+Refused identities:
+
+- `SAM/0x747A`: Picture-by-Picture is on: this product code was reported with PBP 50/50 over DisplayPort, and no switch has been tested in that mode. Turn PBP and PIP off in the OSD.
+
+Caveats:
+
+- `hdmi1`: Firmware M-C9557GGPA-1007.0 was reported to switch HDMI 1 with 0x05 instead. If the monitor did not switch, check the firmware version in the OSD.
+- `hdmi2`: Firmware M-C9557GGPA-1007.0 was reported to switch HDMI 2 with 0x06 instead. If the monitor did not switch, check the firmware version in the OSD.
+- `hdmi3`: 0x32 is known to work on firmware M-C9557GGPA-1009.2 only. If the monitor did not switch, check the firmware version in the OSD.
+
+Sources:
+
+- <https://github.com/rockowitz/ddcutil/issues/397>
+- <https://github.com/mwd102/g95nc-ddc>
+- <https://github.com/moimart/ddc-mqtt>
+- <https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843>
+- <https://github.com/leinardi/monmux/issues/80#issuecomment-6325587801>
 
 ### Alienware AW2725DF
 
@@ -876,31 +905,9 @@ Sources:
 
 - <https://github.com/rockowitz/ddcutil/issues/226>
 
-### Samsung G95NC
-
-- The Odyssey Neo G9 57 inch; ddcutil issue 397 names model codes LS57CG952NUXEN and LS57CG952NNXZA.
-- The HDMI values depend on the firmware. On M-C9557GGPA-1009.2, ema987 switched HDMI 1, 2 and 3 with 0x11, 0x12 and 0x32 from m1ddc, which matches the 0x11 and 0x12 mwd102 lists for 1009.2, while 0x05 and 0x06 sent through monmux did nothing, from either cable. On 1007.0, ema987 and jimmy-tr33 in ddcutil issue 397 switched HDMI 1 and HDMI 2 with 0x05 and 0x06 from ddcutil. The catalog records the 1009.2 values. monmux cannot tell the two firmware versions apart, so a unit still on 1007.0 is expected to need the old values, and a report verifying this model has to name the firmware version shown in the OSD.
-- HDMI 3 switches with 0x32 on 1009.2. mwd102 reads it back as 0x01, and writing 0x01 does not switch; the ddc-mqtt project configures 7 for it. DisplayPort is 0x0F on both firmware versions. PBP and PIP use vendor codes 0xE2 and 0xE3, which ema987 found absent on firmware 1007.0 and present on 1009.2; out of scope either way.
-- The monitor answers DDC only on the input it is showing: once it leaves an input, every m1ddc call over that cable fails, reads included. A machine can switch the monitor away from itself but not back; the way back is the other source, or the OSD.
-- EDID, as text only: manufacturer `SAM`, model name `Odyssey G95NC`, product code 0x7476 over DisplayPort and 0x73D0 over HDMI 2. HDMI 1 and HDMI 3 have not been captured. These become identities when the model is enabled, not before.
-- With DisplayPort and HDMI both connected to the same Mac, the monitor is listed twice with the same alphanumeric serial, so `--serial` cannot pick one; unplug one cable.
-
-Caveats:
-
-- `hdmi1`: Firmware M-C9557GGPA-1007.0 was reported to switch HDMI 1 with 0x05 instead. If the monitor did not switch, check the firmware version in the OSD.
-- `hdmi2`: Firmware M-C9557GGPA-1007.0 was reported to switch HDMI 2 with 0x06 instead. If the monitor did not switch, check the firmware version in the OSD.
-- `hdmi3`: 0x32 is known to work on firmware M-C9557GGPA-1009.2 only. If the monitor did not switch, check the firmware version in the OSD.
-
-Sources:
-
-- <https://github.com/rockowitz/ddcutil/issues/397>
-- <https://github.com/mwd102/g95nc-ddc>
-- <https://github.com/moimart/ddc-mqtt>
-- <https://github.com/leinardi/monmux/issues/80#issuecomment-6096883843>
-
 ### Samsung LC49G95T
 
-- The first record of the `vcp-input-source` mechanism, and the first entry that is not an LG. It is disabled and carries no identity like every other unverified entry. The mechanism has since reached one monitor, the Samsung G95NC through m1ddc under `--unsafe-model`, and no model using it is write-enabled: enabling this one belongs in the [testing.md](testing.md) checklist rather than in a routine catalog flip.
+- The first record of the `vcp-input-source` mechanism, and the first entry that is not an LG. It is disabled and carries no identity like every other unverified entry. The first model enabled on the mechanism is the Samsung G95NC, verified through m1ddc only; every report for this one comes from ddcutil, a path that has not reached a monitor yet, so enabling it belongs in the [testing.md](testing.md) checklist rather than in a routine catalog flip.
 - The values the monitor reports back are not the values that select an input. After a switch, reading VCP 0x60 gives 0x03 for DP1, 0x04 for DP2 and 0x01 for HDMI, and writing those back does not switch. That is one reason monmux never confirms a switch by reading a monitor.
 - DDC/CI answers only on the HDMI input; the DisplayPort inputs do not expose slave address 0x37 at all, so the switch has to be sent from HDMI.
 - Switching to an input with no signal wedges the monitor's DDC engine until a link reset or a trip through the OSD. Never switch blind: whoever verifies this model needs the target input already connected.

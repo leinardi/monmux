@@ -76,11 +76,11 @@ of your change. Three rules:
   that only *records* it — disabled, with no identity — counts as that model: the point is that a
   mechanism enters the code with evidence attached, not that the first entry using it is trusted.
 - A mechanism's backend path is **unproven on hardware** until the first model using it is
-  write-enabled. `vcp-input-source` is in that state today: it has reached one monitor, through
-  m1ddc under `--unsafe-model`, and none through ddcutil. Enabling that first model is therefore the
-  first enabling of the mechanism as well as of the model: work through the [testing.md](testing.md)
-  checklist for it, and say in the pull request that it is the first, rather than treating it as a
-  routine catalog flip.
+  write-enabled. Enabling that first model is therefore the first enabling of the mechanism as well
+  as of the model: work through the [testing.md](testing.md) checklist for it, and say in the pull
+  request that it is the first, rather than treating it as a routine catalog flip. Both existing
+  mechanisms are past that point, `vcp-input-source` with the Samsung G95NC through m1ddc only; its
+  ddcutil path has not reached a monitor.
 - A mechanism is a per-model property and never a fallback. A backend that does not implement a
   model's mechanism refuses with `invalid-operation` rather than trying another one. In particular,
   monmux does not write `VCP 0x60` because a monitor happens to read it — only because a catalog
