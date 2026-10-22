@@ -129,8 +129,8 @@ func KnownInputs() []Input {
 
 	var known []Input
 
-	for _, model := range models {
-		for name := range model.Inputs {
+	for index := range models {
+		for name := range models[index].Inputs {
 			if seen[name] {
 				continue
 			}
@@ -324,6 +324,22 @@ func (i Identity) String() string {
 	return fmt.Sprintf("%s %q", rendered, i.ModelName)
 }
 
+// RefusedIdentity is a fingerprint a model is recognized by and refused for: a
+// mode of the monitor that reports a product code of its own, such as a
+// picture-by-picture layout, and that nobody has tested a switch in. Matching
+// it is what lets monmux name the model and say what to change, rather than
+// call the monitor unknown.
+//
+// Refusal is membership of [Model.RefusedIdentities], not the presence of a
+// reason: there is no field whose zero value would make one writable.
+type RefusedIdentity struct {
+	// Identity is the fingerprint, matched exactly as an allowed one is.
+	Identity Identity
+	// Reason is shown to the user as the detail of the refusal: what the state
+	// is, and how to leave it.
+	Reason string
+}
+
 // inputOp is what the catalog records for one input of one model: how to switch,
 // what value to write, and the evidence for that value. Evidence is per input,
 // not per model, because a model can have one verified input and one that is
@@ -349,6 +365,10 @@ type Model struct {
 	// Identities are the EDID fingerprints this model is recognized by. A model
 	// with no identities can never match, and so can never be written to.
 	Identities []Identity
+	// RefusedIdentities are fingerprints the model is recognized by and never
+	// written to under: [Model.Matches] accepts them, so the model is named,
+	// and [Model.IdentityRefusal] is what the policy refuses them with.
+	RefusedIdentities []RefusedIdentity
 	// WriteEnabled says whether monmux may write to this model at all. An entry
 	// can be documented without being trusted.
 	WriteEnabled bool
@@ -503,22 +523,44 @@ func (m Model) InputMechanism(input Input) (Mechanism, bool) {
 // empty - a macOS listing with neither field, say - therefore matches no pinned
 // identity at all, which is the fail-closed answer rather than a guess.
 //
+// A refused identity matches too: the model is recognized, and refused later
+// with the reason [Model.IdentityRefusal] gives.
+//
 //nolint:gocritic // hugeParam: a value receiver keeps Model usable where it is not addressable
 func (m Model) Matches(identity edid.Identity) bool {
 	for _, known := range m.Identities {
-		if known.Manufacturer != identity.Manufacturer ||
-			known.ProductCode != identity.ProductCode {
-			continue
+		if known.matches(identity) {
+			return true
 		}
-
-		if known.ModelName != "" && known.ModelName != identity.ModelName {
-			continue
-		}
-
-		return true
 	}
 
-	return false
+	_, refused := m.IdentityRefusal(identity)
+
+	return refused
+}
+
+// IdentityRefusal reports whether an EDID identity is one this model refuses,
+// and the reason it gives. It compares exactly as [Model.Matches] does.
+//
+//nolint:gocritic // hugeParam: a value receiver keeps Model usable where it is not addressable
+func (m Model) IdentityRefusal(identity edid.Identity) (string, bool) {
+	for _, refused := range m.RefusedIdentities {
+		if refused.Identity.matches(identity) {
+			return refused.Reason, true
+		}
+	}
+
+	return "", false
+}
+
+// matches reports whether an EDID identity is this fingerprint. The serial
+// fields are never consulted, and the model name only where one is pinned.
+func (i Identity) matches(identity edid.Identity) bool {
+	if i.Manufacturer != identity.Manufacturer || i.ProductCode != identity.ProductCode {
+		return false
+	}
+
+	return i.ModelName == "" || i.ModelName == identity.ModelName
 }
 
 // MatchResult is the outcome of looking an identity up in the catalog.
@@ -558,19 +600,19 @@ func Match(identity edid.Identity) (Model, MatchResult) {
 // can be tested with a catalog that has the collision the real one must not have.
 func matchIn(identity edid.Identity, entries []Model) (Model, MatchResult) {
 	var (
-		found Model
+		found *Model
 		count int
 	)
 
-	for _, model := range entries {
-		if !model.Matches(identity) {
+	for index := range entries {
+		if !entries[index].Matches(identity) {
 			continue
 		}
 
 		count++
 
 		if count == 1 {
-			found = model
+			found = &entries[index]
 		}
 	}
 
@@ -580,7 +622,7 @@ func matchIn(identity edid.Identity, entries []Model) (Model, MatchResult) {
 	case count > 1:
 		return Model{}, MatchAmbiguous
 	default:
-		return cloneModel(found), MatchExact
+		return cloneModel(*found), MatchExact
 	}
 }
 
@@ -592,6 +634,7 @@ func matchIn(identity edid.Identity, entries []Model) (Model, MatchResult) {
 //nolint:gocritic // hugeParam: cloning is exactly what this does; a pointer would defeat it
 func cloneModel(model Model) Model {
 	model.Identities = slices.Clone(model.Identities)
+	model.RefusedIdentities = slices.Clone(model.RefusedIdentities)
 	model.Notes = slices.Clone(model.Notes)
 	model.Sources = slices.Clone(model.Sources)
 	model.Inputs = maps.Clone(model.Inputs)
@@ -613,10 +656,12 @@ func Find(name string) (Model, bool) {
 		return Model{}, false
 	}
 
-	for _, model := range models {
+	for index := range models {
+		model := &models[index]
+
 		if strings.EqualFold(model.Vendor+"/"+model.Name, wanted) ||
 			strings.EqualFold(model.FullName(), wanted) {
-			return cloneModel(model), true
+			return cloneModel(*model), true
 		}
 	}
 
@@ -628,8 +673,8 @@ func Find(name string) (Model, bool) {
 // what a later [Match] returns.
 func Models() []Model {
 	clones := make([]Model, 0, len(models))
-	for _, model := range models {
-		clones = append(clones, cloneModel(model))
+	for index := range models {
+		clones = append(clones, cloneModel(models[index]))
 	}
 
 	return clones

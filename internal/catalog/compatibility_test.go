@@ -41,15 +41,22 @@ const noIdentities = "none"
 // notesHeading opens the part of the document that carries the per-model prose.
 // caveatsLine and sourcesLine open the parts of a section after its notes: the
 // per-input caveats, written only for a model that has one, and the references.
+// refusedLine opens the refused identities, between the notes and the caveats,
+// and is likewise written only for a model that refuses one.
 const (
 	notesHeading = "## Notes on the entries"
+	refusedLine  = "Refused identities:"
 	caveatsLine  = "Caveats:"
 	sourcesLine  = "Sources:"
 )
 
+// refusedSuffix marks a refused identity in the Identities column.
+const refusedSuffix = " (refused)"
+
 // The parts of a model's section, in the order the document writes them.
 const (
 	partNotes = iota
+	partRefused
 	partCaveats
 	partSources
 )
@@ -80,6 +87,7 @@ func (r *row) key() string {
 // section is what the document says about one model outside the table.
 type section struct {
 	notes   []string
+	refused []string
 	caveats []string
 	sources []string
 }
@@ -161,6 +169,16 @@ func TestCompatibilityDocumentCarriesEveryNoteAndSource(t *testing.T) {
 			)
 		}
 
+		if !slices.Equal(written.refused, refusals(&model)) {
+			t.Errorf(
+				"%s lists the refused identities of %s as\n%q\nbut the catalog records\n%q",
+				document,
+				name,
+				written.refused,
+				refusals(&model),
+			)
+		}
+
 		if !slices.Equal(written.caveats, caveats(&model)) {
 			t.Errorf(
 				"%s lists the caveats of %s as\n%q\nbut the catalog records\n%q",
@@ -232,6 +250,18 @@ func describe(t *testing.T, model catalog.Model, input catalog.Input) row {
 	}
 }
 
+// refusals renders a model's refused identities the way the document lists
+// them, each with its reason.
+func refusals(model *catalog.Model) []string {
+	rendered := make([]string, 0, len(model.RefusedIdentities))
+
+	for _, refused := range model.RefusedIdentities {
+		rendered = append(rendered, "`"+refused.Identity.String()+"`: "+refused.Reason)
+	}
+
+	return rendered
+}
+
 // caveats renders a model's caveats the way the document lists them, in listing
 // order.
 func caveats(model *catalog.Model) []string {
@@ -251,13 +281,17 @@ func caveats(model *catalog.Model) []string {
 //
 //nolint:gocritic // hugeParam: see describe
 func identities(model catalog.Model) string {
-	if len(model.Identities) == 0 {
+	if len(model.Identities) == 0 && len(model.RefusedIdentities) == 0 {
 		return noIdentities
 	}
 
-	rendered := make([]string, 0, len(model.Identities))
+	rendered := make([]string, 0, len(model.Identities)+len(model.RefusedIdentities))
 	for _, identity := range model.Identities {
 		rendered = append(rendered, identity.String())
+	}
+
+	for _, refused := range model.RefusedIdentities {
+		rendered = append(rendered, refused.Identity.String()+refusedSuffix)
 	}
 
 	return strings.Join(rendered, ", ")
@@ -332,6 +366,8 @@ func (p *sectionParser) flush() {
 	text := autolinked.ReplaceAllString(strings.Join(p.bullet, " "), "$1")
 
 	switch p.part {
+	case partRefused:
+		p.current.refused = append(p.current.refused, text)
 	case partCaveats:
 		p.current.caveats = append(p.current.caveats, text)
 	case partSources:
@@ -371,6 +407,10 @@ func (p *sectionParser) read(t *testing.T, trimmed string) {
 
 		p.name = strings.TrimPrefix(trimmed, "### ")
 	case p.name == "":
+	case trimmed == refusedLine:
+		p.flush()
+
+		p.part = partRefused
 	case trimmed == caveatsLine:
 		p.flush()
 
@@ -394,8 +434,9 @@ func (p *sectionParser) read(t *testing.T, trimmed string) {
 
 // parseSections reads the per-model prose out of the document. A section runs
 // from its `### ` heading to the next heading of any level; the bullets before
-// the "Caveats:" or "Sources:" line are its notes, the ones under "Caveats:" its
-// caveats, and the ones after "Sources:" its references.
+// the first of "Refused identities:", "Caveats:" or "Sources:" are its notes,
+// and the ones under each of those lines are its refused identities, its
+// caveats and its references.
 func parseSections(t *testing.T) map[string]section {
 	t.Helper()
 

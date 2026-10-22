@@ -38,8 +38,8 @@ Stable, and changed only with a deliberate note in the release:
 
 Not stable, and not to be parsed:
 
-- prose fields — `explanation`, `detail`, `evidence`, `caveat`, `error`, a check's `detail`, and the
-  rendered `command`,
+- prose fields — `explanation`, `detail`, `evidence`, `caveat`, `refused`, a refused identity's
+  `reason`, `error`, a check's `detail`, and the rendered `command`,
 - the order of `displays`, `checks` and `models` beyond what the text output already promises,
 - anything printed on stderr.
 
@@ -200,6 +200,7 @@ It writes nothing.
 | `displays[].match` | `exact`, `none` or `ambiguous`. |
 | `displays[].model` | The matched entry's full name, empty when `match` is not `exact`. |
 | `displays[].enabledInputs` | Input **names**, and empty for any display monmux will not write to. |
+| `displays[].refused` | Present only when the matched entry refuses the identity the display reports — a mode such as picture-by-picture with a product code of its own. The catalog's reason, which a switch is refused with as `unsupported-mode`. Prose: do not parse it. |
 | `checks[]` | The backend's diagnostics: `name`, `ok`, `detail`. |
 
 `enabledInputs` is a list of names, not of labels, and stays that way. A client that wants the human
@@ -223,6 +224,7 @@ The catalog compiled into this binary. No backend, no configuration file, no mon
       "fullName": "LG 38WR85QC-W",
       "writeEnabled": true,
       "identities": ["GSM/0x77D3", "GSM/0x77D4"],
+      "refusedIdentities": [],
       "mechanisms": ["lg-alt-input"],
       "inputs": [
         {
@@ -243,6 +245,10 @@ The catalog compiled into this binary. No backend, no configuration file, no mon
   "writeEnabled": 1
 }
 ```
+
+`identities` are the fingerprints a switch may write to. `refusedIdentities` are the ones the entry
+recognises and refuses, each an object with `identity`, in the same form, and `reason`, the prose a
+switch is refused with as `unsupported-mode`; it is an empty array for almost every entry.
 
 `catalog show --json` prints one of those `models` entries as the whole document. `count` and
 `writeEnabled` are the number of entries listed, after any filter, and how many of them monmux may

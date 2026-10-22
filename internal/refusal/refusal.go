@@ -50,6 +50,11 @@ const (
 	UnknownMonitor Reason = "unknown-monitor"
 	// AmbiguousCatalog means more than one catalog entry claims the identity.
 	AmbiguousCatalog Reason = "ambiguous-catalog"
+	// UnsupportedMode means the catalog recognizes the identity as a mode of a
+	// supported model that monmux deliberately does not switch, such as a
+	// picture-by-picture layout reporting a product code of its own. The
+	// catalog's reason is the detail.
+	UnsupportedMode Reason = "unsupported-mode"
 	// MultipleCandidates means more than one attached display could be the one
 	// meant, and monmux will not choose between them.
 	MultipleCandidates Reason = "multiple-candidates"
@@ -97,6 +102,7 @@ var explanations = map[Reason]string{
 	DisplayNotWritable: "The display cannot be written to.",
 	UnknownMonitor:     "No supported-model catalog entry matches this identity.",
 	AmbiguousCatalog:   "More than one catalog entry claims this identity, so the match is not trustworthy.",
+	UnsupportedMode:    "The monitor is recognized, but monmux does not switch it in the state it reports.",
 	MultipleCandidates: "More than one attached display could be the one meant; pin one with --serial.",
 	InputNotEnabled:    "The requested input is not enabled for this model.",
 	SerialMismatch:     "No attached display matches the pinned serial.",

@@ -61,6 +61,13 @@ const (
 // reads the document back splits a section on.
 const sourcesHeading = "Sources:"
 
+// refusedHeading introduces a model's refused identities, between its notes and
+// its caveats. It is written only for a model that has one.
+const refusedHeading = "Refused identities:"
+
+// refusedSuffix is what the Identities column writes after a refused identity.
+const refusedSuffix = " (refused)"
+
 // caveatsHeading introduces a model's per-input caveats, between its notes and
 // its sources. It is written only for a model that has one.
 const caveatsHeading = "Caveats:"
@@ -162,7 +169,7 @@ func renderRows(model *Model) ([]string, error) {
 		enabled = "yes"
 	}
 
-	identities := renderIdentityList(model.Identities)
+	identities := renderIdentityList(model)
 	rows := make([]string, 0, len(names))
 
 	for _, name := range names {
@@ -190,27 +197,39 @@ func renderRows(model *Model) ([]string, error) {
 }
 
 // renderIdentityList renders the fingerprints the way the Identities column
-// lists them. An entry with none says so in a word, because a blank cell reads
-// like an omission rather than like the deliberate refusal to match that it is.
-func renderIdentityList(identities []Identity) string {
-	if len(identities) == 0 {
+// lists them: the allowed ones, then the refused ones marked as such. An entry
+// with none says so in a word, because a blank cell reads like an omission
+// rather than like the deliberate refusal to match that it is.
+func renderIdentityList(model *Model) string {
+	if len(model.identities()) == 0 {
 		return noIdentities
 	}
 
-	rendered := make([]string, 0, len(identities))
+	rendered := make([]string, 0, len(model.identities()))
 
-	for _, identity := range identities {
-		// The claim type already renders an identity the way monmux writes one,
-		// and is what the duplicate check compares, so the column and the rule
-		// cannot disagree about what an identity is called.
-		rendered = append(rendered, claim{
-			manufacturer: identity.Manufacturer,
-			productCode:  *identity.ProductCode,
-			modelName:    identity.ModelName,
-		}.String())
+	for index := range model.Identities {
+		rendered = append(rendered, identityName(&model.Identities[index]))
+	}
+
+	for index := range model.RefusedIdentities {
+		rendered = append(
+			rendered,
+			identityName(&model.RefusedIdentities[index].Identity)+refusedSuffix,
+		)
 	}
 
 	return strings.Join(rendered, ", ")
+}
+
+// identityName renders one fingerprint. The claim type already renders an
+// identity the way monmux writes one, and is what the duplicate check compares,
+// so the column and the rule cannot disagree about what an identity is called.
+func identityName(identity *Identity) string {
+	return claim{
+		manufacturer: identity.Manufacturer,
+		productCode:  *identity.ProductCode,
+		modelName:    identity.ModelName,
+	}.String()
 }
 
 // renderNotes renders one subsection per model, carrying the prose, the
@@ -233,6 +252,7 @@ func renderNotes(document Document) ([]string, error) {
 			return nil, err
 		}
 
+		lines = append(lines, renderRefused(model)...)
 		lines = append(lines, caveats...)
 		lines = append(lines, "", sourcesHeading, "")
 
@@ -246,6 +266,26 @@ func renderNotes(document Document) ([]string, error) {
 	}
 
 	return lines, nil
+}
+
+// renderRefused renders a model's refused identities as a titled list, each with
+// the reason monmux gives for it, or nothing for a model that has none.
+func renderRefused(model *Model) []string {
+	if len(model.RefusedIdentities) == 0 {
+		return nil
+	}
+
+	lines := []string{"", refusedHeading, ""}
+
+	for index := range model.RefusedIdentities {
+		refused := &model.RefusedIdentities[index]
+
+		lines = append(lines, fmt.Sprintf(
+			"- %#q: %s", identityName(&refused.Identity), autolink(refused.ReasonText()),
+		))
+	}
+
+	return lines
 }
 
 // renderCaveats renders a model's caveats as a titled list, one bullet per input

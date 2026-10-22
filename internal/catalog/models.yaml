@@ -20,6 +20,11 @@
 #     identities can never match, and so can never be written to.
 #   - A model that is not write-enabled must record no identities at all, so it
 #     cannot match a display in the first place.
+#   - A write-enabled model may list `refused_identities`: product codes it
+#     reports in a mode nobody has tested a switch in, such as picture-by-picture.
+#     Each needs a `reason`. monmux recognises the model and refuses the switch
+#     with unsupported-mode and that reason; being in the list is what refuses
+#     it. One fingerprint belongs to one model and one list, never both.
 #   - Every input carries its own evidence, and the evidence carries a grade.
 #     "Another model in the same family uses this value" is not evidence.
 #   - A write-enabled model needs the grade `verified` on every one of its

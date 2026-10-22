@@ -49,9 +49,13 @@ type DisplayReport struct {
 	Match catalog.MatchResult
 	// EnabledInputs are the inputs monmux would be willing to switch this
 	// display to. It is empty for a display it will not write to, whether
-	// because the model is unknown, the model is not write-enabled, or the
-	// display itself is not writable.
+	// because the model is unknown, the model is not write-enabled, the
+	// identity is one the model refuses, or the display itself is not writable.
 	EnabledInputs []catalog.Input
+	// Refusal is the catalog's reason for refusing the identity this display
+	// reports, and empty when the model does not refuse it. A switch to this
+	// display is refused with unsupported-mode and this reason.
+	Refusal string
 }
 
 // Info reports what monmux can see, and never writes.
@@ -113,10 +117,19 @@ func describe(display backend.Display) DisplayReport {
 
 	reported := DisplayReport{Display: display, Model: model, Match: result}
 
+	if result != catalog.MatchExact {
+		return reported
+	}
+
+	reason, refused := model.IdentityRefusal(display.Identity)
+	if refused {
+		reported.Refusal = reason
+	}
+
 	// A display monmux cannot write to has no enabled inputs, whatever the
 	// catalog says about the model: reporting inputs for it would read as an
-	// offer monmux would refuse.
-	if result == catalog.MatchExact && display.Writable {
+	// offer monmux would refuse. A refused identity is the same offer.
+	if display.Writable && !refused {
 		reported.EnabledInputs = model.EnabledInputs()
 	}
 

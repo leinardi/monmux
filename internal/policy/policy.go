@@ -342,10 +342,27 @@ func nothingToWriteTo(selected, unwritable []backend.Display, match matcher) err
 	return refusal.New(refusal.UnknownMonitor, "", identities(selected)...)
 }
 
-// decide checks the requested input against the matched model. This is the last
-// gate: an input with no recorded evidence for this model is refused, and no
+// decide checks the matched display and the requested input against the model.
+// This is the last gate: an identity the model refuses is refused whatever the
+// input, an input with no recorded evidence for this model is refused, and no
 // value from another model or another input is ever substituted.
+//
+// The refused identity is checked here, after the candidates were counted,
+// rather than by leaving it out of them: a recognized monitor is still one the
+// user may have meant, so two of them are still multiple-candidates, and only
+// the display monmux would actually have written to is refused for its mode.
+// The --unsafe-model path never reaches here, which is what makes it the
+// override for this refusal as for every other identification rule.
 func decide(target *candidate, input catalog.Input) (Decision, error) {
+	reason, refused := target.model.IdentityRefusal(target.display.Identity)
+	if refused {
+		return Decision{}, refusal.New(
+			refusal.UnsupportedMode,
+			reason,
+			target.display.Identity,
+		)
+	}
+
 	operation, enabled := target.model.Operation(input)
 	if !enabled {
 		return Decision{}, refusal.New(

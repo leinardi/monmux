@@ -333,6 +333,7 @@ func renderCatalogModel(out io.Writer, entry *catalog.Model) error {
 	page.linef("  Write-enabled: %s", yesNo(entry.WriteEnabled))
 	page.linef("  Identities:    %s", modelIdentities(entry))
 
+	renderModelList(page, "Refused identities", modelRefusals(entry))
 	renderModelInputs(page, entry)
 	renderModelList(page, "Caveats", modelCaveats(entry))
 	renderModelList(page, "Notes", entry.Notes)
@@ -385,6 +386,18 @@ func renderModelInputs(page *printer, entry *catalog.Model) {
 	for _, row := range rows {
 		page.linef("    %s", renderRow(row, widths))
 	}
+}
+
+// modelRefusals renders the identities an entry recognizes and refuses, each
+// with the reason a switch is refused with.
+func modelRefusals(entry *catalog.Model) []string {
+	lines := make([]string, 0, len(entry.RefusedIdentities))
+
+	for _, refused := range entry.RefusedIdentities {
+		lines = append(lines, refused.Identity.String()+": "+refused.Reason)
+	}
+
+	return lines
 }
 
 // modelCaveats renders an entry's caveats, one line per input that has one, in
@@ -543,15 +556,24 @@ type (
 
 	// jsonCatalogModel is one catalog entry, and the whole of `catalog show --json`.
 	jsonCatalogModel struct {
-		Vendor       string             `json:"vendor"`
-		Name         string             `json:"name"`
-		FullName     string             `json:"fullName"`
-		WriteEnabled bool               `json:"writeEnabled"`
-		Identities   []string           `json:"identities"`
-		Mechanisms   []string           `json:"mechanisms"`
-		Inputs       []jsonCatalogInput `json:"inputs"`
-		Notes        []string           `json:"notes"`
-		Sources      []string           `json:"sources"`
+		Vendor       string   `json:"vendor"`
+		Name         string   `json:"name"`
+		FullName     string   `json:"fullName"`
+		WriteEnabled bool     `json:"writeEnabled"`
+		Identities   []string `json:"identities"`
+		// RefusedIdentities are matched to this entry and never switched: a
+		// mode of the monitor reporting a product code of its own.
+		RefusedIdentities []jsonRefusedIdentity `json:"refusedIdentities"`
+		Mechanisms        []string              `json:"mechanisms"`
+		Inputs            []jsonCatalogInput    `json:"inputs"`
+		Notes             []string              `json:"notes"`
+		Sources           []string              `json:"sources"`
+	}
+
+	// jsonRefusedIdentity is one identity an entry refuses, with the reason.
+	jsonRefusedIdentity struct {
+		Identity string `json:"identity"`
+		Reason   string `json:"reason"`
 	}
 
 	// jsonCatalogInput is one recorded input of one entry, with its evidence.
@@ -602,10 +624,13 @@ func asJSONCatalogModel(entry *catalog.Model) jsonCatalogModel {
 		FullName:     entry.FullName(),
 		WriteEnabled: entry.WriteEnabled,
 		Identities:   make([]string, 0, len(entry.Identities)),
-		Mechanisms:   modelMechanisms(entry),
-		Inputs:       make([]jsonCatalogInput, 0, len(entry.Inputs)),
-		Notes:        entry.Notes,
-		Sources:      entry.Sources,
+		RefusedIdentities: make(
+			[]jsonRefusedIdentity, 0, len(entry.RefusedIdentities),
+		),
+		Mechanisms: modelMechanisms(entry),
+		Inputs:     make([]jsonCatalogInput, 0, len(entry.Inputs)),
+		Notes:      entry.Notes,
+		Sources:    entry.Sources,
 	}
 
 	if document.Mechanisms == nil {
@@ -622,6 +647,13 @@ func asJSONCatalogModel(entry *catalog.Model) jsonCatalogModel {
 
 	for _, identity := range entry.Identities {
 		document.Identities = append(document.Identities, identity.String())
+	}
+
+	for _, refused := range entry.RefusedIdentities {
+		document.RefusedIdentities = append(document.RefusedIdentities, jsonRefusedIdentity{
+			Identity: refused.Identity.String(),
+			Reason:   refused.Reason,
+		})
 	}
 
 	for _, input := range entry.RecordedInputs() {

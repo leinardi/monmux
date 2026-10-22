@@ -834,3 +834,151 @@ func TestACaveatAtTheLimitIsAccepted(t *testing.T) {
 		}
 	}
 }
+
+// refusing returns valid with one refused identity, its reason written exactly
+// as given, quotes and all; an empty reason leaves the key out entirely.
+func refusing(productCode, reason string) string {
+	item := "    refused_identities:\n" +
+		"      - manufacturer: ACM\n" +
+		"        product_code: " + productCode + "\n"
+	if reason != "" {
+		item += "        reason: " + reason + "\n"
+	}
+
+	return strings.Replace(valid, "    write_enabled: true\n", item+"    write_enabled: true\n", 1)
+}
+
+func TestARefusedIdentityRendersWithItsReason(t *testing.T) {
+	t.Parallel()
+
+	rendered, err := generate.Generate([]byte(refusing("0x0002", `"Turn PBP off."`)))
+	if err != nil {
+		t.Fatalf("a catalog with a refused identity was rejected: %v", err)
+	}
+
+	for _, want := range []string{
+		"RefusedIdentities: []RefusedIdentity{",
+		`{Identity: Identity{Manufacturer: "ACM", ProductCode: 0x0002}, Reason: "Turn PBP off."},`,
+		`{Manufacturer: "ACM", ProductCode: 0x0001},`,
+	} {
+		if !strings.Contains(string(rendered), want) {
+			t.Errorf("the rendered catalog does not contain %q:\n%s", want, rendered)
+		}
+	}
+
+	plain, err := generate.Generate([]byte(valid))
+	if err != nil {
+		t.Fatalf("a valid catalog was rejected: %v", err)
+	}
+
+	if strings.Contains(string(plain), "RefusedIdentities") {
+		t.Errorf("a model with no refused identity rendered the field:\n%s", plain)
+	}
+}
+
+// Refusal is membership of the list: the decoder puts a refused identity there
+// whatever its reason says, so a reason the validation somehow let through could
+// change the message and never the decision. The validation rejects the file
+// anyway, and the next test says with what.
+func TestARefusedIdentityIsRefusedByWhereItIsWritten(t *testing.T) {
+	t.Parallel()
+
+	for _, reason := range []string{"", "null", `""`} {
+		document, err := generate.Parse([]byte(refusing("0x0002", reason)))
+		if err != nil {
+			t.Fatalf("reason %q: %v", reason, err)
+		}
+
+		model := document.Models[0]
+		if len(model.RefusedIdentities) != 1 || len(model.Identities) != 1 ||
+			*model.RefusedIdentities[0].ProductCode != 0x0002 ||
+			*model.Identities[0].ProductCode != 0x0001 {
+			t.Errorf("reason %q: decoded as allowed %v, refused %v",
+				reason, model.Identities, model.RefusedIdentities)
+		}
+
+		if !errors.Is(document.Validate(), generate.ErrBadRefusal) {
+			t.Errorf("reason %q was not rejected as a bad refusal", reason)
+		}
+	}
+}
+
+func TestABadRefusedIdentityIsRejected(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		document string
+		want     error
+	}{
+		"no reason":               {refusing("0x0002", ""), generate.ErrBadRefusal},
+		"an empty reason":         {refusing("0x0002", "''"), generate.ErrBadRefusal},
+		"a null reason":           {refusing("0x0002", "null"), generate.ErrBadRefusal},
+		"a tilde reason":          {refusing("0x0002", "~"), generate.ErrBadRefusal},
+		"a blank reason":          {refusing("0x0002", `"  "`), generate.ErrBadRefusal},
+		"an untrimmed reason":     {refusing("0x0002", `"Turn PBP off. "`), generate.ErrBadRefusal},
+		"a numeric reason":        {refusing("0x0002", "42"), generate.ErrBadRefusal},
+		"a map for a reason":      {refusing("0x0002", "{why: PBP}"), generate.ErrBadRefusal},
+		"a reason holding a pipe": {refusing("0x0002", `"PBP | PIP"`), generate.ErrBadRefusal},
+		"a reason one byte too long": {
+			refusing("0x0002", `"`+strings.Repeat("x", 201)+`"`), generate.ErrBadRefusal,
+		},
+		"an unknown key": {
+			strings.Replace(refusing("0x0002", `"Turn PBP off."`),
+				"        reason:", "        color: black\n        reason:", 1),
+			generate.ErrMalformed,
+		},
+		"a lowercase manufacturer": {
+			strings.Replace(refusing("0x0002", `"Turn PBP off."`),
+				"      - manufacturer: ACM\n        product_code: 0x0002",
+				"      - manufacturer: acm\n        product_code: 0x0002", 1),
+			generate.ErrManufacturer,
+		},
+		"no product code": {
+			strings.Replace(refusing("0x0002", `"Turn PBP off."`),
+				"        product_code: 0x0002\n", "", 1),
+			generate.ErrMissing,
+		},
+		"the same fingerprint allowed and refused": {
+			refusing("0x0001", `"Turn PBP off."`), generate.ErrDuplicateIdentity,
+		},
+		"a refused fingerprint another model allows": {
+			refusing("0x0002", `"Turn PBP off."`) + renamed("TEST-2", 0x0002),
+			generate.ErrDuplicateIdentity,
+		},
+		"only refused identities on a write-enabled model": {
+			strings.Replace(refusing("0x0002", `"Turn PBP off."`),
+				"    identities:\n      - manufacturer: ACM\n        product_code: 0x0001\n",
+				"    identities: []\n", 1),
+			generate.ErrIdentityRequired,
+		},
+		"a refused identity on a model that is not write-enabled": {
+			strings.Replace(
+				strings.Replace(refusing("0x0002", `"Turn PBP off."`),
+					"    identities:\n      - manufacturer: ACM\n        product_code: 0x0001\n",
+					"    identities: []\n", 1),
+				"write_enabled: true", "write_enabled: false", 1),
+			generate.ErrIdentityForbidden,
+		},
+	}
+
+	for name, testCase := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := generate.Generate([]byte(testCase.document))
+			if !errors.Is(err, testCase.want) {
+				t.Errorf("%s gave %v, want %v", name, err, testCase.want)
+			}
+		})
+	}
+}
+
+// A reason exactly at the limit is accepted.
+func TestARefusalReasonAtTheLimitIsAccepted(t *testing.T) {
+	t.Parallel()
+
+	_, err := generate.Generate([]byte(refusing("0x0002", `"`+strings.Repeat("x", 200)+`"`)))
+	if err != nil {
+		t.Errorf("a reason of 200 bytes was rejected: %v", err)
+	}
+}

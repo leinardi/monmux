@@ -54,7 +54,7 @@ func TestIdentitiesAreUniqueAcrossModels(t *testing.T) {
 	var claimed []claim
 
 	for _, model := range catalog.Models() {
-		for _, identity := range model.Identities {
+		for _, identity := range recognized(&model) {
 			for _, previous := range claimed {
 				same := previous.identity.Manufacturer == identity.Manufacturer &&
 					previous.identity.ProductCode == identity.ProductCode
@@ -164,6 +164,41 @@ func TestEveryModelCarriesANote(t *testing.T) {
 	}
 }
 
+// recognized is every fingerprint a model is matched by, the refused ones
+// included: one display must never be claimed twice, whatever the claim does.
+func recognized(model *catalog.Model) []catalog.Identity {
+	all := slices.Clone(model.Identities)
+
+	for _, refused := range model.RefusedIdentities {
+		all = append(all, refused.Identity)
+	}
+
+	return all
+}
+
+// Refusal is membership of the list, and the reason is what the user is told
+// to do about it, so a refused identity without one would refuse in silence.
+func TestEveryRefusedIdentityGivesAReason(t *testing.T) {
+	t.Parallel()
+
+	for _, model := range catalog.Models() {
+		for _, refused := range model.RefusedIdentities {
+			if strings.TrimSpace(refused.Reason) == "" {
+				t.Errorf("%s refuses %s without a reason", model.FullName(), refused.Identity)
+			}
+
+			reason, isRefused := model.IdentityRefusal(edid.Identity{
+				Manufacturer: refused.Identity.Manufacturer,
+				ProductCode:  refused.Identity.ProductCode,
+				ModelName:    refused.Identity.ModelName,
+			})
+			if !isRefused || reason != refused.Reason {
+				t.Errorf("%s does not refuse its own %s", model.FullName(), refused.Identity)
+			}
+		}
+	}
+}
+
 func TestDisabledModelsNeverMatch(t *testing.T) {
 	t.Parallel()
 
@@ -172,7 +207,7 @@ func TestDisabledModelsNeverMatch(t *testing.T) {
 			continue
 		}
 
-		for _, identity := range model.Identities {
+		for _, identity := range recognized(&model) {
 			probe := edid.Identity{
 				Manufacturer: identity.Manufacturer,
 				ProductCode:  identity.ProductCode,

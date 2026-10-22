@@ -80,6 +80,10 @@ func renderDisplay(page *printer, reported *app.DisplayReport, showSerial bool) 
 	page.linef("  Status:  %s", status(&display))
 	page.linef("  Model:   %s", model(reported))
 	page.linef("  Inputs:  %s", inputs(reported.EnabledInputs))
+
+	if reported.Refusal != "" {
+		page.linef("  Refused: %s", reported.Refusal)
+	}
 }
 
 // renderChecks prints the backend's diagnostics.

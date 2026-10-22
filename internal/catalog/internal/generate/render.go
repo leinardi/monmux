@@ -121,6 +121,7 @@ func renderModel(model *Model) ([]string, error) {
 			fmt.Sprintf("Vendor: %q,", model.Vendor),
 		},
 		renderIdentities(model.Identities),
+		renderRefusedIdentities(model.RefusedIdentities),
 		[]string{fmt.Sprintf("WriteEnabled: %t,", model.WriteEnabled)},
 		inputs,
 		renderStrings("Notes", model.Notes),
@@ -139,23 +140,52 @@ func renderIdentities(identities []Identity) []string {
 	lines := make([]string, 0, len(identities)+2)
 	lines = append(lines, "Identities: []Identity{")
 
-	for _, identity := range identities {
-		rendered := fmt.Sprintf(
-			"{Manufacturer: %q, ProductCode: 0x%04X",
-			identity.Manufacturer,
-			*identity.ProductCode,
-		)
-
-		// An unpinned name renders as nothing rather than as an empty string, so
-		// that "this identity matches on the code alone" is what the Go says.
-		if identity.ModelName != "" {
-			rendered += fmt.Sprintf(", ModelName: %q", identity.ModelName)
-		}
-
-		lines = append(lines, rendered+"},")
+	for index := range identities {
+		lines = append(lines, "{"+renderIdentityFields(&identities[index])+"},")
 	}
 
 	return append(lines, "},")
+}
+
+// renderRefusedIdentities renders the fingerprints the model is recognized by
+// and refused for. A model with none renders no field at all, which is what
+// almost every entry looks like.
+func renderRefusedIdentities(refused []RefusedIdentity) []string {
+	if len(refused) == 0 {
+		return nil
+	}
+
+	lines := make([]string, 0, len(refused)+2)
+	lines = append(lines, "RefusedIdentities: []RefusedIdentity{")
+
+	for index := range refused {
+		entry := &refused[index]
+
+		lines = append(lines, fmt.Sprintf(
+			"{Identity: Identity{%s}, Reason: %q},",
+			renderIdentityFields(&entry.Identity),
+			entry.ReasonText(),
+		))
+	}
+
+	return append(lines, "},")
+}
+
+// renderIdentityFields renders the fields of one fingerprint, without braces.
+func renderIdentityFields(identity *Identity) string {
+	rendered := fmt.Sprintf(
+		"Manufacturer: %q, ProductCode: 0x%04X",
+		identity.Manufacturer,
+		*identity.ProductCode,
+	)
+
+	// An unpinned name renders as nothing rather than as an empty string, so
+	// that "this identity matches on the code alone" is what the Go says.
+	if identity.ModelName != "" {
+		rendered += fmt.Sprintf(", ModelName: %q", identity.ModelName)
+	}
+
+	return rendered
 }
 
 // renderInputs renders the input map in the order [sortedInputNames] decides,

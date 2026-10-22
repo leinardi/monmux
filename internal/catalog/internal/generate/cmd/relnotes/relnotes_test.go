@@ -488,3 +488,106 @@ func parse(t *testing.T, source string) generate.Document {
 
 	return document
 }
+
+// withoutSecondIdentity is enabledEntry matching only its first product code.
+func withoutSecondIdentity() string {
+	return strings.Replace(
+		enabledEntry, "      - manufacturer: TST\n        product_code: 0x1001\n", "", 1,
+	)
+}
+
+// withRefused adds one refused identity to a catalog built from enabledEntry.
+func withRefused(source, productCode, reason string) string {
+	return strings.Replace(
+		source,
+		"    write_enabled: true\n",
+		"    refused_identities:\n"+
+			"      - manufacturer: TST\n"+
+			"        product_code: "+productCode+"\n"+
+			"        reason: \""+reason+"\"\n"+
+			"    write_enabled: true\n",
+		1,
+	)
+}
+
+// An identity that is allowed now and was not is the one transition that makes
+// monmux write to a display it used to refuse; every other move into, out of or
+// within the refused list leaves that display refused.
+func TestIdentityTransitionsAreEnablingOnlyWhenTheyAllowAWrite(t *testing.T) {
+	t.Parallel()
+
+	const (
+		pbp      = "Picture-by-picture is on."
+		reworded = "Picture-by-picture is on. Turn it off in the OSD."
+	)
+
+	cases := map[string]struct {
+		before, after string
+		section       string
+		wanted        string
+		enabling      bool
+	}{
+		"a new allowed identity": {
+			before:   withoutSecondIdentity(),
+			after:    enabledEntry,
+			section:  "### Identities added",
+			wanted:   "- `Testco/MX100` — matches `TST/0x1001`",
+			enabling: true,
+		},
+		"a refused identity allowed": {
+			before:   withRefused(withoutSecondIdentity(), "0x1001", pbp),
+			after:    enabledEntry,
+			section:  "### Identities added",
+			wanted:   "- `Testco/MX100` — matches `TST/0x1001`, which it used to refuse",
+			enabling: true,
+		},
+		"an allowed identity refused": {
+			before:  enabledEntry,
+			after:   withRefused(withoutSecondIdentity(), "0x1001", pbp),
+			section: "### Identities now refused",
+			wanted:  "- `Testco/MX100` — refuses `TST/0x1001`, which it used to match",
+		},
+		"a new refused identity": {
+			before:  enabledEntry,
+			after:   withRefused(enabledEntry, "0x1002", pbp),
+			section: "### Identities now refused",
+			wanted:  "- `Testco/MX100` — recognizes and refuses `TST/0x1002`",
+		},
+		"a refused identity removed": {
+			before:  withRefused(enabledEntry, "0x1002", pbp),
+			after:   enabledEntry,
+			section: "### Identities removed",
+			wanted:  "- `Testco/MX100` — no longer recognizes `TST/0x1002`, which it refused",
+		},
+		"a refusal reason reworded": {
+			before:  withRefused(enabledEntry, "0x1002", pbp),
+			after:   withRefused(enabledEntry, "0x1002", reworded),
+			section: "### Evidence, notes and sources",
+			wanted:  "- `Testco/MX100` — changed: the refusal reason for `TST/0x1002`",
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			comparison := compare(parse(t, test.before), parse(t, test.after))
+
+			if comparison.enabling() != test.enabling {
+				t.Errorf("enabling = %t, want %t", comparison.enabling(), test.enabling)
+			}
+
+			rendered := comparison.markdown("v0.1.0")
+
+			at := strings.Index(rendered, test.section+"\n")
+			if at < 0 || !strings.Contains(rendered[at:], test.wanted) {
+				t.Errorf("no %q under %q; the notes are:\n%s", test.wanted, test.section, rendered)
+			}
+
+			// Exactly one line moved, so nothing else may have been reported.
+			if strings.Count(rendered, "\n- ") != 1 {
+				t.Errorf("more than one line was reported:\n%s", rendered)
+			}
+		})
+	}
+}

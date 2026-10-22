@@ -37,7 +37,9 @@ specification's 0x0F/0x11 to 0x05, 0x09, 0x13 and 0x00.
   `monmux switch` reaches it only when `--unsafe-model` names it and identification is bypassed
   altogether. A fingerprint may also pin the EDID model name, written after the code as
   `GSM/0x7707 "LG HDR 4K"`; that is only used where two models share a reused product code, and no
-  entry needs it today.
+  entry needs it today. An identity followed by `(refused)` is one the model is recognised by and
+  never switched under — a mode such as picture-by-picture that reports a product code of its own —
+  and its reason is listed under the model.
 - **Input** — the symbolic input, as typed on the command line: a connector kind (`dp`, `hdmi`,
   `usb-c`, `dvi`, `vga`, `thunderbolt`) plus an optional port number, as in `hdmi2`. A kind is
   written bare when the model has one port of it and numbered when it has several, never both.
@@ -63,10 +65,12 @@ The table is ordered the way the catalog file is written: the models monmux will
 then by vendor, then by model name. The generator enforces that order on the file, so the two cannot
 drift apart.
 
-Under each model, the notes section carries the per-model prose and its sources. A model with an
-input that has a known condition under which the unit may not follow — a firmware version that needs
-another value, say — also lists a **Caveats** block between the two: one line per input, and exactly
-the sentence `monmux switch` prints after it sends to that input.
+Under each model, the notes section carries the per-model prose and its sources. Between the two,
+a model that refuses an identity lists a **Refused identities** block, with the reason a switch is
+refused with as `unsupported-mode`; and a model with an input that has a known condition under which
+the unit may not follow — a firmware version that needs another value, say — lists a **Caveats**
+block: one line per input, and exactly the sentence `monmux switch` prints after it sends to that
+input.
 
 ## The same table, offline
 

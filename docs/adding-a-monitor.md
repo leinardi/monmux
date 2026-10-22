@@ -168,6 +168,10 @@ model of a vendor.
       - manufacturer: ABC
         product_code: 0x1234
         # model_name: ABC 4K   # only when two models share this product code
+  refused_identities:      # optional: a mode nobody tested a switch in
+      - manufacturer: ABC
+        product_code: 0x1235
+        reason: "Picture-by-Picture is on. Turn it off in the OSD."
   write_enabled: true
   inputs:
       dp:
@@ -207,6 +211,14 @@ command was sent, and in the dry-run block, and `catalog show` lists it. Keep it
 that tells the user what to check; the reasoning, the reports and the quirks belong in `notes`. Leave
 the key out when there is nothing to say — writing it empty is an error, not an absence.
 
+`refused_identities` is optional, and is for a mode of the monitor that reports a product code of
+its own — picture-by-picture is the case it was added for — when nobody has tested a switch in that
+mode. Recording it lets monmux recognise the monitor and refuse with `unsupported-mode` and the
+`reason`, which should say what the mode is and how to leave it, instead of refusing it as an
+unknown monitor. Record only a code somebody captured in that mode; do not guess the codes of the
+other inputs. A refused identity is refused because it is in that list: no reason, and no spelling
+of one, makes it writable. `--unsafe-model` still reaches it, like any display.
+
 There is no model-level caveat. When an entry needs one, add it to the generator, and print it
 together with the input's caveat, never instead of it: an input-level caveat is the more specific
 warning, and a model-level one must not be able to hide it.
@@ -226,13 +238,18 @@ Rules the generator refuses and the invariant tests re-check:
 
 - A write-enabled model has at least one identity. Without one it can never match, and an entry that
   can never match must not claim to be enabled.
-- A model that is not write-enabled records no identity at all. Matching does not consult the flag,
-  so an entry with a fingerprint would match a real display and then refuse late instead of never
-  matching.
-- An identity belongs to exactly one model, across the whole catalog, and a manufacturer is three
-  uppercase letters. Two identities collide when the manufacturer and the product code are equal and
-  either pins no `model_name`, or both pin the same one — so only two identities that both pin, with
-  different names, may share a product code.
+- A model that is not write-enabled records no identity at all, refused ones included. Matching does
+  not consult the flag, so an entry with a fingerprint would match a real display and then refuse
+  late instead of never matching.
+- A write-enabled model's one required identity is an allowed one: an entry that refuses every
+  display it matches is not enabled in any useful sense.
+- Every refused identity writes a `reason`: a non-empty string of at most 200 bytes with no leading
+  or trailing whitespace, no `|` and no line break. `reason:` and `reason: null` are refused.
+- An identity belongs to exactly one model, across the whole catalog and across both lists, so one
+  fingerprint can be neither allowed and refused at once nor refused by one model and allowed by
+  another, and a manufacturer is three uppercase letters. Two identities collide when the
+  manufacturer and the product code are equal and either pins no `model_name`, or both pin the same
+  one — so only two identities that both pin, with different names, may share a product code.
 - A pinned `model_name` is 1 to 13 characters of printable ASCII with no leading or trailing
   whitespace, because that is what an EDID descriptor can hold.
 - Every recorded input is a well-formed name. A name is a connector kind — `dp`, `hdmi`, `usb-c`,
