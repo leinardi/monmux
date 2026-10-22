@@ -1,0 +1,24 @@
+[1] (null) (00000000-0000-4000-8000-000000000002)
+ - Product name:  (null)
+ - Manufacturer:  00-10-fa
+ - AN Serial:     (null)
+ - Vendor:        1552 (0x0610)
+ - Model:         41041 (0xa051)
+ - Serial:        16909060 (0x01020304)
+ - Display ID:    1
+ - System UUID:   00000000-0000-4000-8000-000000000002
+ - EDID UUID:     (null)
+ - IO Location:   IOService:/AppleARMPE/arm-io/AppleT600xIO/disp0@8A000000/AppleCLCD2
+ - Adapter:       11267
+[2] Odyssey G95NC (00000000-0000-4000-8000-000000000001)
+ - Product name:  Odyssey G95NC
+ - Manufacturer:  SAM
+ - AN Serial:     TESTSERIAL01
+ - Vendor:        19501 (0x4c2d)
+ - Model:         29814 (0x7476)
+ - Serial:        16909060 (0x01020304)
+ - Display ID:    4
+ - System UUID:   00000000-0000-4000-8000-000000000001
+ - EDID UUID:     00000000-0000-4000-8000-000000000001
+ - IO Location:   IOService:/AppleARMPE/arm-io/AppleT600xIO/dispext1@8B000000/AppleCLCD2
+ - Adapter:       14595

@@ -38,7 +38,7 @@ type Display struct {
 	// display is still reported by info, but policy can never select it.
 	Writable bool
 	// Status is why the display is in the state it is in: "ok",
-	// "no-ddc-channel", "edid-unreadable", "no-uuid", and so on.
+	// "no-ddc-channel", "edid-unreadable", "no-uuid", "built-in", and so on.
 	Status string
 }
 
@@ -52,4 +52,8 @@ const (
 	StatusEDIDUnreadable = "edid-unreadable"
 	// StatusNoUUID means macOS gave the display no UUID, the only selector there.
 	StatusNoUUID = "no-uuid"
+	// StatusBuiltIn means the display is the computer's own panel. It has no
+	// inputs to switch, so it is never a target, and counting it as one would
+	// make every --unsafe-model run on a laptop ambiguous.
+	StatusBuiltIn = "built-in"
 )

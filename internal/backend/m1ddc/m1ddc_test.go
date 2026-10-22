@@ -444,3 +444,30 @@ func TestDoctorWritesNothing(t *testing.T) {
 		}
 	}
 }
+
+// The Mac's own panel is listed and passes: it is never a target, and a FAIL
+// for it would be on every MacBook's report.
+func TestDoctorPassesTheBuiltInPanel(t *testing.T) {
+	t.Parallel()
+
+	world := newWorld(t,
+		exec.Rule{
+			Match:  listCommand,
+			Result: exec.Result{Stdout: fixture(t, "testdata/display-list-built-in-h16g.txt")},
+		},
+	)
+
+	for _, check := range world.backend.Doctor(t.Context()) {
+		if check.Name != "display 2" {
+			continue
+		}
+
+		if !check.OK || check.Detail != backend.StatusBuiltIn {
+			t.Errorf("the built-in panel's check = %+v", check)
+		}
+
+		return
+	}
+
+	t.Error("doctor did not report the built-in panel")
+}
