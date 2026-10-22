@@ -85,8 +85,8 @@ disable a pin the user believes is protecting them.
 
 **What it is.** `monmux switch <input> --unsafe-model VENDOR/MODEL` treats the attached display as
 that catalog entry instead of identifying it from its EDID, and skips the write-enabled gate.
-Seventy of the seventy-one entries are recorded from somebody else's report and are refused without
-it; this is how the person who owns one of those monitors produces the evidence that would enable
+Sixty-nine of the seventy-one entries are recorded from somebody else's report and are refused
+without it; this is how the person who owns one of those monitors produces the evidence that would enable
 it, and it is why it exists at all.
 
 **What it deliberately weakens**, stated plainly rather than buried:
@@ -123,11 +123,12 @@ does not happen. There is no interactive prompt: the flag's name and the banner 
 prompt would break the scripting the flag exists to allow. The result line then says the
 identification was bypassed, so scrollback shows it later.
 
-Seventy of the seventy-one entries use `vcp-input-source`, which has reached one monitor so far,
-through m1ddc, and none through ddcutil. Every `--unsafe-model` run against one of them is a first
-run of that entry's values, and the first from Linux is also the first hardware run of the ddcutil
-path: both belong with the checklist in [testing.md](testing.md), with `--dry-run` first and the
-monitor's OSD within reach.
+Thirty-six entries use `vcp-input-source`, and one of them, the Samsung G95NC, is write-enabled,
+verified through m1ddc. No `vcp-input-source` entry has reached a monitor through ddcutil. Every
+`--unsafe-model` run against one of the other thirty-five is a first run of that entry's values, and
+any first run from Linux, the G95NC's included, is also the first hardware run of the ddcutil path:
+both belong with the checklist in [testing.md](testing.md), with `--dry-run` first and the monitor's
+OSD within reach.
 
 ### Serial and UUID leakage
 

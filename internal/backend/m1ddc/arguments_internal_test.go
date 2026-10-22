@@ -47,9 +47,8 @@ func TestArgumentsAreTheSetInvocation(t *testing.T) {
 			value:     0x1D1,
 			want:      []string{"set", "input-alt", "465"},
 		},
-		// m1ddc's `set input` is the standard Input Source feature. No end-to-end
-		// planFor golden test for this mechanism is possible until a model using
-		// it is write-enabled; the first pull request that enables one adds it.
+		// m1ddc's `set input` is the standard Input Source feature. The end-to-end
+		// golden test for it is TestGoldenCommandForTheG95NC.
 		"the standard Input Source feature": {
 			mechanism: catalog.MechanismInputSource,
 			value:     0x0F,

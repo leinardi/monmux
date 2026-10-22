@@ -38,8 +38,8 @@ Stable, and changed only with a deliberate note in the release:
 
 Not stable, and not to be parsed:
 
-- prose fields — `explanation`, `detail`, `evidence`, `error`, a check's `detail`, and the rendered
-  `command`,
+- prose fields — `explanation`, `detail`, `evidence`, `caveat`, `refused`, a refused identity's
+  `reason`, `error`, a check's `detail`, and the rendered `command`,
 - the order of `displays`, `checks` and `models` beyond what the text output already promises,
 - anything printed on stderr.
 
@@ -100,6 +100,7 @@ being announced as a completed switch.
 | `inputLabel` | a decision was reached | The human name monmux prints, e.g. `USB-C`. |
 | `operation` | a decision was reached | `mechanism`, `value`, `valueHex` — from the compiled-in catalog. |
 | `command` | a decision was reached | The invocation, redacted unless `--show-serial`. Prose: do not parse it. |
+| `caveat` | a decision was reached, and the catalog records a caveat for the input | A condition under which the monitor may not follow, e.g. a firmware version that needs another value. Prose: do not parse it. |
 | `refusal` | `outcome` is `refused` | See below. |
 | `error` | `outcome` is `failed` | The failure text. Prose: do not parse it. |
 
@@ -199,6 +200,7 @@ It writes nothing.
 | `displays[].match` | `exact`, `none` or `ambiguous`. |
 | `displays[].model` | The matched entry's full name, empty when `match` is not `exact`. |
 | `displays[].enabledInputs` | Input **names**, and empty for any display monmux will not write to. |
+| `displays[].refused` | Present only when the matched entry refuses the identity the display reports — a mode such as picture-by-picture with a product code of its own. The catalog's reason, which a switch is refused with as `unsupported-mode`. Prose: do not parse it. |
 | `checks[]` | The backend's diagnostics: `name`, `ok`, `detail`. |
 
 `enabledInputs` is a list of names, not of labels, and stays that way. A client that wants the human
@@ -222,6 +224,7 @@ The catalog compiled into this binary. No backend, no configuration file, no mon
       "fullName": "LG 38WR85QC-W",
       "writeEnabled": true,
       "identities": ["GSM/0x77D3", "GSM/0x77D4"],
+      "refusedIdentities": [],
       "mechanisms": ["lg-alt-input"],
       "inputs": [
         {
@@ -243,6 +246,10 @@ The catalog compiled into this binary. No backend, no configuration file, no mon
 }
 ```
 
+`identities` are the fingerprints a switch may write to. `refusedIdentities` are the ones the entry
+recognises and refuses, each an object with `identity`, in the same form, and `reason`, the prose a
+switch is refused with as `unsupported-mode`; it is an empty array for almost every entry.
+
 `catalog show --json` prints one of those `models` entries as the whole document. `count` and
 `writeEnabled` are the number of entries listed, after any filter, and how many of them monmux may
 write to.
@@ -253,7 +260,8 @@ write to.
 `inputs[]` is what the entry **records**, which is not the same as what monmux will write: only a
 `writeEnabled` entry can be switched, and only to an input it records. `label` is the human name
 monmux itself prints for that input, so a client can show what monmux shows without inventing a
-spelling of its own. `grade` is the evidence grade, and `evidence` is the prose behind it.
+spelling of its own. `grade` is the evidence grade, and `evidence` is the prose behind it. `caveat`
+is present only on an input that has one, and is the same prose `switch` prints after it sends.
 
 ## `version --json`
 

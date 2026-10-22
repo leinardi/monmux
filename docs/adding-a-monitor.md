@@ -76,11 +76,11 @@ of your change. Three rules:
   that only *records* it — disabled, with no identity — counts as that model: the point is that a
   mechanism enters the code with evidence attached, not that the first entry using it is trusted.
 - A mechanism's backend path is **unproven on hardware** until the first model using it is
-  write-enabled. `vcp-input-source` is in that state today: it has reached one monitor, through
-  m1ddc under `--unsafe-model`, and none through ddcutil. Enabling that first model is therefore the
-  first enabling of the mechanism as well as of the model: work through the [testing.md](testing.md)
-  checklist for it, and say in the pull request that it is the first, rather than treating it as a
-  routine catalog flip.
+  write-enabled. Enabling that first model is therefore the first enabling of the mechanism as well
+  as of the model: work through the [testing.md](testing.md) checklist for it, and say in the pull
+  request that it is the first, rather than treating it as a routine catalog flip. Both existing
+  mechanisms are past that point, `vcp-input-source` with the Samsung G95NC through m1ddc only; its
+  ddcutil path has not reached a monitor.
 - A mechanism is a per-model property and never a fallback. A backend that does not implement a
   model's mechanism refuses with `invalid-operation` rather than trying another one. In particular,
   monmux does not write `VCP 0x60` because a monitor happens to read it — only because a catalog
@@ -168,6 +168,10 @@ model of a vendor.
       - manufacturer: ABC
         product_code: 0x1234
         # model_name: ABC 4K   # only when two models share this product code
+  refused_identities:      # optional: a mode nobody tested a switch in
+      - manufacturer: ABC
+        product_code: 0x1235
+        reason: "Picture-by-Picture is on. Turn it off in the OSD."
   write_enabled: true
   inputs:
       dp:
@@ -178,6 +182,7 @@ model of a vendor.
               date: "2026-01-01"
               tool: Linux (ddcutil)
               note: switched from USB-C to DisplayPort
+          # caveat: "One sentence printed whenever this input is switched."   # optional
   notes:
       - "Anything a reader needs that the table has no column for: a negative report, a conflict, an alias, a quirk."
   sources:
@@ -199,6 +204,25 @@ way and nobody can talk a weak report up in prose. The grades, and what each one
 `notes` is per-model prose and is rendered under the model in [compatibility.md](compatibility.md);
 it is documentation and never an operation, so nothing written there can reach a monitor.
 
+`caveat` is optional, per input, and is for a known condition under which a unit that matches the
+entry may not do what the value says: a firmware version that needs another value is the case it
+was added for, because monmux cannot read the firmware. `switch` prints it after the line saying the
+command was sent, and in the dry-run block, and `catalog show` lists it. Keep it to one sentence
+that tells the user what to check; the reasoning, the reports and the quirks belong in `notes`. Leave
+the key out when there is nothing to say — writing it empty is an error, not an absence.
+
+`refused_identities` is optional, and is for a mode of the monitor that reports a product code of
+its own — picture-by-picture is the case it was added for — when nobody has tested a switch in that
+mode. Recording it lets monmux recognise the monitor and refuse with `unsupported-mode` and the
+`reason`, which should say what the mode is and how to leave it, instead of refusing it as an
+unknown monitor. Record only a code somebody captured in that mode; do not guess the codes of the
+other inputs. A refused identity is refused because it is in that list: no reason, and no spelling
+of one, makes it writable. `--unsafe-model` still reaches it, like any display.
+
+There is no model-level caveat. When an entry needs one, add it to the generator, and print it
+together with the input's caveat, never instead of it: an input-level caveat is the more specific
+warning, and a model-level one must not be able to hide it.
+
 Then re-render the Go the binary actually compiles, and commit both files:
 
 ```sh
@@ -214,13 +238,18 @@ Rules the generator refuses and the invariant tests re-check:
 
 - A write-enabled model has at least one identity. Without one it can never match, and an entry that
   can never match must not claim to be enabled.
-- A model that is not write-enabled records no identity at all. Matching does not consult the flag,
-  so an entry with a fingerprint would match a real display and then refuse late instead of never
-  matching.
-- An identity belongs to exactly one model, across the whole catalog, and a manufacturer is three
-  uppercase letters. Two identities collide when the manufacturer and the product code are equal and
-  either pins no `model_name`, or both pin the same one — so only two identities that both pin, with
-  different names, may share a product code.
+- A model that is not write-enabled records no identity at all, refused ones included. Matching does
+  not consult the flag, so an entry with a fingerprint would match a real display and then refuse
+  late instead of never matching.
+- A write-enabled model's one required identity is an allowed one: an entry that refuses every
+  display it matches is not enabled in any useful sense.
+- Every refused identity writes a `reason`: a non-empty string of at most 200 bytes with no leading
+  or trailing whitespace, no `|` and no line break. `reason:` and `reason: null` are refused.
+- An identity belongs to exactly one model, across the whole catalog and across both lists, so one
+  fingerprint can be neither allowed and refused at once nor refused by one model and allowed by
+  another, and a manufacturer is three uppercase letters. Two identities collide when the
+  manufacturer and the product code are equal and either pins no `model_name`, or both pin the same
+  one — so only two identities that both pin, with different names, may share a product code.
 - A pinned `model_name` is 1 to 13 characters of printable ASCII with no leading or trailing
   whitespace, because that is what an EDID descriptor can hold.
 - Every recorded input is a well-formed name. A name is a connector kind — `dp`, `hdmi`, `usb-c`,
@@ -239,6 +268,9 @@ Rules the generator refuses and the invariant tests re-check:
 - No text the documentation renders — `by`, `tool`, `date`, `url`, `note`, a `notes` entry or a
   source — holds a `|` or a line break, because the document test reads Markdown table cells and
   single-line bullets.
+- A `caveat`, when the key is written, is a non-empty string of at most 200 bytes with no leading
+  or trailing whitespace, no `|` and no line break. `caveat:`, `caveat: null` and `caveat: ""` are
+  all refused rather than read as "no caveat".
 - The models are written in catalog order: write-enabled first, then by vendor, then by model name.
 - Every model names at least one source.
 - Every identity writes a `product_code`, and every input writes a `value`. Leaving one out is an
@@ -267,9 +299,9 @@ A disabled entry is not a lesser contribution. It is the thing that stops the ne
 ## 7. Update the documentation and the fixtures
 
 - The table and the `### Vendor Model` sections of [compatibility.md](compatibility.md) are
-  generated: `make go-generate` writes them from your `notes` and `sources`, so there are no rows to
-  type and nothing to keep byte-identical by hand. Commit the regenerated file. Anything you want to
-  say that is not in those two lists belongs outside the markers, or in the YAML.
+  generated: `make go-generate` writes them from your `notes`, caveats and `sources`, so there are no
+  rows to type and nothing to keep byte-identical by hand. Commit the regenerated file. Anything you
+  want to say that the YAML has no field for belongs outside the markers.
 - If you add a fixture — a captured EDID, or captured tool output — **sanitize it first**. Replace
   every serial and UUID with the synthetic values in `internal/backend/testdata/README.md`,
   recompute the EDID checksum, and check that the allowlist test passes. It fails the build if any

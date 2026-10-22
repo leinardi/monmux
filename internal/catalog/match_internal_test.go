@@ -274,3 +274,91 @@ func TestCompareInputsIsTotalEvenForNamesThatDoNotParse(t *testing.T) {
 		t.Error("CompareInputs does not report a name equal to itself")
 	}
 }
+
+// refusingEntries is one write-enabled entry with an allowed identity and a
+// refused one, pinned so the model name has to agree, and a second entry that
+// claims nothing.
+func refusingEntries() []Model {
+	return []Model{
+		{
+			Name:       "first",
+			Vendor:     "ACME",
+			Identities: []Identity{{Manufacturer: "ACM", ProductCode: 0x0001}},
+			RefusedIdentities: []RefusedIdentity{{
+				Identity: Identity{Manufacturer: "ACM", ProductCode: 0x0002, ModelName: "ACME PBP"},
+				Reason:   "Picture-by-picture is on.",
+			}},
+			WriteEnabled: true,
+			Inputs: map[Input]inputOp{
+				"dp": {mechanism: MechanismInputSource, value: 0x0F, evidence: "test"},
+			},
+		},
+		{Name: "second", Vendor: "ACME"},
+	}
+}
+
+// A refused identity is recognized - the model is named - and refused, under
+// the same comparison as an allowed one, the pinned model name included.
+func TestARefusedIdentityMatchesAndIsRefused(t *testing.T) {
+	t.Parallel()
+
+	refused := edid.Identity{Manufacturer: "ACM", ProductCode: 0x0002, ModelName: "ACME PBP"}
+
+	model, result := matchIn(refused, refusingEntries())
+	if result != MatchExact || model.Name != "first" {
+		t.Fatalf("match = %s for %q, want exact for first", result, model.Name)
+	}
+
+	reason, isRefused := model.IdentityRefusal(refused)
+	if !isRefused || reason != "Picture-by-picture is on." {
+		t.Errorf("refusal = %q, %t", reason, isRefused)
+	}
+
+	allowed := edid.Identity{Manufacturer: "ACM", ProductCode: 0x0001}
+
+	_, isRefused = model.IdentityRefusal(allowed)
+	if isRefused {
+		t.Error("the allowed identity is refused")
+	}
+
+	// The pinned name is part of the fingerprint: without it the display is
+	// not this mode at all, and so not this model.
+	unnamed := edid.Identity{Manufacturer: "ACM", ProductCode: 0x0002}
+
+	_, result = matchIn(unnamed, refusingEntries())
+	if result != MatchNone {
+		t.Errorf("an unpinned display matched a pinned refused identity: %s", result)
+	}
+}
+
+// One display claimed by two entries is ambiguous whether either claim allows a
+// write or refuses one.
+func TestARefusedIdentityClaimedTwiceIsAmbiguous(t *testing.T) {
+	t.Parallel()
+
+	entries := refusingEntries()
+	entries[1].Identities = []Identity{{Manufacturer: "ACM", ProductCode: 0x0002}}
+
+	_, result := matchIn(
+		edid.Identity{Manufacturer: "ACM", ProductCode: 0x0002, ModelName: "ACME PBP"},
+		entries,
+	)
+	if result != MatchAmbiguous {
+		t.Errorf("match = %s, want ambiguous", result)
+	}
+}
+
+// The refused identities a caller is handed are a copy: dropping one must not
+// make the compiled-in entry write to that mode.
+func TestRefusedIdentitiesAreClonedWithTheModel(t *testing.T) {
+	t.Parallel()
+
+	entries := refusingEntries()
+
+	handedOut := cloneModel(entries[0])
+	handedOut.RefusedIdentities[0].Identity.ProductCode = 0x0003
+
+	if entries[0].RefusedIdentities[0].Identity.ProductCode != 0x0002 {
+		t.Error("mutating a handed-out model changed the entry's refused identity")
+	}
+}

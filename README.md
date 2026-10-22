@@ -16,18 +16,19 @@ verified — is refused without a write, and every refusal says so in as many wo
 documented exception is the `--unsafe-model` override below, which has to be typed on the command
 line it applies to.
 
-It wraps `ddcutil` on Linux and `m1ddc` on macOS; there is no native I²C or IOKit backend. One
-monitor model is verified so far.
+It wraps `ddcutil` on Linux and `m1ddc` on macOS; there is no native I²C or IOKit backend. Two
+monitor models are verified so far.
 
 ## Supported monitors
 
-One model is verified on hardware: the LG 38WR85QC-W, on `dp` and `usb-c`. Another 70 models from
-twelve vendors are recorded from public reports, every one of them disabled and without an EDID
-fingerprint, so monmux can never match them, and will not write to them unless you take the
-identification off yourself with [`--unsafe-model`](#the---unsafe-model-override). They are written
-down for the contributor who owns one — enabling a row means testing it on a real unit and recording
-the evidence, see [docs/adding-a-monitor.md](docs/adding-a-monitor.md). The full list, with the
-evidence and the conflicts behind every value, is in [docs/compatibility.md](docs/compatibility.md).
+Two models are verified on hardware: the LG 38WR85QC-W, on `dp` and `usb-c`, and the Samsung G95NC,
+on `dp`, `hdmi1`, `hdmi2` and `hdmi3`. Another 69 models from twelve vendors are recorded from
+public reports, every one of them disabled and without an EDID fingerprint, so monmux can never
+match them, and will not write to them unless you take the identification off yourself with
+[`--unsafe-model`](#the---unsafe-model-override). They are written down for the contributor who owns
+one — enabling a row means testing it on a real unit and recording the evidence, see
+[docs/adding-a-monitor.md](docs/adding-a-monitor.md). The full list, with the evidence and the
+conflicts behind every value, is in [docs/compatibility.md](docs/compatibility.md).
 
 **Own one of them?** Every recorded model has an open [`help wanted`
 issue](https://github.com/leinardi/monmux/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+label%3Acatalog)
@@ -36,9 +37,9 @@ them. A test on your unit, reported there, is what makes a model switchable — 
 nothing is as useful to report as one that worked.
 
 Two mechanisms are implemented: `lg-alt-input`, the LG side channel, and `vcp-input-source`, the
-standard `VCP 0x60` Input Source feature. Only the first is write-enabled on any model. The second
-has 36 recorded models, all disabled; it has reached one monitor, a Samsung G95NC switched through
-m1ddc under `--unsafe-model`, and has never been run through ddcutil.
+standard `VCP 0x60` Input Source feature. Each is write-enabled on one model. The second has 36
+recorded models; the one enabled is the Samsung G95NC, verified through m1ddc, and the mechanism has
+never been run through ddcutil.
 
 ## Install
 
@@ -202,7 +203,7 @@ sent" is the strongest true statement available; monmux never claims a monitor s
 
 ### The `--unsafe-model` override
 
-Seventy of the seventy-one entries are recorded from somebody else's report and are not
+Sixty-nine of the seventy-one entries are recorded from somebody else's report and are not
 write-enabled, so `monmux switch` refuses them. `--unsafe-model` is the deliberate way past that,
 for the person who owns the monitor and is trying to produce the evidence that would enable it:
 

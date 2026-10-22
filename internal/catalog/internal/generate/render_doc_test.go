@@ -345,3 +345,112 @@ func TestRenderDocumentValidatesBeforeItRenders(t *testing.T) {
 		t.Fatalf("error is %v, want ErrMissing", err)
 	}
 }
+
+// A caveat is listed under the notes and above the sources, one bullet per input
+// in catalog order whatever order the file writes them in, and a model with
+// none gets no block at all.
+func TestRenderDocumentListsCaveatsBetweenNotesAndSources(t *testing.T) {
+	t.Parallel()
+
+	plain := render(t, oneModel, surround(""))
+	if strings.Contains(plain, "Caveats:") {
+		t.Errorf("a model with no caveat got a block:\n%s", plain)
+	}
+
+	source := strings.Replace(
+		oneModel,
+		"          url: https://example.invalid/report\n",
+		"          url: https://example.invalid/report\n"+
+			"        caveat: \"Second, see https://example.invalid/firmware for why.\"\n"+
+			"      hdmi1:\n"+
+			"        mechanism: vcp-input-source\n"+
+			"        value: 0x12\n"+
+			"        caveat: \"First.\"\n"+
+			"        evidence:\n"+
+			"          grade: reported\n"+
+			"          by: \"somebody\"\n"+
+			"          tool: \"ddcutil\"\n"+
+			"          url: https://example.invalid/report\n",
+		1,
+	)
+
+	lines := strings.Split(render(t, source, surround("")), "\n")
+
+	note := indexOfPrefix(lines, "- A note that links")
+	heading := indexOfPrefix(lines, "Caveats:")
+	first := indexOfPrefix(lines, "- `hdmi1`: First.")
+	second := indexOfPrefix(
+		lines,
+		"- `hdmi2`: Second, see <https://example.invalid/firmware> for why.",
+	)
+	sources := indexOfPrefix(lines, "Sources:")
+
+	if note < 0 || heading < 0 || first < 0 || second < 0 || sources < 0 ||
+		note >= heading || heading >= first || first >= second || second >= sources {
+		t.Errorf(
+			"the caveats are missing or out of place (note %d, heading %d, hdmi1 %d, hdmi2 %d, sources %d):\n%s",
+			note,
+			heading,
+			first,
+			second,
+			sources,
+			strings.Join(lines, "\n"),
+		)
+	}
+}
+
+// A refused identity is listed in the Identities column, marked, and its reason
+// gets a block of its own under the notes and above the caveats.
+func TestRenderDocumentMarksAndExplainsARefusedIdentity(t *testing.T) {
+	t.Parallel()
+
+	source := strings.NewReplacer(
+		"    identities: []\n",
+		"    identities:\n"+
+			"      - manufacturer: ACM\n"+
+			"        product_code: 0x0001\n"+
+			"    refused_identities:\n"+
+			"      - manufacturer: ACM\n"+
+			"        product_code: 0x0002\n"+
+			"        reason: \"Picture-by-picture is on. Turn it off in the OSD.\"\n",
+		"write_enabled: false", "write_enabled: true",
+		"          grade: reported\n          by: \"somebody\"\n          tool: \"ddcutil\"\n"+
+			"          url: https://example.invalid/report\n",
+		"          grade: verified\n          date: \"2026-10-21\"\n          tool: \"ddcutil\"\n"+
+			"          note: \"switched\"\n        caveat: \"Check the firmware.\"\n",
+	).Replace(oneModel)
+
+	spliced := render(t, source, surround(""))
+	lines := strings.Split(spliced, "\n")
+
+	if !strings.Contains(
+		spliced,
+		"| Acme TESTER-1 | ACM/0x0001, ACM/0x0002 (refused) | `hdmi2` |",
+	) {
+		t.Errorf("the Identities column does not mark the refused identity:\n%s", spliced)
+	}
+
+	note := indexOfPrefix(lines, "- A note that links")
+	refused := indexOfPrefix(lines, "Refused identities:")
+	reason := indexOfPrefix(
+		lines,
+		"- `ACM/0x0002`: Picture-by-picture is on. Turn it off in the OSD.",
+	)
+	caveats := indexOfPrefix(lines, "Caveats:")
+
+	if note < 0 || refused < 0 || reason < 0 || caveats < 0 ||
+		note >= refused || refused >= reason || reason >= caveats {
+		t.Errorf(
+			"the refused identities are missing or out of place (note %d, heading %d, reason %d, caveats %d):\n%s",
+			note,
+			refused,
+			reason,
+			caveats,
+			spliced,
+		)
+	}
+
+	if strings.Contains(render(t, oneModel, surround("")), "Refused identities:") {
+		t.Error("a model with no refused identity got a block")
+	}
+}

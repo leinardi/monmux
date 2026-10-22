@@ -61,6 +61,17 @@ const (
 // reads the document back splits a section on.
 const sourcesHeading = "Sources:"
 
+// refusedHeading introduces a model's refused identities, between its notes and
+// its caveats. It is written only for a model that has one.
+const refusedHeading = "Refused identities:"
+
+// refusedSuffix is what the Identities column writes after a refused identity.
+const refusedSuffix = " (refused)"
+
+// caveatsHeading introduces a model's per-input caveats, between its notes and
+// its sources. It is written only for a model that has one.
+const caveatsHeading = "Caveats:"
+
 // noIdentities is what the Identities column says for an entry that records no
 // EDID fingerprint, and so can never match a display.
 const noIdentities = "none"
@@ -108,9 +119,14 @@ func RenderDocument(document Document) ([]string, error) {
 		return nil, err
 	}
 
+	notes, err := renderNotes(document)
+	if err != nil {
+		return nil, err
+	}
+
 	// A leading blank keeps a blank line between the begin marker and the first
 	// heading, which is what Markdown wants around a heading.
-	lines := slices.Concat([]string{""}, table, renderNotes(document))
+	lines := slices.Concat([]string{""}, table, notes)
 
 	err = checkMarkers(lines)
 	if err != nil {
@@ -153,7 +169,7 @@ func renderRows(model *Model) ([]string, error) {
 		enabled = "yes"
 	}
 
-	identities := renderIdentityList(model.Identities)
+	identities := renderIdentityList(model)
 	rows := make([]string, 0, len(names))
 
 	for _, name := range names {
@@ -181,33 +197,45 @@ func renderRows(model *Model) ([]string, error) {
 }
 
 // renderIdentityList renders the fingerprints the way the Identities column
-// lists them. An entry with none says so in a word, because a blank cell reads
-// like an omission rather than like the deliberate refusal to match that it is.
-func renderIdentityList(identities []Identity) string {
-	if len(identities) == 0 {
+// lists them: the allowed ones, then the refused ones marked as such. An entry
+// with none says so in a word, because a blank cell reads like an omission
+// rather than like the deliberate refusal to match that it is.
+func renderIdentityList(model *Model) string {
+	if len(model.identities()) == 0 {
 		return noIdentities
 	}
 
-	rendered := make([]string, 0, len(identities))
+	rendered := make([]string, 0, len(model.identities()))
 
-	for _, identity := range identities {
-		// The claim type already renders an identity the way monmux writes one,
-		// and is what the duplicate check compares, so the column and the rule
-		// cannot disagree about what an identity is called.
-		rendered = append(rendered, claim{
-			manufacturer: identity.Manufacturer,
-			productCode:  *identity.ProductCode,
-			modelName:    identity.ModelName,
-		}.String())
+	for index := range model.Identities {
+		rendered = append(rendered, identityName(&model.Identities[index]))
+	}
+
+	for index := range model.RefusedIdentities {
+		rendered = append(
+			rendered,
+			identityName(&model.RefusedIdentities[index].Identity)+refusedSuffix,
+		)
 	}
 
 	return strings.Join(rendered, ", ")
 }
 
-// renderNotes renders one subsection per model, carrying the prose and the
-// references the catalog file records. Neither is ever an operation: nothing
-// here reaches a monitor.
-func renderNotes(document Document) []string {
+// identityName renders one fingerprint. The claim type already renders an
+// identity the way monmux writes one, and is what the duplicate check compares,
+// so the column and the rule cannot disagree about what an identity is called.
+func identityName(identity *Identity) string {
+	return claim{
+		manufacturer: identity.Manufacturer,
+		productCode:  *identity.ProductCode,
+		modelName:    identity.ModelName,
+	}.String()
+}
+
+// renderNotes renders one subsection per model, carrying the prose, the
+// caveats and the references the catalog file records. None of it is ever an
+// operation: nothing here reaches a monitor.
+func renderNotes(document Document) ([]string, error) {
 	lines := []string{notesHeading, ""}
 
 	for index := range document.Models {
@@ -219,6 +247,13 @@ func renderNotes(document Document) []string {
 			lines = append(lines, "- "+autolink(note))
 		}
 
+		caveats, err := renderCaveats(model)
+		if err != nil {
+			return nil, err
+		}
+
+		lines = append(lines, renderRefused(model)...)
+		lines = append(lines, caveats...)
 		lines = append(lines, "", sourcesHeading, "")
 
 		for _, source := range model.Sources {
@@ -230,7 +265,55 @@ func renderNotes(document Document) []string {
 		lines = append(lines, "")
 	}
 
+	return lines, nil
+}
+
+// renderRefused renders a model's refused identities as a titled list, each with
+// the reason monmux gives for it, or nothing for a model that has none.
+func renderRefused(model *Model) []string {
+	if len(model.RefusedIdentities) == 0 {
+		return nil
+	}
+
+	lines := []string{"", refusedHeading, ""}
+
+	for index := range model.RefusedIdentities {
+		refused := &model.RefusedIdentities[index]
+
+		lines = append(lines, fmt.Sprintf(
+			"- %#q: %s", identityName(&refused.Identity), autolink(refused.ReasonText()),
+		))
+	}
+
 	return lines
+}
+
+// renderCaveats renders a model's caveats as a titled list, one bullet per input
+// in catalog order, or nothing for a model that has none. The table has no
+// column for a caveat: it is rare, and a column that is empty on almost every
+// row would only widen the table.
+func renderCaveats(model *Model) ([]string, error) {
+	names, err := sortedInputNames(model)
+	if err != nil {
+		return nil, err
+	}
+
+	var bullets []string
+
+	for _, name := range names {
+		entry := model.Inputs[name.String()]
+
+		caveat := entry.CaveatText()
+		if caveat != "" {
+			bullets = append(bullets, fmt.Sprintf("- %#q: %s", name, autolink(caveat)))
+		}
+	}
+
+	if len(bullets) == 0 {
+		return nil, nil
+	}
+
+	return slices.Concat([]string{"", caveatsHeading, ""}, bullets), nil
 }
 
 // FullName is how the documentation names a model, and how the test that reads

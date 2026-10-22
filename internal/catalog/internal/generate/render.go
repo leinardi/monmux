@@ -47,8 +47,8 @@ const licenseHeader = `/*
  * limitations under the License.
  */`
 
-// linesPerInput is how many lines renderInputs emits for one recorded input.
-const linesPerInput = 6
+// linesPerInput is the most lines renderInputs emits for one recorded input.
+const linesPerInput = 7
 
 // generatedMarker is the line that tells go and the linters this file is not
 // written by hand.
@@ -121,6 +121,7 @@ func renderModel(model *Model) ([]string, error) {
 			fmt.Sprintf("Vendor: %q,", model.Vendor),
 		},
 		renderIdentities(model.Identities),
+		renderRefusedIdentities(model.RefusedIdentities),
 		[]string{fmt.Sprintf("WriteEnabled: %t,", model.WriteEnabled)},
 		inputs,
 		renderStrings("Notes", model.Notes),
@@ -139,23 +140,52 @@ func renderIdentities(identities []Identity) []string {
 	lines := make([]string, 0, len(identities)+2)
 	lines = append(lines, "Identities: []Identity{")
 
-	for _, identity := range identities {
-		rendered := fmt.Sprintf(
-			"{Manufacturer: %q, ProductCode: 0x%04X",
-			identity.Manufacturer,
-			*identity.ProductCode,
-		)
-
-		// An unpinned name renders as nothing rather than as an empty string, so
-		// that "this identity matches on the code alone" is what the Go says.
-		if identity.ModelName != "" {
-			rendered += fmt.Sprintf(", ModelName: %q", identity.ModelName)
-		}
-
-		lines = append(lines, rendered+"},")
+	for index := range identities {
+		lines = append(lines, "{"+renderIdentityFields(&identities[index])+"},")
 	}
 
 	return append(lines, "},")
+}
+
+// renderRefusedIdentities renders the fingerprints the model is recognized by
+// and refused for. A model with none renders no field at all, which is what
+// almost every entry looks like.
+func renderRefusedIdentities(refused []RefusedIdentity) []string {
+	if len(refused) == 0 {
+		return nil
+	}
+
+	lines := make([]string, 0, len(refused)+2)
+	lines = append(lines, "RefusedIdentities: []RefusedIdentity{")
+
+	for index := range refused {
+		entry := &refused[index]
+
+		lines = append(lines, fmt.Sprintf(
+			"{Identity: Identity{%s}, Reason: %q},",
+			renderIdentityFields(&entry.Identity),
+			entry.ReasonText(),
+		))
+	}
+
+	return append(lines, "},")
+}
+
+// renderIdentityFields renders the fields of one fingerprint, without braces.
+func renderIdentityFields(identity *Identity) string {
+	rendered := fmt.Sprintf(
+		"Manufacturer: %q, ProductCode: 0x%04X",
+		identity.Manufacturer,
+		*identity.ProductCode,
+	)
+
+	// An unpinned name renders as nothing rather than as an empty string, so
+	// that "this identity matches on the code alone" is what the Go says.
+	if identity.ModelName != "" {
+		rendered += fmt.Sprintf(", ModelName: %q", identity.ModelName)
+	}
+
+	return rendered
 }
 
 // renderInputs renders the input map in the order [sortedInputNames] decides,
@@ -186,8 +216,16 @@ func renderInputs(model *Model) ([]string, error) {
 			fmt.Sprintf("value: 0x%02X,", *entry.Value),
 			fmt.Sprintf("grade: %s,", gradeNames[entry.Evidence.Grade]),
 			fmt.Sprintf("evidence: %q,", evidence),
-			"},",
 		)
+
+		// An input with no caveat renders no line, so that "nothing to warn
+		// about" is what the Go says rather than an empty string.
+		caveat := entry.CaveatText()
+		if caveat != "" {
+			lines = append(lines, fmt.Sprintf("caveat: %q,", caveat))
+		}
+
+		lines = append(lines, "},")
 	}
 
 	return append(lines, "},"), nil

@@ -110,6 +110,17 @@ var (
 	// ErrBadText reports text that cannot be rendered where the documentation
 	// puts it: a Markdown table cell, or a single bullet.
 	ErrBadText = errors.New("generate: text holds a pipe or a line break")
+	// ErrBadCaveat reports a caveat that was written and says nothing usable:
+	// null, empty, blank, untrimmed, not a string, too long to print on one
+	// line of a switch, or holding a pipe or a line break. Leaving the key out
+	// is how an input says it has no caveat; writing it empty is a mistake, and
+	// it is reported rather than read as the absence it looks like.
+	ErrBadCaveat = errors.New("generate: bad caveat")
+	// ErrBadRefusal reports a refused identity whose reason is missing or says
+	// nothing usable, by the same rules as a caveat. The identity stays refused
+	// whatever its reason says - refusal is membership of the list, not the
+	// presence of text - so this is about the message the user is shown.
+	ErrBadRefusal = errors.New("generate: bad refusal reason")
 )
 
 // The mechanisms. They mirror catalog.Mechanisms().
@@ -176,6 +187,16 @@ var requiredEvidence = map[string][]string{
 	gradeReported:   {fieldBy, fieldTool, fieldURL},
 	gradeQuoted:     {fieldBy, fieldTool, fieldURL},
 }
+
+// caveatLength is the longest a caveat may be. It is printed after the line
+// that says a switch was sent, so it has to stay one sentence a user reads at
+// that moment rather than a paragraph; the reasoning goes in the notes.
+const caveatLength = 200
+
+// refusalLength is the longest a refused identity's reason may be. It is the
+// detail of a refusal, under the explanation, so it has to stay one or two
+// sentences saying what to change.
+const refusalLength = 200
 
 // urlScheme is the only scheme a recorded reference may use.
 const urlScheme = "https://"
@@ -245,10 +266,18 @@ type Document struct {
 }
 
 // Model is one catalog entry, as written in the file.
+//
+// RefusedIdentities are fingerprints the model is recognized by and refused
+// for: a mode of the monitor that reports a product code of its own and that
+// nobody has tested a switch in. Recognizing it lets monmux say what to change
+// instead of calling the monitor unknown. Being in this list is what refuses an
+// identity, so no spelling of its reason can make it writable.
 type Model struct {
 	Name       string     `yaml:"name"`
 	Vendor     string     `yaml:"vendor"`
 	Identities []Identity `yaml:"identities"`
+	//nolint:tagliatelle // see WriteEnabled
+	RefusedIdentities []RefusedIdentity `yaml:"refused_identities"`
 	//nolint:tagliatelle // the file is snake_case, like the configuration file
 	WriteEnabled bool             `yaml:"write_enabled"`
 	Inputs       map[string]Input `yaml:"inputs"`
@@ -270,14 +299,67 @@ type Identity struct {
 	ModelName string `yaml:"model_name"`
 }
 
+// RefusedIdentity is a fingerprint a model is recognized by and refused for,
+// with the reason shown to the user. Reason is a node for the same reason
+// [Input.Caveat] is: `reason:` and `reason: null` must be told apart from a
+// reason that was written.
+type RefusedIdentity struct {
+	Identity `yaml:",inline"`
+
+	Reason yaml.Node `yaml:"reason"`
+}
+
+// ReasonText returns the reason the identity is refused, or the empty string
+// when the file wrote none - which [Document.Validate] rejects.
+func (r *RefusedIdentity) ReasonText() string {
+	text, _, isText := optionalText(&r.Reason)
+	if !isText {
+		return ""
+	}
+
+	return text
+}
+
+// identities returns every fingerprint the model is recognized by, the refused
+// ones included: one display must never be claimed twice, whether the claim
+// allows a write or refuses one.
+func (m *Model) identities() []Identity {
+	all := slices.Clone(m.Identities)
+
+	for index := range m.RefusedIdentities {
+		all = append(all, m.RefusedIdentities[index].Identity)
+	}
+
+	return all
+}
+
 // Input is what the file records for one input of one model. Value is 16 bits
 // wide because a SetVCP carries an SH/SL pair, and it is a pointer for the same
 // reason as [Identity.ProductCode]: a value nobody wrote must not default to
 // 0x0000.
+//
+// Caveat is a known condition under which a matching unit may not do what the
+// value says, printed whenever the input is switched. It is decoded as a node
+// rather than as a string because yaml.v3 decodes `caveat:`, `caveat: null` and
+// a missing key into the same empty string, and only the last one means "no
+// caveat"; [Input.CaveatText] reads it once [Document.Validate] has checked it.
 type Input struct {
-	Mechanism string   `yaml:"mechanism"`
-	Value     *uint16  `yaml:"value"`
-	Evidence  Evidence `yaml:"evidence"`
+	Mechanism string    `yaml:"mechanism"`
+	Value     *uint16   `yaml:"value"`
+	Evidence  Evidence  `yaml:"evidence"`
+	Caveat    yaml.Node `yaml:"caveat"`
+}
+
+// CaveatText returns the input's caveat, or the empty string when it has none.
+// Anything the file wrote that is not a string reads as none here, which is why
+// it is only called on a document [Document.Validate] accepted.
+func (i *Input) CaveatText() string {
+	text, _, isText := optionalText(&i.Caveat)
+	if !isText {
+		return ""
+	}
+
+	return text
 }
 
 // Evidence is why anyone believes a value does what the entry says it does. It
@@ -400,7 +482,7 @@ func (d Document) Validate() error {
 
 		names[model.Name] = true
 
-		for _, identity := range model.Identities {
+		for _, identity := range model.identities() {
 			// A missing product code is reported by validateIdentities; there is
 			// nothing to compare until the file supplies one.
 			if identity.ProductCode == nil {
@@ -507,8 +589,11 @@ func (m *Model) validate() []error {
 	return problems
 }
 
-// validateIdentities checks the fingerprints, including the two rules that tie
-// them to WriteEnabled.
+// validateIdentities checks the fingerprints, including the rules that tie them
+// to WriteEnabled. A refused identity does not count towards the one a
+// write-enabled model needs - an entry that refuses every display it matches
+// is not enabled in any useful sense - and a model that is not write-enabled
+// may record neither kind, because it must match nothing at all.
 func (m *Model) validateIdentities() []error {
 	var problems []error
 
@@ -516,11 +601,29 @@ func (m *Model) validateIdentities() []error {
 		problems = append(problems, fmt.Errorf("%w: %q", ErrIdentityRequired, m.Name))
 	}
 
-	if !m.WriteEnabled && len(m.Identities) != 0 {
+	if !m.WriteEnabled && len(m.identities()) != 0 {
 		problems = append(problems, fmt.Errorf("%w: %q", ErrIdentityForbidden, m.Name))
 	}
 
-	for _, identity := range m.Identities {
+	for index := range m.RefusedIdentities {
+		refused := &m.RefusedIdentities[index]
+
+		present, problem := boundedText(&refused.Reason, refusalLength)
+
+		switch {
+		case !present:
+			problems = append(problems, fmt.Errorf(
+				"%w: %q refuses an identity without a reason", ErrBadRefusal, m.Name,
+			))
+		case problem != "":
+			problems = append(problems, fmt.Errorf(
+				"%w: %q refuses an identity with a reason that is %s",
+				ErrBadRefusal, m.Name, problem,
+			))
+		}
+	}
+
+	for _, identity := range m.identities() {
 		if !validManufacturer(identity.Manufacturer) {
 			problems = append(problems, fmt.Errorf(
 				"%w: %q has %q", ErrManufacturer, m.Name, identity.Manufacturer,
@@ -590,6 +693,13 @@ func (m *Model) validateInputs() []error {
 		}
 
 		problems = append(problems, m.validateEvidence(name, &entry)...)
+
+		present, problem := boundedText(&entry.Caveat, caveatLength)
+		if present && problem != "" {
+			problems = append(problems, fmt.Errorf(
+				"%w: %q records a caveat for %q that is %s", ErrBadCaveat, m.Name, name, problem,
+			))
+		}
 	}
 
 	err := input.CheckNumbering(parsed)
@@ -708,6 +818,50 @@ func (m *Model) validateSources() []error {
 
 // nullTag is the YAML tag of a document, or a node, that holds nothing.
 const nullTag = "!!null"
+
+// stringTag is the YAML tag of a scalar that decoded as a string.
+const stringTag = "!!str"
+
+// optionalText reads a scalar the file may leave out. present is false only when
+// the key was never written - yaml.v3 leaves a node it never visited at its zero
+// Kind, and gives `key:`, `key: null` and `key: ~` the null tag instead - and
+// isText is true only for a string.
+func optionalText(node *yaml.Node) (text string, present, isText bool) {
+	if node.Kind == 0 {
+		return "", false, false
+	}
+
+	if node.Kind != yaml.ScalarNode || node.Tag != stringTag {
+		return "", true, false
+	}
+
+	return node.Value, true, true
+}
+
+// boundedText checks optional text that is printed on one line, and says what
+// is wrong with it when something is. A key that was written has to hold a
+// non-blank, trimmed string of at most limit bytes that a table cell and a
+// bullet can carry; problem is empty when it does, and when the key is absent.
+func boundedText(node *yaml.Node, limit int) (present bool, problem string) {
+	text, present, isText := optionalText(node)
+
+	switch {
+	case !present:
+		return false, ""
+	case !isText:
+		return true, "not a string (null, empty or another type)"
+	case strings.TrimSpace(text) == "":
+		return true, "blank"
+	case text != strings.TrimSpace(text):
+		return true, "not trimmed"
+	case !renderable(text):
+		return true, "holding a pipe or a line break"
+	case len(text) > limit:
+		return true, fmt.Sprintf("longer than %d bytes", limit)
+	default:
+		return true, ""
+	}
+}
 
 // emptyDocument reports whether a decoded document carries nothing. A file may
 // open or close with a `---` marker, which yields a document whose only child is

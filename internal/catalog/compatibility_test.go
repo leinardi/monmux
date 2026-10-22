@@ -38,11 +38,27 @@ const columns = 8
 // noIdentities is what the document writes for a model with no EDID fingerprint.
 const noIdentities = "none"
 
-// notesHeading opens the part of the document that carries the per-model prose,
-// and sourcesLine separates a section's notes from its references.
+// notesHeading opens the part of the document that carries the per-model prose.
+// caveatsLine and sourcesLine open the parts of a section after its notes: the
+// per-input caveats, written only for a model that has one, and the references.
+// refusedLine opens the refused identities, between the notes and the caveats,
+// and is likewise written only for a model that refuses one.
 const (
 	notesHeading = "## Notes on the entries"
+	refusedLine  = "Refused identities:"
+	caveatsLine  = "Caveats:"
 	sourcesLine  = "Sources:"
+)
+
+// refusedSuffix marks a refused identity in the Identities column.
+const refusedSuffix = " (refused)"
+
+// The parts of a model's section, in the order the document writes them.
+const (
+	partNotes = iota
+	partRefused
+	partCaveats
+	partSources
 )
 
 // autolinked matches a bare URL that markdownlint wrapped in angle brackets.
@@ -71,6 +87,8 @@ func (r *row) key() string {
 // section is what the document says about one model outside the table.
 type section struct {
 	notes   []string
+	refused []string
+	caveats []string
 	sources []string
 }
 
@@ -151,6 +169,26 @@ func TestCompatibilityDocumentCarriesEveryNoteAndSource(t *testing.T) {
 			)
 		}
 
+		if !slices.Equal(written.refused, refusals(&model)) {
+			t.Errorf(
+				"%s lists the refused identities of %s as\n%q\nbut the catalog records\n%q",
+				document,
+				name,
+				written.refused,
+				refusals(&model),
+			)
+		}
+
+		if !slices.Equal(written.caveats, caveats(&model)) {
+			t.Errorf(
+				"%s lists the caveats of %s as\n%q\nbut the catalog records\n%q",
+				document,
+				name,
+				written.caveats,
+				caveats(&model),
+			)
+		}
+
 		if !slices.Equal(written.sources, model.Sources) {
 			t.Errorf(
 				"%s sources %s as\n%q\nbut the catalog records\n%q",
@@ -212,17 +250,48 @@ func describe(t *testing.T, model catalog.Model, input catalog.Input) row {
 	}
 }
 
+// refusals renders a model's refused identities the way the document lists
+// them, each with its reason.
+func refusals(model *catalog.Model) []string {
+	rendered := make([]string, 0, len(model.RefusedIdentities))
+
+	for _, refused := range model.RefusedIdentities {
+		rendered = append(rendered, "`"+refused.Identity.String()+"`: "+refused.Reason)
+	}
+
+	return rendered
+}
+
+// caveats renders a model's caveats the way the document lists them, in listing
+// order.
+func caveats(model *catalog.Model) []string {
+	var rendered []string
+
+	for _, input := range model.RecordedInputs() {
+		caveat, cautioned := model.InputCaveat(input)
+		if cautioned {
+			rendered = append(rendered, "`"+input.String()+"`: "+caveat)
+		}
+	}
+
+	return rendered
+}
+
 // identities renders a model's EDID fingerprints the way the document lists them.
 //
 //nolint:gocritic // hugeParam: see describe
 func identities(model catalog.Model) string {
-	if len(model.Identities) == 0 {
+	if len(model.Identities) == 0 && len(model.RefusedIdentities) == 0 {
 		return noIdentities
 	}
 
-	rendered := make([]string, 0, len(model.Identities))
+	rendered := make([]string, 0, len(model.Identities)+len(model.RefusedIdentities))
 	for _, identity := range model.Identities {
 		rendered = append(rendered, identity.String())
+	}
+
+	for _, refused := range model.RefusedIdentities {
+		rendered = append(rendered, refused.Identity.String()+refusedSuffix)
 	}
 
 	return strings.Join(rendered, ", ")
@@ -283,7 +352,7 @@ type sectionParser struct {
 	sections map[string]section
 	name     string
 	current  section
-	sourced  bool
+	part     int
 	bullet   []string
 }
 
@@ -295,9 +364,15 @@ func (p *sectionParser) flush() {
 	}
 
 	text := autolinked.ReplaceAllString(strings.Join(p.bullet, " "), "$1")
-	if p.sourced {
+
+	switch p.part {
+	case partRefused:
+		p.current.refused = append(p.current.refused, text)
+	case partCaveats:
+		p.current.caveats = append(p.current.caveats, text)
+	case partSources:
 		p.current.sources = append(p.current.sources, text)
-	} else {
+	default:
 		p.current.notes = append(p.current.notes, text)
 	}
 
@@ -319,7 +394,7 @@ func (p *sectionParser) end(t *testing.T) {
 		p.sections[p.name] = p.current
 	}
 
-	p.name, p.current, p.sourced = "", section{}, false
+	p.name, p.current, p.part = "", section{}, partNotes
 }
 
 // read takes one line of a section.
@@ -332,10 +407,18 @@ func (p *sectionParser) read(t *testing.T, trimmed string) {
 
 		p.name = strings.TrimPrefix(trimmed, "### ")
 	case p.name == "":
+	case trimmed == refusedLine:
+		p.flush()
+
+		p.part = partRefused
+	case trimmed == caveatsLine:
+		p.flush()
+
+		p.part = partCaveats
 	case trimmed == sourcesLine:
 		p.flush()
 
-		p.sourced = true
+		p.part = partSources
 	case strings.HasPrefix(trimmed, "- "):
 		p.flush()
 
@@ -351,7 +434,9 @@ func (p *sectionParser) read(t *testing.T, trimmed string) {
 
 // parseSections reads the per-model prose out of the document. A section runs
 // from its `### ` heading to the next heading of any level; the bullets before
-// the "Sources:" line are its notes and the ones after it are its references.
+// the first of "Refused identities:", "Caveats:" or "Sources:" are its notes,
+// and the ones under each of those lines are its refused identities, its
+// caveats and its references.
 func parseSections(t *testing.T) map[string]section {
 	t.Helper()
 

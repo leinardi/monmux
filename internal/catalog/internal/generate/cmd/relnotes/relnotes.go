@@ -134,6 +134,7 @@ type changes struct {
 	changedValues     []string
 	addedIdentities   []string
 	recordedModels    []string
+	refusedIdentities []string
 	recordedInputs    []string
 	changedRecorded   []string
 	removedIdentities []string
@@ -163,6 +164,7 @@ func (c *changes) sections() []section {
 			lines:    c.recordedInputs,
 		},
 		{title: "Values changed on a recorded input", enabling: true, lines: c.changedRecorded},
+		{title: "Identities now refused", enabling: false, lines: c.refusedIdentities},
 		{title: "Identities removed", enabling: false, lines: c.removedIdentities},
 		{title: "Models no longer write-enabled", enabling: false, lines: c.noLongerEnabled},
 		{title: "Inputs no longer recorded", enabling: false, lines: c.removedInputs},
@@ -292,8 +294,8 @@ func (c *changes) inputs(name string, before, after *generate.Model) {
 }
 
 // evidence records the parts of an entry that say why a value is believed,
-// rather than what it is: the per-input evidence, the model notes and the
-// sources. None of it ever reaches a monitor, so none of it enables anything -
+// rather than what it is: the per-input evidence and caveats, the model notes
+// and the sources. None of it ever reaches a monitor, so none of it enables anything -
 // but "no catalog change" has to mean the file is identical, not that the bytes
 // happen to match, so a moved record is reported rather than swallowed.
 //
@@ -314,6 +316,12 @@ func (c *changes) evidence(name string, before, after *generate.Model) {
 		if then.Evidence != now.Evidence {
 			moved = append(moved, fmt.Sprintf("the evidence for %#q", key))
 		}
+
+		// A caveat is printed next to a switch and never changes what is sent,
+		// so it is a record like the evidence is.
+		if then.CaveatText() != now.CaveatText() {
+			moved = append(moved, fmt.Sprintf("the caveat for %#q", key))
+		}
 	}
 
 	if !slices.Equal(before.Notes, after.Notes) {
@@ -331,27 +339,114 @@ func (c *changes) evidence(name string, before, after *generate.Model) {
 	c.records = append(c.records, bullet(name, "changed: "+strings.Join(moved, ", ")))
 }
 
-// identities records the EDID fingerprints an entry gained or lost. An added
-// one is an enabling change: it is what makes monmux match a display it
-// previously refused as unknown.
+// identities records the EDID fingerprints an entry gained, lost or moved
+// between allowed and refused. Only one direction enables anything: an identity
+// that is allowed now and was not - new, or no longer refused - is what makes
+// monmux write to a display it previously refused, as unknown or for its mode.
+// Refusing an identity, recognizing a new one only to refuse it, and dropping a
+// refused one all leave that display refused, so none of them is enabling.
 func (c *changes) identities(name string, before, after *generate.Model) {
-	earlier := renderIdentities(before.Identities)
-	later := renderIdentities(after.Identities)
+	moved := identityChange{
+		earlier:    renderIdentities(before.Identities),
+		later:      renderIdentities(after.Identities),
+		wasRefused: refusalsByIdentity(before.RefusedIdentities),
+		nowRefused: refusalsByIdentity(after.RefusedIdentities),
+	}
 
-	for _, identity := range later {
-		if !slices.Contains(earlier, identity) {
+	c.allowedIdentities(name, &moved)
+	c.refusedChanges(name, &moved)
+	c.removedIdentityChanges(name, &moved)
+}
+
+// identityChange is one entry's fingerprints in two releases: the allowed ones
+// as lists of comparison keys, and the refused ones as key-to-reason maps.
+type identityChange struct {
+	earlier, later         []string
+	wasRefused, nowRefused map[string]string
+}
+
+// allowedIdentities records every identity allowed now and not before, which
+// is the enabling direction.
+func (c *changes) allowedIdentities(name string, moved *identityChange) {
+	for _, identity := range moved.later {
+		switch {
+		case slices.Contains(moved.earlier, identity):
+		case moved.wasRefused[identity] != "":
+			c.addedIdentities = append(
+				c.addedIdentities,
+				bullet(name, "matches "+identity+", which it used to refuse"),
+			)
+		default:
 			c.addedIdentities = append(c.addedIdentities, bullet(name, "matches "+identity))
 		}
 	}
+}
 
-	for _, identity := range earlier {
-		if !slices.Contains(later, identity) {
+// refusedChanges records every identity refused now that was not, or that is
+// refused for a reworded reason.
+func (c *changes) refusedChanges(name string, moved *identityChange) {
+	for _, identity := range slices.Sorted(maps.Keys(moved.nowRefused)) {
+		switch {
+		case moved.wasRefused[identity] == moved.nowRefused[identity]:
+		case moved.wasRefused[identity] != "":
+			c.records = append(
+				c.records, bullet(name, "changed: the refusal reason for "+identity),
+			)
+		case slices.Contains(moved.earlier, identity):
+			c.refusedIdentities = append(
+				c.refusedIdentities,
+				bullet(name, "refuses "+identity+", which it used to match"),
+			)
+		default:
+			c.refusedIdentities = append(
+				c.refusedIdentities,
+				bullet(name, "recognizes and refuses "+identity),
+			)
+		}
+	}
+}
+
+// removedIdentityChanges records every identity the entry no longer claims in
+// either list. One that moved between the lists is reported where it moved to.
+func (c *changes) removedIdentityChanges(name string, moved *identityChange) {
+	for _, identity := range moved.earlier {
+		if !slices.Contains(moved.later, identity) && moved.nowRefused[identity] == "" {
 			c.removedIdentities = append(
 				c.removedIdentities,
 				bullet(name, "no longer matches "+identity),
 			)
 		}
 	}
+
+	for _, identity := range slices.Sorted(maps.Keys(moved.wasRefused)) {
+		if moved.nowRefused[identity] == "" && !slices.Contains(moved.later, identity) {
+			c.removedIdentities = append(
+				c.removedIdentities,
+				bullet(name, "no longer recognizes "+identity+", which it refused"),
+			)
+		}
+	}
+}
+
+// refusalsByIdentity maps every refused fingerprint of a model, rendered as the
+// comparison key, to its reason. A reason the file never wrote reads as a
+// placeholder rather than as nothing, so that a refused identity is never
+// mistaken for an absent one.
+func refusalsByIdentity(refused []generate.RefusedIdentity) map[string]string {
+	reasons := make(map[string]string, len(refused))
+
+	for index := range refused {
+		entry := &refused[index]
+
+		reason := entry.ReasonText()
+		if reason == "" {
+			reason = "(no reason)"
+		}
+
+		reasons[renderIdentity(&entry.Identity)] = reason
+	}
+
+	return reasons
 }
 
 // index maps every entry of a catalog by the name the command line uses for it.

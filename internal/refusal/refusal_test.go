@@ -52,6 +52,7 @@ func allReasons() []refusal.Reason {
 		refusal.DisplayNotWritable,
 		refusal.UnknownMonitor,
 		refusal.AmbiguousCatalog,
+		refusal.UnsupportedMode,
 		refusal.MultipleCandidates,
 		refusal.InputNotEnabled,
 		refusal.SerialMismatch,

@@ -93,6 +93,24 @@ will not send a manufacturer-specific value to a monitor nobody has tested it on
 [adding-a-monitor.md](adding-a-monitor.md) — and note that "it is the same brand as one that works"
 is not evidence.
 
+If the monitor is in the catalog and was switched before, check whether a picture-by-picture or
+picture-in-picture layout is on. Some monitors report a different product code in that mode, which
+the catalog does not know unless somebody recorded it; turn the layout off in the monitor's OSD and
+run `monmux info` again.
+
+### `unsupported-mode`
+
+The monitor is recognised, and the identity it reports is one the catalog records as a mode monmux
+does not switch: a picture-by-picture layout that changes the product code the monitor reports, for
+example. Nobody has tested a switch in that mode, so monmux refuses it rather than guess. The detail
+is the catalog's reason, which says what the mode is and how to leave it, and `monmux info` prints
+the same reason under the display as `Refused:`.
+
+Leave the mode in the monitor's OSD and switch again. If you mean to switch in that mode anyway,
+`--unsafe-model VENDOR/MODEL` skips identification and with it this refusal — run it with
+`--dry-run` first, and if it works, a report on the model's issue is what turns that mode into
+evidence.
+
 ### `ambiguous-catalog`
 
 Two catalog entries claim the same EDID identity. That is a bug in the catalog rather than anything
@@ -139,8 +157,7 @@ displays and is refused. In order of preference:
 ### `input-not-enabled`
 
 The monitor is supported, but that input is not enabled for it — nobody has tested that value on
-that model. `monmux info` lists the inputs that are enabled. `hdmi1` and `hdmi2` are not enabled for
-any model today.
+that model. `monmux info` lists the inputs that are enabled.
 
 This refusal is not a limitation to work around. Enabling an input means testing it on a real unit
 and recording the evidence.

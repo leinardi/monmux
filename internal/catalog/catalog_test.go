@@ -54,7 +54,7 @@ func TestIdentitiesAreUniqueAcrossModels(t *testing.T) {
 	var claimed []claim
 
 	for _, model := range catalog.Models() {
-		for _, identity := range model.Identities {
+		for _, identity := range recognized(&model) {
 			for _, previous := range claimed {
 				same := previous.identity.Manufacturer == identity.Manufacturer &&
 					previous.identity.ProductCode == identity.ProductCode
@@ -164,6 +164,41 @@ func TestEveryModelCarriesANote(t *testing.T) {
 	}
 }
 
+// recognized is every fingerprint a model is matched by, the refused ones
+// included: one display must never be claimed twice, whatever the claim does.
+func recognized(model *catalog.Model) []catalog.Identity {
+	all := slices.Clone(model.Identities)
+
+	for _, refused := range model.RefusedIdentities {
+		all = append(all, refused.Identity)
+	}
+
+	return all
+}
+
+// Refusal is membership of the list, and the reason is what the user is told
+// to do about it, so a refused identity without one would refuse in silence.
+func TestEveryRefusedIdentityGivesAReason(t *testing.T) {
+	t.Parallel()
+
+	for _, model := range catalog.Models() {
+		for _, refused := range model.RefusedIdentities {
+			if strings.TrimSpace(refused.Reason) == "" {
+				t.Errorf("%s refuses %s without a reason", model.FullName(), refused.Identity)
+			}
+
+			reason, isRefused := model.IdentityRefusal(edid.Identity{
+				Manufacturer: refused.Identity.Manufacturer,
+				ProductCode:  refused.Identity.ProductCode,
+				ModelName:    refused.Identity.ModelName,
+			})
+			if !isRefused || reason != refused.Reason {
+				t.Errorf("%s does not refuse its own %s", model.FullName(), refused.Identity)
+			}
+		}
+	}
+}
+
 func TestDisabledModelsNeverMatch(t *testing.T) {
 	t.Parallel()
 
@@ -172,7 +207,7 @@ func TestDisabledModelsNeverMatch(t *testing.T) {
 			continue
 		}
 
-		for _, identity := range model.Identities {
+		for _, identity := range recognized(&model) {
 			probe := edid.Identity{
 				Manufacturer: identity.Manufacturer,
 				ProductCode:  identity.ProductCode,
@@ -372,10 +407,13 @@ func TestReturnedModelsCannotMutateTheCatalog(t *testing.T) {
 
 	var enabled, disabled *catalog.Model
 
+	// The entry mutated is the one the tested identity matches, so that what is
+	// checked afterwards is the entry the mutation tried to change.
 	for index := range handedOut {
-		if handedOut[index].WriteEnabled {
+		switch {
+		case handedOut[index].Matches(tested):
 			enabled = &handedOut[index]
-		} else {
+		case !handedOut[index].WriteEnabled:
 			disabled = &handedOut[index]
 		}
 	}
@@ -819,5 +857,48 @@ func TestUnsafeOperationMatchesOperationOnAWriteEnabledModel(t *testing.T) {
 				enabled,
 			)
 		}
+	}
+}
+
+// The G95NC is the first write-enabled model of vcp-input-source: all four
+// inputs verified, matched over DisplayPort and HDMI, and recognized but refused
+// with Picture-by-Picture on.
+func TestTheG95NCIsEnabledAndRefusesPictureByPicture(t *testing.T) {
+	t.Parallel()
+
+	values := map[catalog.Input]uint16{"dp": 0x0F, "hdmi1": 0x11, "hdmi2": 0x12, "hdmi3": 0x32}
+
+	for _, productCode := range []uint16{0x7476, 0x73D0} {
+		model, result := catalog.Match(edid.Identity{Manufacturer: "SAM", ProductCode: productCode})
+		if result != catalog.MatchExact || model.FullName() != "Samsung G95NC" {
+			t.Fatalf("SAM/0x%04X matched %q (%s)", productCode, model.FullName(), result)
+		}
+
+		_, refused := model.IdentityRefusal(
+			edid.Identity{Manufacturer: "SAM", ProductCode: productCode},
+		)
+		if refused {
+			t.Errorf("SAM/0x%04X is refused", productCode)
+		}
+
+		for input, value := range values {
+			operation, enabled := model.Operation(input)
+			if !enabled || operation.Value() != value ||
+				operation.Mechanism() != catalog.MechanismInputSource {
+				t.Errorf("%s = %s (enabled %t), want 0x%02X", input, operation, enabled, value)
+			}
+		}
+	}
+
+	pbp := edid.Identity{Manufacturer: "SAM", ProductCode: 0x747A}
+
+	model, result := catalog.Match(pbp)
+	if result != catalog.MatchExact || model.FullName() != "Samsung G95NC" {
+		t.Fatalf("the PBP identity matched %q (%s)", model.FullName(), result)
+	}
+
+	reason, refused := model.IdentityRefusal(pbp)
+	if !refused || !strings.Contains(reason, "Picture-by-Picture") {
+		t.Errorf("the PBP identity is not refused for its mode: %q, %t", reason, refused)
 	}
 }

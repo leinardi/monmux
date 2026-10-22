@@ -106,6 +106,9 @@ type (
 		Match         string        `json:"match"`
 		Model         string        `json:"model"`
 		EnabledInputs []string      `json:"enabledInputs"`
+		// Refused is the catalog's reason for refusing the identity the display
+		// reports, present only when the matched model refuses it.
+		Refused string `json:"refused,omitempty"`
 	}
 
 	// jsonCheck is one line of the backend's diagnostics.
@@ -164,6 +167,7 @@ func asJSONReport(report *app.Report, showSerial bool) jsonReport {
 			Match:         reported.Match.String(),
 			Model:         jsonModel(reported),
 			EnabledInputs: jsonInputs(reported.EnabledInputs),
+			Refused:       reported.Refusal,
 		})
 	}
 

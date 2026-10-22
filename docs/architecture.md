@@ -132,6 +132,15 @@ with the same code — otherwise the bare entry would shadow the pinned one. A d
 name is empty matches no pinned identity at all, which is the fail-closed answer rather than a
 guess.
 
+An entry can also **refuse** an identity. Some monitors report a product code of their own in a
+mode nobody has tested a switch in — the Samsung G95NC does with picture-by-picture on. Listing that
+code under the entry's `refused_identities` lets monmux name the monitor and say what to change,
+instead of calling it unknown: the identity matches, and the policy refuses the display it would
+have written to with `unsupported-mode` and the catalog's reason, before it looks at the input. A
+refused identity is still a candidate, so two of them are still `multiple-candidates`. What refuses
+it is being in that list, not the text of the reason, and `--unsafe-model` skips it along with the
+rest of identification.
+
 ## What each backend actually runs
 
 Linux, for the LG side channel:
