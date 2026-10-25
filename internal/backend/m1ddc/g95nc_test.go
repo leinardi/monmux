@@ -25,7 +25,6 @@ import (
 	"github.com/leinardi/monmux/internal/backend"
 	"github.com/leinardi/monmux/internal/catalog"
 	"github.com/leinardi/monmux/internal/policy"
-	"github.com/leinardi/monmux/internal/refusal"
 )
 
 // g95ncListing is a `display list detailed` entry shaped like ema987's capture
@@ -80,7 +79,7 @@ func TestGoldenCommandForTheG95NC(t *testing.T) {
 
 	values := map[catalog.Input]string{"dp": "15", "hdmi1": "17", "hdmi2": "18", "hdmi3": "50"}
 
-	for _, productCode := range []uint16{0x7476, 0x73D0} {
+	for _, productCode := range []uint16{0x7476, 0x73D0, 0x747A, 0x73D3, 0x747D, 0x741E} {
 		for input, value := range values {
 			t.Run(fmt.Sprintf("0x%04X/%s", productCode, input), func(t *testing.T) {
 				t.Parallel()
@@ -111,19 +110,5 @@ func TestGoldenCommandForTheG95NC(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-
-// With Picture-by-Picture on, the G95NC reports a product code the catalog
-// refuses, and the decision stops there.
-func TestTheG95NCInPictureByPictureIsRefused(t *testing.T) {
-	t.Parallel()
-
-	_, err := policy.Resolve(
-		displaysOf(g95ncRecords(t, 0x747A)),
-		policy.Request{Input: "dp"},
-	)
-	if !refusal.Is(err, refusal.UnsupportedMode) {
-		t.Errorf("error = %v, want unsupported-mode", err)
 	}
 }

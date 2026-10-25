@@ -179,23 +179,60 @@ func renderUnsafeWarning(
 	)
 	page.linef("  Input:   %s", assumedInput(assumed, input))
 
-	// The risk named is the one that is true of this run. A verified value
-	// was run on that model, so what is unproven is only that this display is
-	// one; saying it was never verified would contradict the evidence line
-	// just above, and teach the reader to skip the banner.
+	for _, line := range assumedIdentification(display, assumed) {
+		page.linef("%s", line)
+	}
+
+	// The evidence sentence follows the grade, so that it never contradicts
+	// the evidence line above and teaches the reader to skip the banner.
 	grade, recorded := assumed.InputGrade(input)
 	if recorded && grade == catalog.GradeVerified {
-		page.linef("The display above was not identified. The value was verified on that model,")
-		page.linef("but nothing checked that this display is one.")
+		page.linef("The value was verified on the assumed model.")
 	} else {
-		page.linef("The display above was not identified, and the value was never verified on")
-		page.linef("this model by this project.")
+		page.linef("The value was never verified on the assumed model by this project.")
 	}
 
 	page.linef("A wrong value can leave the monitor on an input with no signal; recover with")
 	page.linef("the monitor's own OSD or by unplugging the other inputs.")
 
 	return page.err
+}
+
+// assumedIdentification says what the catalog makes of the display the override
+// is about to write to. The override decides nothing from it - the EDID is not
+// what selects the model under --unsafe-model - but the user is owed what it
+// says: "not identified" would be untrue of a display that matches, and a
+// display that matches another entry is the clearest sign the wrong name was
+// typed.
+func assumedIdentification(display *backend.Display, assumed *catalog.Model) []string {
+	model, result := catalog.Match(display.Identity)
+
+	switch {
+	case result == catalog.MatchExact && model.FullName() == assumed.FullName():
+		reason, refused := model.IdentityRefusal(display.Identity)
+		if refused {
+			return []string{
+				"The display above is identified as the assumed model, in a state monmux",
+				"refuses to switch without the override: " + reason,
+			}
+		}
+
+		return []string{
+			"The display above is identified as the assumed model: monmux would switch",
+			"it without --unsafe-model too.",
+		}
+	case result == catalog.MatchExact:
+		return []string{
+			"The display above is identified as " + model.FullName() + ", not as the assumed",
+			"model. Check that the name you gave is the monitor you meant.",
+		}
+	case result == catalog.MatchAmbiguous:
+		return []string{
+			"The display above matches more than one catalog entry, so it was not identified.",
+		}
+	default:
+		return []string{"The display above was not identified."}
+	}
 }
 
 // bypassed is what the outcome line adds when the display was never identified,

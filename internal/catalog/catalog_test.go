@@ -861,22 +861,22 @@ func TestUnsafeOperationMatchesOperationOnAWriteEnabledModel(t *testing.T) {
 }
 
 // The G95NC is the first write-enabled model of vcp-input-source: all four
-// inputs verified, matched over DisplayPort and HDMI, and recognized but refused
-// with Picture-by-Picture on.
-func TestTheG95NCIsEnabledAndRefusesPictureByPicture(t *testing.T) {
+// inputs verified, and matched in the normal layout and with Picture-by-Picture
+// and Picture-in-Picture on, none of them refused.
+func TestTheG95NCIsEnabledInEveryCapturedLayout(t *testing.T) {
 	t.Parallel()
 
 	values := map[catalog.Input]uint16{"dp": 0x0F, "hdmi1": 0x11, "hdmi2": 0x12, "hdmi3": 0x32}
 
-	for _, productCode := range []uint16{0x7476, 0x73D0} {
-		model, result := catalog.Match(edid.Identity{Manufacturer: "SAM", ProductCode: productCode})
+	for _, productCode := range []uint16{0x7476, 0x73D0, 0x747A, 0x73D3, 0x747D, 0x741E} {
+		identity := edid.Identity{Manufacturer: "SAM", ProductCode: productCode}
+
+		model, result := catalog.Match(identity)
 		if result != catalog.MatchExact || model.FullName() != "Samsung G95NC" {
 			t.Fatalf("SAM/0x%04X matched %q (%s)", productCode, model.FullName(), result)
 		}
 
-		_, refused := model.IdentityRefusal(
-			edid.Identity{Manufacturer: "SAM", ProductCode: productCode},
-		)
+		_, refused := model.IdentityRefusal(identity)
 		if refused {
 			t.Errorf("SAM/0x%04X is refused", productCode)
 		}
@@ -888,17 +888,5 @@ func TestTheG95NCIsEnabledAndRefusesPictureByPicture(t *testing.T) {
 				t.Errorf("%s = %s (enabled %t), want 0x%02X", input, operation, enabled, value)
 			}
 		}
-	}
-
-	pbp := edid.Identity{Manufacturer: "SAM", ProductCode: 0x747A}
-
-	model, result := catalog.Match(pbp)
-	if result != catalog.MatchExact || model.FullName() != "Samsung G95NC" {
-		t.Fatalf("the PBP identity matched %q (%s)", model.FullName(), result)
-	}
-
-	reason, refused := model.IdentityRefusal(pbp)
-	if !refused || !strings.Contains(reason, "Picture-by-Picture") {
-		t.Errorf("the PBP identity is not refused for its mode: %q, %t", reason, refused)
 	}
 }
