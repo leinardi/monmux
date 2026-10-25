@@ -1968,7 +1968,7 @@ func TestTheUnsafeBannerDoesNotCallAVerifiedValueUnverified(t *testing.T) {
 
 	for _, wanted := range []string{
 		"evidence: verified",
-		"The value was verified on that model,\nbut nothing checked that this display is one.",
+		"The display above was not identified.\nThe value was verified on the assumed model.",
 		"OSD",
 	} {
 		if !strings.Contains(stderr, wanted) {
@@ -1978,5 +1978,51 @@ func TestTheUnsafeBannerDoesNotCallAVerifiedValueUnverified(t *testing.T) {
 
 	if strings.Contains(stderr, "never verified") {
 		t.Errorf("the warning calls a verified value unverified:\n%s", stderr)
+	}
+}
+
+// The banner says what the catalog makes of the display, though the override
+// decides nothing from it: the display can be the assumed model, another one,
+// or nothing the catalog knows.
+func TestTheUnsafeBannerSaysWhatTheDisplayIs(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		display backend.Display
+		model   string
+		wanted  string
+	}{
+		"the assumed model": {
+			display: g95nc(0x7476),
+			model:   "Samsung/G95NC",
+			wanted:  "The display above is identified as the assumed model: monmux would switch\nit without --unsafe-model too.",
+		},
+		"another model": {
+			display: supported(),
+			model:   "Samsung/G95NC",
+			wanted:  "The display above is identified as LG 38WR85QC-W, not as the assumed\nmodel.",
+		},
+		"nothing the catalog knows": {
+			display: strange(),
+			model:   "Samsung/G95NC",
+			wanted:  "The display above was not identified.",
+		},
+	}
+
+	for name, test := range cases {
+		_, stderr, code := newWorld(test.display).run(
+			"switch", "hdmi1", "--unsafe-model", test.model, "--dry-run",
+		)
+		if code != exitSent {
+			t.Fatalf("%s: exit = %d, stderr = %q", name, code, stderr)
+		}
+
+		if !strings.Contains(stderr, test.wanted) {
+			t.Errorf("%s: the warning does not say %q:\n%s", name, test.wanted, stderr)
+		}
+
+		if strings.Contains(stderr, "not identified") != (name == "nothing the catalog knows") {
+			t.Errorf("%s: the warning is wrong about identification:\n%s", name, stderr)
+		}
 	}
 }
