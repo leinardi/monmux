@@ -28,7 +28,6 @@ import (
 
 	"github.com/leinardi/monmux/internal/catalog"
 	"github.com/leinardi/monmux/internal/policy"
-	"github.com/leinardi/monmux/internal/refusal"
 )
 
 // The EDID block-0 layout the G95NC stand-in is written into.
@@ -39,12 +38,10 @@ const (
 	modelNameTag     = 0xFC
 )
 
-// The Samsung G95NC's product codes, as ema987 captured them.
-const (
-	g95ncOverDP   = 0x7476
-	g95ncOverHDMI = 0x73D0
-	g95ncPBP      = 0x747A
-)
+// g95ncCodes are the Samsung G95NC's product codes, as ema987 captured them:
+// DisplayPort and HDMI in the normal layout, then with Picture-by-Picture and
+// with Picture-in-Picture on.
+var g95ncCodes = []uint16{0x7476, 0x73D0, 0x747A, 0x73D3, 0x747D, 0x741E}
 
 // g95ncEDID is the tested LG's EDID rewritten to identify as a Samsung G95NC
 // reporting productCode: the manufacturer, the product code and the model name
@@ -89,9 +86,9 @@ func g95ncWorld(t *testing.T, productCode uint16) (built *world, raw []byte) {
 
 // The end-to-end golden test for vcp-input-source, which could not exist until
 // a model using it was write-enabled: enumerate a G95NC, identify it, decide,
-// plan and execute, and pin the exact arguments at the end. It runs for both
-// identities the model is matched by, because the input a machine sits on
-// decides which one the monitor reports.
+// plan and execute, and pin the exact arguments at the end. It runs for every
+// identity the model is matched by, because the input a machine sits on and the
+// layout decide which one the monitor reports.
 func TestGoldenCommandForTheG95NC(t *testing.T) {
 	t.Parallel()
 
@@ -102,7 +99,7 @@ func TestGoldenCommandForTheG95NC(t *testing.T) {
 		"hdmi3": "0x32",
 	}
 
-	for _, productCode := range []uint16{g95ncOverDP, g95ncOverHDMI} {
+	for _, productCode := range g95ncCodes {
 		for input, value := range values {
 			t.Run(fmt.Sprintf("0x%04X/%s", productCode, input), func(t *testing.T) {
 				t.Parallel()
@@ -155,24 +152,5 @@ func TestGoldenCommandForTheG95NC(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-
-// With Picture-by-Picture on, the G95NC reports a product code the catalog
-// refuses. The display is identified, refused for its mode, and nothing is run.
-func TestTheG95NCInPictureByPictureIsRefused(t *testing.T) {
-	t.Parallel()
-
-	world, _ := g95ncWorld(t, g95ncPBP)
-	displays := world.ready(t)
-	before := len(world.runner.Calls())
-
-	_, err := policy.Resolve(displays, policy.Request{Input: "hdmi1"})
-	if !refusal.Is(err, refusal.UnsupportedMode) {
-		t.Fatalf("error = %v, want unsupported-mode", err)
-	}
-
-	if len(world.runner.Calls()) != before {
-		t.Errorf("the refusal ran something: %v", world.runner.Lines()[before:])
 	}
 }

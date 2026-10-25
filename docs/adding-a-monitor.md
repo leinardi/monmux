@@ -214,7 +214,9 @@ mode. Recording it lets monmux recognise the monitor and refuse with `unsupporte
 `reason`, which should say what the mode is and how to leave it, instead of refusing it as an
 unknown monitor. Record only a code somebody captured in that mode; do not guess the codes of the
 other inputs. A refused identity is refused because it is in that list: no reason, and no spelling
-of one, makes it writable. `--unsafe-model` still reaches it, like any display.
+of one, makes it writable. `--unsafe-model` still reaches it, like any display. Once a switch in
+that mode has been tested and does what the value says, move the code to `identities`: that is what
+happened to the Samsung G95NC's picture-by-picture code, and no entry refuses one today.
 
 There is no model-level caveat. When an entry needs one, add it to the generator, and print it
 together with the input's caveat, never instead of it: an input-level caveat is the more specific
