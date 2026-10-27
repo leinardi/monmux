@@ -34,8 +34,6 @@ import (
 )
 
 const (
-	// edidBlockSize is the length of the EDID block monmux reads and compares.
-	edidBlockSize = 128
 	// connectedStatus is what a connector's status file says when a monitor is
 	// attached to it.
 	connectedStatus = "connected"
@@ -55,7 +53,7 @@ var busPattern = regexp.MustCompile(`^i2c-\d+$`)
 // Enumerate lists the connected displays. Displays monmux cannot write to are
 // listed too, with Writable false and a Status saying why: info reports them,
 // and policy refuses to select them.
-func (b *Backend) Enumerate(_ context.Context) ([]backend.Display, error) {
+func (b *Backend) Enumerate(ctx context.Context) ([]backend.Display, error) {
 	entries, err := os.ReadDir(b.sysfsRoot)
 	if err != nil {
 		return nil, refusal.New(
@@ -67,6 +65,7 @@ func (b *Backend) Enumerate(_ context.Context) ([]backend.Display, error) {
 	displays := make([]backend.Display, 0, len(entries))
 	found := make(map[string]connector, len(entries))
 	statuses := make(map[string]string, len(entries))
+	unlinked := map[int]connector{}
 
 	for _, entry := range entries {
 		name := entry.Name()
@@ -77,12 +76,21 @@ func (b *Backend) Enumerate(_ context.Context) ([]backend.Display, error) {
 
 		display, known, writable := inspect(filepath.Join(b.sysfsRoot, name), name)
 
+		if !writable && known.edid != nil {
+			unlinked[len(displays)] = known
+		}
+
 		displays = append(displays, display)
-		statuses[display.Handle] = display.Status
 
 		if writable {
 			found[display.Handle] = known
 		}
+	}
+
+	b.resolveUnlinked(ctx, displays, unlinked, found)
+
+	for index := range displays {
+		statuses[displays[index].Handle] = displays[index].Status
 	}
 
 	slices.SortFunc(displays, func(left, right backend.Display) int {
@@ -106,7 +114,9 @@ func connected(directory string) bool {
 }
 
 // inspect reads one connector. A display whose EDID will not parse, or which
-// exposes no DDC channel, comes back unwritable with the reason in Status.
+// exposes no DDC channel, comes back unwritable with the reason in Status. One
+// with a good EDID and no ddc link also returns that EDID, so the caller can
+// look its bus up with ddcutil instead.
 func inspect(directory, name string) (backend.Display, connector, bool) {
 	display := backend.Display{
 		Handle: name,
@@ -133,13 +143,94 @@ func inspect(directory, name string) (backend.Display, connector, bool) {
 	if err != nil {
 		display.Status = backend.StatusNoDDCChannel
 
-		return display, connector{}, false
+		return display, connector{edid: bytes.Clone(raw[:edidBlockSize])}, false
 	}
 
 	display.Writable = true
 	display.Status = backend.StatusOK
 
 	return display, connector{edid: bytes.Clone(raw[:edidBlockSize]), bus: bus}, true
+}
+
+// resolveUnlinked finds the bus of every connector that has a good EDID and no
+// ddc link, by asking ddcutil which bus carries that exact EDID. It runs only
+// when such a connector exists and preflight has accepted ddcutil, so a system
+// whose connectors all have their link never pays for it. A connector it cannot
+// place stays as it was: unwritable, with status no-ddc-channel.
+func (b *Backend) resolveUnlinked(
+	ctx context.Context,
+	displays []backend.Display,
+	unlinked map[int]connector,
+	found map[string]connector,
+) {
+	if len(unlinked) == 0 {
+		return
+	}
+
+	blocks, ok := b.detect(ctx)
+	if !ok {
+		return
+	}
+
+	for index, known := range unlinked {
+		display := &displays[index]
+
+		bus, placed := b.placeBus(blocks, known.edid, display.Handle)
+		if !placed {
+			continue
+		}
+
+		display.Writable = true
+		display.Status = backend.StatusOK
+		found[display.Handle] = connector{edid: known.edid, bus: bus, detected: true}
+	}
+}
+
+// detect runs `ddcutil detect --verbose` and parses it. Nothing is concluded
+// from a run that failed: the connectors it would have placed stay unwritable.
+func (b *Backend) detect(ctx context.Context) ([]detectedBus, bool) {
+	path, err := b.toolPath()
+	if err != nil {
+		return nil, false
+	}
+
+	result, err := b.runner.Run(ctx, path, detectArgs)
+	if err != nil {
+		return nil, false
+	}
+
+	return parseDetect(result.Stdout), true
+}
+
+// placeBus returns the bus ddcutil reports for an EDID, once it has also been
+// checked against sysfs: the bus has to belong to the same PCI device as the
+// connector's card. ddcutil's own association is a second opinion; this one is
+// the kernel's, and either disagreeing leaves the connector unplaced.
+func (b *Backend) placeBus(blocks []detectedBus, block []byte, name string) (string, bool) {
+	bus, ok := busByEDID(blocks, block, name)
+	if !ok || !busPattern.MatchString(bus) {
+		return "", false
+	}
+
+	connectorPath, err := filepath.EvalSymlinks(filepath.Join(b.sysfsRoot, name))
+	if err != nil {
+		return "", false
+	}
+
+	device, _, cut := strings.Cut(
+		connectorPath,
+		string(filepath.Separator)+"drm"+string(filepath.Separator),
+	)
+	if !cut {
+		return "", false
+	}
+
+	busPath, err := filepath.EvalSymlinks(filepath.Join(b.i2cRoot, bus))
+	if err != nil || !strings.HasPrefix(busPath, device+string(filepath.Separator)) {
+		return "", false
+	}
+
+	return bus, true
 }
 
 // readBus follows a connector's ddc link to the I2C bus behind it.
@@ -196,8 +287,9 @@ func (b *Backend) Ready(_ context.Context, display backend.Display) error {
 
 // reverify re-reads the connector immediately before a write. If its EDID or its
 // bus differs by a single byte from what Enumerate saw, the display is not the
-// one that was identified and nothing is sent.
-func (b *Backend) reverify(display *backend.Display, known connector) error {
+// one that was identified and nothing is sent. A bus that came from ddcutil is
+// looked up again the same way, rather than trusted from the earlier run.
+func (b *Backend) reverify(ctx context.Context, display *backend.Display, known connector) error {
 	directory := filepath.Join(b.sysfsRoot, display.Handle)
 
 	raw, err := os.ReadFile(filepath.Join(directory, "edid"))
@@ -217,7 +309,7 @@ func (b *Backend) reverify(display *backend.Display, known connector) error {
 		)
 	}
 
-	bus, err := readBus(directory)
+	bus, err := b.currentBus(ctx, directory, display.Handle, known)
 	if err != nil {
 		return refusal.New(
 			refusal.IdentityChanged,
@@ -235,4 +327,28 @@ func (b *Backend) reverify(display *backend.Display, known connector) error {
 	}
 
 	return nil
+}
+
+// currentBus is the bus a connector is on now, found the way Enumerate found it:
+// through the ddc link, or through ddcutil for a connector that has none.
+func (b *Backend) currentBus(
+	ctx context.Context,
+	directory, name string,
+	known connector,
+) (string, error) {
+	if !known.detected {
+		return readBus(directory)
+	}
+
+	blocks, ok := b.detect(ctx)
+	if !ok {
+		return "", refusal.New(refusal.TargetNotReady, "ddcutil detect failed.")
+	}
+
+	bus, placed := b.placeBus(blocks, known.edid, name)
+	if !placed {
+		return "", refusal.New(refusal.TargetNotReady, "ddcutil no longer places the display.")
+	}
+
+	return bus, nil
 }

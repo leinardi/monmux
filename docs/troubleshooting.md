@@ -73,8 +73,12 @@ lists a connected connector.
 The display monmux would have written to cannot be written to. `monmux info` gives the reason in its
 status:
 
-- `no-ddc-channel` — the connector exposes no `ddc` link. Common on ports wired through some docks
-  and adapters, and on DisplayPort MST hubs. Try connecting the monitor directly.
+- `no-ddc-channel` — the connector exposes no `ddc` link, and `ddcutil detect` did not place it
+  on exactly one bus either. Common on ports wired through some docks and adapters, and on
+  DisplayPort MST hubs. Try connecting the monitor directly. On the NVIDIA proprietary driver,
+  which creates no `ddc` links, check that `ddcutil detect --verbose` lists the monitor as a
+  `Display` with its `DRM_connector`; the conditions monmux requires are in
+  [the backend notes](backends.md#connectors-with-no-ddc-link).
 - `edid-unreadable` — the EDID could not be read or did not parse. Often a cable or an adapter; try
   another one.
 - `no-uuid` — macOS gave the display no system UUID, which is the only way monmux can address it
@@ -195,9 +199,9 @@ sudo usermod -aG i2c "$USER"      # then log out and back in
 
 ### `identity-changed`
 
-Between listing the displays and writing, the display stopped being the one monmux identified — the
-EDID changed, the `ddc` link moved to another bus, or on macOS the UUID no longer carries the same
-identity. Nothing was written.
+Between listing the displays and writing, the display stopped being the one monmux identified: the
+EDID changed, its bus changed (the `ddc` link, or what `ddcutil detect` reports for a connector
+without one), or on macOS the UUID no longer carries the same identity. Nothing was written.
 
 Usually something was replugged, or a monitor woke up, mid-command. Run it again. If it happens
 repeatedly, a dock or an MST hub is probably rebinding buses underneath you, and `monmux info` run

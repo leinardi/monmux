@@ -38,8 +38,9 @@ unplugged, another plugged in, or an I²C bus rebound to a different connector �
 monmux identified is not the one that receives the write.
 
 **Mitigation.** The identity is re-verified immediately before the write. On Linux the connector's
-EDID is re-read and compared byte for byte with what enumeration saw, and the `ddc` link is
-re-resolved to the same bus; on macOS the display list is re-read and the UUID must still carry the
+EDID is re-read and compared byte for byte with what enumeration saw, and the bus is looked up
+again the same way — the `ddc` link, or `ddcutil detect` for a connector with none — and must be
+the same one; on macOS the display list is re-read and the UUID must still carry the
 same identity. Any difference is `identity-changed`, and nothing is sent. The Linux write then
 selects the display by its full 256-character EDID rather than by a bus number, so `ddcutil` itself
 refuses if the monitor on that bus changed in the remaining instant.
