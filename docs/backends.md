@@ -43,12 +43,31 @@ Displays come from `/sys/class/drm`, not from `ddcutil`. For every connector who
 | What it finds | Result |
 | --- | --- |
 | EDID parses, `ddc` link present | `writable`, status `ok`, handle is the connector name |
+| EDID parses, no `ddc` link, bus found by `ddcutil detect` | `writable`, status `ok` |
 | EDID missing or unparsable | not writable, status `edid-unreadable` |
-| no `ddc` symlink | not writable, status `no-ddc-channel` |
+| no `ddc` link, and no bus found | not writable, status `no-ddc-channel` |
 
-The raw EDID bytes and the bus number are kept inside the backend and never exported. Because
-enumeration reads only sysfs, `info` lists your monitors even when `ddcutil` is missing or too old —
-the checks then say why nothing can be switched.
+The raw EDID bytes and the bus number are kept inside the backend and never exported. The displays
+themselves come from sysfs alone, so `info` lists your monitors even when `ddcutil` is missing or
+too old — the checks then say why nothing can be switched.
+
+### Connectors with no `ddc` link
+
+Some drivers give a connector no `ddc` link at all; the NVIDIA proprietary driver is the common
+case. For those connectors, and only when there is at least one, monmux runs the read-only
+`ddcutil detect --verbose` once and places the connector on a bus only if every one of these holds:
+
+- block 0 of the connector's sysfs EDID matches, byte for byte, the EDID dump of exactly one bus. An
+  EDID on two buses — a mirrored or MST setup — places it on neither;
+- ddcutil reports that bus as a display it can talk DDC on, not as an invalid one;
+- ddcutil names the same DRM connector for that bus;
+- the bus, in `/sys/bus/i2c/devices`, sits under the same PCI device as the connector's card.
+
+Anything else leaves the connector `no-ddc-channel`, exactly as before the fallback existed: a
+ddcutil that fails, prints something monmux cannot read, or disagrees with sysfs is never guessed
+past. `monmux doctor` says where the bus came from — `ok (bus i2c-9 found by ddcutil detect)` — and
+the re-check before a write runs the same lookup again, so a bus that moved or vanished is
+`identity-changed`. The write itself is the same `--edid` invocation as on any other connector.
 
 ### ddcutil permissions
 

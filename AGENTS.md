@@ -191,8 +191,8 @@ Do not weaken any of these. They are the reason the tool exists.
    which ignores `write_enabled`. It ignores nothing else — an input the named entry does not record
    has no value at all, and is still refused with `input-not-enabled`.
 3. **Re-verify at the last moment.** `Execute` re-reads the identity (sysfs EDID and bus on Linux,
-   `display list detailed` on macOS) and refuses with `identity-changed` if anything moved since
-   enumeration.
+   the bus from the `ddc` link or, without one, from `ddcutil detect`; `display list detailed` on
+   macOS) and refuses with `identity-changed` if anything moved since enumeration.
 4. **Refuse loudly, write never.** Every refusal path returns a `refusal.Refusal` whose message ends
    with `No DDC write was performed.` and exits with code 2. Only code 1 (tool/exec error) may leave
    the write status unknown, and it says so explicitly.
