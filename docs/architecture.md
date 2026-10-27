@@ -78,8 +78,9 @@ interface by reflection to keep it that way.
 ### 3. The identity is re-verified immediately before the write
 
 Enumeration and the write are two moments in time, and a monitor can be unplugged between them.
-Before writing, the Linux backend re-reads the connector's EDID byte for byte and re-resolves its
-`ddc` link to the same I²C bus; the macOS backend re-lists the displays and confirms the UUID still
+Before writing, the Linux backend re-reads the connector's EDID byte for byte and looks its I²C bus
+up again the way enumeration did — the `ddc` link, or `ddcutil detect` for a connector that has
+none — and requires the same bus; the macOS backend re-lists the displays and confirms the UUID still
 carries the same identity. Any difference is `identity-changed`, and nothing is sent. On Linux the
 write itself then selects the display by its full 256-character EDID rather than by a bus number, so
 `ddcutil` refuses on its own if the monitor on that bus is no longer the one monmux identified.

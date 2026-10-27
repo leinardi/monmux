@@ -1,0 +1,29 @@
+Display 1
+  I2C bus:  /dev/i2c-9
+    DRM_connector:                             card2-HDMI-A-2
+    /sys/class/drm/card2-HDMI-A-2/status       connected
+    Driver:                                    nvidia
+    EDID exists:                               true
+    I2C address 0x37 (DDC) responsive:         true
+    /sys/bus/i2c/devices/i2c-9/name            NVIDIA i2c adapter 3 at 1:00.0
+    PCI device path:                           /sys/devices/pci0000:00/0000:00:01.1/0000:01:00.0/i2c-9
+  EDID synopsis:
+    Mfg id:               GSM - LG Electronics
+    Model:                LG ULTRAWIDE
+    Product code:         30675  (0x77d3)
+    Serial number:        TESTSERIAL01
+    Binary serial number: 16909060 (0x01020304)
+  EDID source: I2C
+  EDID hex dump:
+       +0          +4          +8          +c            0   4   8   c   
++0000   00 ff ff ff ff ff ff 00 1e 6d d3 77 04 03 02 01   .........m.w....
++0010   0c 21 01 04 b5 58 25 78 f9 42 f5 b0 4f 42 ab 25   .!...X%x.B..OB.%
++0020   0f 50 54 21 09 00 d1 c0 61 40 45 40 81 c0 01 01   .PT!....a@E@....
++0030   01 01 01 01 01 01 3d c2 00 a0 f0 40 3a 60 30 20   ......=....@:`0 
++0040   3a 00 70 6f 31 00 00 1a 00 00 00 fd 00 30 90 fa   :.po1........0..
++0050   fa 63 01 0a 20 20 20 20 20 20 00 00 00 fc 00 4c   .c..      .....L
++0060   47 20 55 4c 54 52 41 57 49 44 45 0a 00 00 00 ff   G ULTRAWIDE.....
++0070   00 54 45 53 54 53 45 52 49 41 4c 30 31 0a 02 5b   .TESTSERIAL01..[
+  VCP version:         2.1
+  Monitor Model Id:  GSM-LG_ULTRAWIDE-30675
+

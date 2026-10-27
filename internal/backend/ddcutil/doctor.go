@@ -86,8 +86,20 @@ func (b *Backend) displayChecks(ctx context.Context) []backend.Check {
 		}
 
 		err = b.Ready(ctx, display)
-		checks = append(checks, backend.CheckResult(display.Label, err, display.Status))
+		checks = append(checks, backend.CheckResult(display.Label, err, b.readyDetail(&display)))
 	}
 
 	return checks
+}
+
+// readyDetail is what a writable display's check says. A bus that came from
+// ddcutil rather than from the kernel's ddc link says so, because that is the
+// first thing to know if the switch then misbehaves.
+func (b *Backend) readyDetail(display *backend.Display) string {
+	known, err := b.connectorFor(display)
+	if err != nil || !known.detected {
+		return display.Status
+	}
+
+	return display.Status + " (bus " + known.bus + " found by ddcutil detect)"
 }
