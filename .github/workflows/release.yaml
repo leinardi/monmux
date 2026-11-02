@@ -456,7 +456,7 @@ jobs:
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Check .goreleaser.yaml
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           version: ${{ env.GORELEASER_VERSION }}
           args: check
@@ -465,7 +465,7 @@ jobs:
       # A configuration error, a build error or a cosign error stops the run
       # here, with no tag on the remote.
       - name: Build and sign everything, publish nothing
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           version: ${{ env.GORELEASER_VERSION }}
           args: release --clean --skip=publish --release-header=dist-notes/header.md
@@ -539,7 +539,7 @@ jobs:
 
       - name: Publish the release, the packages and the cask
         if: ${{ !inputs.dry_run }}
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           version: ${{ env.GORELEASER_VERSION }}
           args: release --clean --release-header=dist-notes/header.md
@@ -559,7 +559,7 @@ jobs:
 
       - name: Set up the Cloudsmith CLI
         if: ${{ !inputs.dry_run }}
-        uses: cloudsmith-io/cloudsmith-cli-action@69e169e2ad9bc9a1599c2dff464061a00fe9f8ba # v3.1.1
+        uses: cloudsmith-io/cloudsmith-cli-action@92b1383b22bbd36d804b858f273abcdf4d349f6b # v3.2.1
         with:
           oidc-namespace: leinardi
           oidc-service-slug: ${{ vars.CLOUDSMITH_SERVICE_SLUG }}
