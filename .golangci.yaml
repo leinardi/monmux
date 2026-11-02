@@ -96,6 +96,14 @@ linters:
           disabled: true
         - name: unused-parameter
         - name: unused-receiver
+    wrapcheck:
+      # A refusal is returned as is, never wrapped: wrapping would corrupt the
+      # message the user sees, which must end with "No DDC write was
+      # performed." wrapcheck v2.13 (golangci-lint v2.15) started reporting
+      # concrete error types from other packages returned as error, so the
+      # constructor is ignored here rather than at every call site.
+      extra-ignore-sigs:
+        - refusal.New(
 
   exclusions:
     presets:
