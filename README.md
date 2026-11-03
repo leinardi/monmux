@@ -38,8 +38,7 @@ nothing is as useful to report as one that worked.
 
 Two mechanisms are implemented: `lg-alt-input`, the LG side channel, and `vcp-input-source`, the
 standard `VCP 0x60` Input Source feature. Each is write-enabled on one model. The second has 36
-recorded models; the one enabled is the Samsung G95NC, verified through m1ddc, and the mechanism has
-never been run through ddcutil.
+recorded models; the one enabled is the Samsung G95NC, verified through both m1ddc and ddcutil.
 
 ## Install
 

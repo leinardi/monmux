@@ -221,9 +221,8 @@ record counts as that model: the point is that the mechanism arrives with eviden
 that the first entry using it is trusted. Until a model using a mechanism is write-enabled, that
 backend path is unproven, and enabling that first model is the first enabling of the mechanism,
 done with the [`docs/testing.md`](docs/testing.md) checklist, not a routine catalog flip. Both
-mechanisms are past that point: `vcp-input-source` with the Samsung G95NC, verified through m1ddc.
-Its ddcutil path has still not reached a monitor, so the first Linux run of any `vcp-input-source`
-entry is a first too.
+mechanisms are past that point, on both backends: `vcp-input-source` with the Samsung G95NC,
+verified through m1ddc and ddcutil.
 
 **Backends only execute a `Command` produced by `Plan`.** `Command` is returned by `Plan` for
 display only and is never accepted as input by any method. `Execute` takes the `catalog.Operation`,

@@ -126,11 +126,9 @@ prompt would break the scripting the flag exists to allow. The result line then 
 identification was bypassed, so scrollback shows it later.
 
 Thirty-six entries use `vcp-input-source`, and one of them, the Samsung G95NC, is write-enabled,
-verified through m1ddc. No `vcp-input-source` entry has reached a monitor through ddcutil. Every
-`--unsafe-model` run against one of the other thirty-five is a first run of that entry's values, and
-any first run from Linux, the G95NC's included, is also the first hardware run of the ddcutil path:
-both belong with the checklist in [testing.md](testing.md), with `--dry-run` first and the monitor's
-OSD within reach.
+verified through both m1ddc and ddcutil. Every `--unsafe-model` run against one of the other
+thirty-five is a first run of that entry's values, and belongs with the checklist in
+[testing.md](testing.md), with `--dry-run` first and the monitor's OSD within reach.
 
 ### Serial and UUID leakage
 
