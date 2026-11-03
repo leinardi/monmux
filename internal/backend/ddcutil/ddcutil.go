@@ -22,14 +22,17 @@
 // Two things make the write as safe as this design can make it. The display is
 // selected by its full 256-character EDID rather than by a bus number, so if the
 // monitor on that bus changed since monmux looked, ddcutil itself refuses. And
-// Execute re-reads the connector's EDID and its ddc link immediately before
-// running, so a display that moved is caught here first.
+// Execute re-reads the connector's EDID and its bus immediately before running,
+// so a display that moved is caught here first. The bus comes from the
+// connector's ddc link, or, for a connector the kernel gave none, from the one
+// bus `ddcutil detect` reports with exactly that EDID.
 package ddcutil
 
 import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"path/filepath"
 	"sync"
 
 	"github.com/leinardi/monmux/internal/backend"
@@ -48,6 +51,12 @@ const (
 	defaultDevRoot = "/dev"
 )
 
+// i2cFromSysfs leads from the DRM connectors to where the kernel lists the I2C
+// buses, each a link into the device tree that says which device the bus
+// belongs to: /sys/class/drm to /sys/bus/i2c/devices. Deriving it keeps a test's
+// fake sysfs one tree.
+var i2cFromSysfs = []string{"..", "..", "bus", "i2c", "devices"}
+
 // Options configures the backend. The zero value talks to the real system.
 type Options struct {
 	// Runner runs ddcutil. A nil Runner means the real one.
@@ -64,9 +73,13 @@ type Options struct {
 // connector is what Enumerate learned about one display and kept to itself: the
 // raw EDID bytes and the I2C bus behind its ddc link. Neither is exported.
 // The EDID is private data, and the bus is only meaningful together with it.
+//
+// detected marks a bus that came from `ddcutil detect` because the connector
+// has no ddc link, so that the re-check before a write looks it up the same way.
 type connector struct {
-	edid []byte
-	bus  string
+	edid     []byte
+	bus      string
+	detected bool
 }
 
 // Backend is the ddcutil backend.
@@ -75,6 +88,7 @@ type Backend struct {
 	configured string
 	sysfsRoot  string
 	devRoot    string
+	i2cRoot    string
 
 	mu         sync.Mutex
 	path       string
@@ -104,6 +118,7 @@ func New(opts Options) *Backend {
 		configured: opts.Path,
 		sysfsRoot:  sysfsRoot,
 		devRoot:    devRoot,
+		i2cRoot:    filepath.Join(append([]string{sysfsRoot}, i2cFromSysfs...)...),
 		connectors: map[string]connector{},
 		statuses:   map[string]string{},
 	}
@@ -167,7 +182,7 @@ func (b *Backend) Execute(
 		return err
 	}
 
-	err = b.reverify(&display, known)
+	err = b.reverify(ctx, &display, known)
 	if err != nil {
 		return err
 	}

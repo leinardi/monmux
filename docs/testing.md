@@ -250,9 +250,9 @@ write-enabled model may carry — see [adding-a-monitor.md](adding-a-monitor.md)
 
 A mechanism enters the catalog with a **disabled** record, so its backend path has never reached a
 monitor. Both existing mechanisms are past their first enabling — `vcp-input-source` with the
-Samsung G95NC, verified through m1ddc only, whose ddcutil path has still not reached a monitor — so
-this applies to the next mechanism added. Enabling the first model that uses one is two firsts at
-once, and needs more than the checklist above:
+Samsung G95NC, verified through m1ddc and ddcutil — so this applies to the next mechanism added.
+Enabling the first model that uses one is two firsts at once, and needs more than the checklist
+above:
 
 1. Work through the whole checklist for the model, substituting that mechanism's command line — the
    two are in [backends.md](backends.md). The model is not write-enabled yet, so `monmux switch`

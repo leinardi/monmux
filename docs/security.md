@@ -38,8 +38,9 @@ unplugged, another plugged in, or an I²C bus rebound to a different connector �
 monmux identified is not the one that receives the write.
 
 **Mitigation.** The identity is re-verified immediately before the write. On Linux the connector's
-EDID is re-read and compared byte for byte with what enumeration saw, and the `ddc` link is
-re-resolved to the same bus; on macOS the display list is re-read and the UUID must still carry the
+EDID is re-read and compared byte for byte with what enumeration saw, and the bus is looked up
+again the same way — the `ddc` link, or `ddcutil detect` for a connector with none — and must be
+the same one; on macOS the display list is re-read and the UUID must still carry the
 same identity. Any difference is `identity-changed`, and nothing is sent. The Linux write then
 selects the display by its full 256-character EDID rather than by a bus number, so `ddcutil` itself
 refuses if the monitor on that bus changed in the remaining instant.
@@ -125,11 +126,9 @@ prompt would break the scripting the flag exists to allow. The result line then 
 identification was bypassed, so scrollback shows it later.
 
 Thirty-six entries use `vcp-input-source`, and one of them, the Samsung G95NC, is write-enabled,
-verified through m1ddc. No `vcp-input-source` entry has reached a monitor through ddcutil. Every
-`--unsafe-model` run against one of the other thirty-five is a first run of that entry's values, and
-any first run from Linux, the G95NC's included, is also the first hardware run of the ddcutil path:
-both belong with the checklist in [testing.md](testing.md), with `--dry-run` first and the monitor's
-OSD within reach.
+verified through both m1ddc and ddcutil. Every `--unsafe-model` run against one of the other
+thirty-five is a first run of that entry's values, and belongs with the checklist in
+[testing.md](testing.md), with `--dry-run` first and the monitor's OSD within reach.
 
 ### Serial and UUID leakage
 

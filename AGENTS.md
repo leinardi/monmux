@@ -191,8 +191,8 @@ Do not weaken any of these. They are the reason the tool exists.
    which ignores `write_enabled`. It ignores nothing else — an input the named entry does not record
    has no value at all, and is still refused with `input-not-enabled`.
 3. **Re-verify at the last moment.** `Execute` re-reads the identity (sysfs EDID and bus on Linux,
-   `display list detailed` on macOS) and refuses with `identity-changed` if anything moved since
-   enumeration.
+   the bus from the `ddc` link or, without one, from `ddcutil detect`; `display list detailed` on
+   macOS) and refuses with `identity-changed` if anything moved since enumeration.
 4. **Refuse loudly, write never.** Every refusal path returns a `refusal.Refusal` whose message ends
    with `No DDC write was performed.` and exits with code 2. Only code 1 (tool/exec error) may leave
    the write status unknown, and it says so explicitly.
@@ -221,9 +221,8 @@ record counts as that model: the point is that the mechanism arrives with eviden
 that the first entry using it is trusted. Until a model using a mechanism is write-enabled, that
 backend path is unproven, and enabling that first model is the first enabling of the mechanism,
 done with the [`docs/testing.md`](docs/testing.md) checklist, not a routine catalog flip. Both
-mechanisms are past that point: `vcp-input-source` with the Samsung G95NC, verified through m1ddc.
-Its ddcutil path has still not reached a monitor, so the first Linux run of any `vcp-input-source`
-entry is a first too.
+mechanisms are past that point, on both backends: `vcp-input-source` with the Samsung G95NC,
+verified through m1ddc and ddcutil.
 
 **Backends only execute a `Command` produced by `Plan`.** `Command` is returned by `Plan` for
 display only and is never accepted as input by any method. `Execute` takes the `catalog.Operation`,
