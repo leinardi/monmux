@@ -122,12 +122,12 @@ flag that makes a gate pass on nothing (`|| true`, `continue-on-error`, `if: fal
 kind), with an allowlist for the release workflow's deliberate ones that fails once an entry is
 stale. `test/docs` resolves every relative Markdown link and anchor.
 
-**Script tests.** The two pre-commit scripts that hold the repository to a rule,
-`scripts/check-license-headers.sh` and `scripts/check-suppressions.sh`, are tested by shell
-scripts beside them rather than by Go tests, because a Go test that ran them would have to start
-a process. The shell tests drive git in scratch repositories, with every variable that could
+**Script tests.** The pre-commit script that holds the repository to a rule,
+`scripts/check-license-headers.sh`, is tested by a shell
+script beside it rather than by Go tests, because a Go test that ran it would have to start
+a process. The shell test drives git in scratch repositories, with every variable that could
 point git at the repository being committed removed first (`scripts/lib/scratch-git.sh`), and
-run nothing else: never monmux, `ddcutil` or `m1ddc`. `make verify-scripts` runs them, and so
+run nothing else: never monmux, `ddcutil` or `m1ddc`. `make verify-scripts` runs it, and so
 does CI's `scripts` job.
 
 **Cross-compilation.** Only one of the two backends is visible to the host toolchain at a time, so

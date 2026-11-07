@@ -115,9 +115,7 @@ up constantly:
   unit-tested on either host.
 - Every Go and shell file, the Makefile and the repo-local `.mk` fragments start with the Apache 2.0
   header; the `check-license-headers` hook says which file lacks it.
-- A new `//nolint` or `# shellcheck disable=` needs `scripts/check-suppressions.sh --update`,
-  committed with it: the `check-suppressions` hook refuses a suppression the baseline does not
-  record.
+- A new `//nolint` or `# shellcheck disable=` carries a comment saying why the fix does not apply.
 - Comments explain why, not what. A comment that restates the code is noise; a comment explaining
   why a check exists is the reason somebody will not delete it in six months.
 
