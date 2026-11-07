@@ -129,7 +129,7 @@ Run before considering an edit done. `make check` applies to every row.
 | `internal/catalog/models.yaml`, the generator, `internal/catalog/internal/input` | `make go-generate`, commit what it renders, then `make go-test` |
 | `go.mod`, `go.sum` | `make go-tidy`, `make audit-deps` (network), `go test ./test/toolchain/` |
 | `test/**` | `go test -count=1 ./test/...` |
-| `scripts/check-license-headers.sh`, `scripts/check-suppressions.sh`, `scripts/lib/**`, their `*.test.sh` | `make verify-scripts`, and the script itself over the tree |
+| `scripts/check-license-headers.sh`, `scripts/lib/**`, their `*.test.sh` | `make verify-scripts`, and the script itself over the tree |
 | `.github/workflows/**` | `pre-commit run actionlint --all-files`, `go test ./test/toolchain/` (pins, vacuous flags) |
 | `.pre-commit-config.yaml`, `Makefile`, `.mk/**` | `make check`, `go test ./test/toolchain/`, `make help` |
 | `.goreleaser.yaml` | the `release-config` CI job (`goreleaser check`) |
@@ -243,10 +243,6 @@ real run executes, by construction.
   header from `.idea/copyright/Apache_2_0.xml`, dated by the file's first commit.
   `scripts/check-license-headers.sh` enforces it as an always-run pre-commit hook; make-common's
   fetched files are exempt.
-- In-file suppressions (`//nolint:<linter>`, `# shellcheck disable=`) are ratcheted per rule
-  against `.suppressions-baseline` by `scripts/check-suppressions.sh`. Adding one is allowed, but
-  never silently: run `scripts/check-suppressions.sh --update` and commit the baseline with it. A
-  count that falls below its baseline fails the same way.
 - The meta-tests under `test/` (the Go line and linter pins, flags that make a gate pass on
   nothing, Markdown links) read files only. The hook scripts are tested by shell tests against
   scratch git repositories (`make verify-scripts`), because no Go test starts a process.

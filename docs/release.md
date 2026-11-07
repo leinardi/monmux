@@ -273,7 +273,7 @@ any branch, which is the very thing the `guard` job exists to prevent.
 | Job | Runner | What it does |
 | --- | --- | --- |
 | `pre-commit-all` | ubuntu | Every pre-commit hook on every file, minus `go-test-repo-mod` and `audit-deps-go`, which `test` and `govulncheck` run; fails if a hook changed or created a file. |
-| `scripts` | ubuntu | The shell tests of the licence-header and suppression scripts, in scratch git repositories. |
+| `scripts` | ubuntu | The shell tests of the licence-header script, in scratch git repositories. |
 | `test` | ubuntu + macos | `make go-test` (`go test -race ./...`) on both, so each backend's build-tagged tests run. |
 | `cross` | ubuntu | `make go-build-cross`, `make go-vet-cross`, `make go-lint-cross`. |
 | `lint-macos` | macos | `golangci-lint run ./...` natively, the only look at `internal/backend/m1ddc` under its tag. |

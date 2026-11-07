@@ -2,7 +2,7 @@
 name: go-style-guide
 description: >
   Go coding rules for monmux: the golangci-lint v2 (default: all) settings and how
-  to satisfy them, nolint directives and the suppression ratchet, the linux/darwin
+  to satisfy them, nolint directives, the linux/darwin
   build-tag layout and cross-OS lint, refusal error handling (never wrapped), and
   the helpers to reuse (tool-path trust check, refusals, doctor checks, redaction,
   catalog lookups, fakes). Use when writing, editing or reviewing any .go file in
@@ -116,7 +116,7 @@ _, _ = fmt.Fprintln(stderr, rendered)
 
 ---
 
-## 3. `nolint` directives and the suppression ratchet
+## 3. `nolint` directives
 
 `nolintlint` enforces three things:
 
@@ -138,15 +138,6 @@ func (f *Fake) Ready(_ context.Context, _ Display) error {
 
 Multiple linters are comma-separated with no spaces. Name all that fire: `gocyclo` and
 `cyclop` measure the same thing, and `gocognit` often joins them.
-
-**Suppressions are ratcheted.** [`.suppressions-baseline`](../../../.suppressions-baseline) holds
-one count per rule (`nolint/<linter>`, and `shellcheck-disable/<code>` for shell).
-`scripts/check-suppressions.sh` runs as the `check-suppressions` pre-commit hook and refuses a
-count above its baseline, a rule the baseline does not know, a count below its baseline (the file
-must describe the tree), and a staged diff that adds a suppression line without also changing the
-baseline. Every new, moved or removed suppression therefore needs
-`scripts/check-suppressions.sh --update`, committed with the change that earned it. Raising a count
-needs a reviewer's agreement; the baseline file is what they read.
 
 ---
 
@@ -368,8 +359,7 @@ flaky test pass, are always wrong.
 - [ ] No `errors.New` or `%w`-less `fmt.Errorf` in a function body: wrap a package-level sentinel
 - [ ] `any` not `interface{}`; `new(expr)`, not a pointer-boxing helper
 - [ ] Numbers other than 0–3 extracted to named constants (non-test code)
-- [ ] Each `//nolint` names specific linters, explains why the fix does not apply, and is
-  committed with `scripts/check-suppressions.sh --update`
+- [ ] Each `//nolint` names specific linters, and explains why the fix does not apply
 - [ ] No `FIXME` comments
 - [ ] `//go:build linux` / `//go:build darwin` first line in backend-specific files;
   `make go-lint-cross` after touching one
@@ -390,7 +380,5 @@ flaky test pass, are always wrong.
    `make go-vet-cross` and `make go-lint-cross`: step 1 lints only the host's backend.
 4. Fix each report and re-run from step 1 until all of them are clean.
 5. Check `git status`: the formatter hook rewrites files in place, so review and keep its changes.
-   If you added, moved or removed a suppression, run `scripts/check-suppressions.sh --update` and
-   stage `.suppressions-baseline`.
 
 `make verify-go` runs steps 2 and 3 plus both lints in one command.

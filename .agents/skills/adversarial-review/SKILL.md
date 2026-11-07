@@ -100,8 +100,8 @@ are findings even when lint is green. Load only what the diff touches.
 
 A meta-test guards a claim about the repository rather than the product: the Go line and the
 golangci-lint pin agree everywhere (`test/toolchain`), no gate passes on nothing, every Markdown
-link resolves (`test/docs`), and the licence-header and suppression scripts refuse what they say
-they refuse (their shell tests). Try to make the guarded thing go wrong and see whether the test
+link resolves (`test/docs`), and the licence-header script refuses what it says
+it refuses (their shell tests). Try to make the guarded thing go wrong and see whether the test
 still notices. A test that passes because its input is empty, its walk found no files, its
 allowlist entry outlived the line it excused, or its rule never ran is a false pass.
 
@@ -265,11 +265,10 @@ intent was. If one exists, is the diff removing exactly what that line retires a
 ### (c) A new suppression has to show its work
 
 Any new `//nolint:` or `# shellcheck disable=` is a standing decision to let a linter stay
-silent. `scripts/check-suppressions.sh` counts them per rule against `.suppressions-baseline` and
-refuses a commit that adds one without changing the baseline, so a raised count is visible; the
-review is where it is accepted or not. So demand the attempt: for a complexity
-or length rule, was the obvious extraction tried and what broke? For `wrapcheck`, why is wrapping
-wrong here? For `varnamelen`, why does the name have to be short? A suppression whose reason
+silent, and no hook counts them: the review is where one is accepted or not. So demand the
+attempt: for a complexity or length rule, was the obvious extraction tried and what broke? For
+`wrapcheck`, why is wrapping wrong here? For `varnamelen`, why does the name have to be short? A
+suppression whose reason
 comment restates the rule instead of explaining why the fix does not apply is a finding, and so is
 a suppression with no reason comment at all. The same holds for a new exclusion in
 `.golangci.yaml` — and an exclusion, enable or setting there that matches nothing in this repo
@@ -314,7 +313,7 @@ monitor.
 | `internal/catalog` or `docs/compatibility.md` | `make go-test` — the compatibility test is the gate |
 | build, Makefile, `.mk/`, or CI | `make go-build`, `go test ./test/toolchain/` and `make check` |
 | `test/**` | `go test -count=1 ./test/...` |
-| `scripts/check-*.sh`, `scripts/lib/`, `.suppressions-baseline` | `make verify-scripts` |
+| `scripts/check-*.sh`, `scripts/lib/` | `make verify-scripts` |
 | docs or skill only | `make check` and inspect the rendered content and links |
 
 The suite is fast, isolated and hermetic, so a source change normally warrants the full suite
