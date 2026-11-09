@@ -49,14 +49,10 @@ var vacuousFlags = []struct {
 // outlive the code it excuses.
 var allowedVacuous = map[string]map[string]string{
 	".github/workflows/release.yaml": {
-		// grep exits 1 when no tag matches, which under pipefail would end the step; an empty
-		// tag list is a valid answer here, and the callers test for it.
-		`{ grep -E "$RELEASE_TAG_REGEX" || true; } | sort -V | tail -n1`:                        "no release tag yet",
-		`git tag --points-at HEAD | { grep -E "$RELEASE_TAG_REGEX" || true; } | grep -qxF "$1"`: "HEAD carries no release tag",
-		// HEAD^ does not exist on a root commit; the baseline is then empty, which is handled.
-		`PREVIOUS=$({ git tag --merged "HEAD^" 2>/dev/null || true; } | highest_release)`: "root commit",
-		// The remote has no release tag yet, so the pipeline finds nothing; checked right after.
-		`| tail -n1 || true)`: "no remote release tag yet",
+		// grep exits 1 when no tag matches, which under pipefail would end the step; a remote with
+		// no release tag yet is a valid answer, checked right after. The git ls-remote it filters
+		// runs in its own assignment, so a failed lookup still stops the step.
+		`| { grep -E "$RELEASE_TAG_REGEX" || true; } \`: "no remote release tag yet",
 	},
 }
 
