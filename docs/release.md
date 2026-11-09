@@ -91,33 +91,43 @@ exists, and everything after it is idempotent.
 1. **Refuse anything but `main`.** `workflow_dispatch` lets the caller pick any branch, and the
    release job holds `contents: write`, an OIDC identity and the tap token — dispatched from a side
    branch it would tag that branch's tree and publish it. The `guard` job fails, rather than skips,
-   when `github.ref` is not `refs/heads/main`, and every other job waits on it, so such a run is red
-   and nothing runs at all. The ruleset cannot express this: tag protection stops a tag from
-   *moving*, not from being created on the wrong commit. The second line of defence is the `release`
-   environment — add a deployment branch rule limiting it to `main`, and required reviewers if a
-   release should need a second pair of eyes.
-2. **Verify.** `test` on Linux and macOS, `cross`, `govulncheck`. These are copies of the CI jobs
-   rather than a call into `ci.yaml`, so that a release never depends on which pull request last ran
-   CI.
-3. **Resolve the version.** Only strict `vMAJOR.MINOR.PATCH` tags are releases: `RELEASE_TAG_REGEX`
-   in the workflow, `^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`, with no leading zeros,
-   no pre-release and no build metadata. An explicit input must match it. Otherwise the highest
-   strict tag reachable from `HEAD` is the current version, and `svu next` is given that exact tag
-   as `--tag.pattern`, never a glob (a glob such as `v[0-9]*.[0-9]*.[0-9]*` also matches
-   `v1.2.3-rc.1`). With no strict tag reachable, a run with no version fails and asks for one. `svu`
-   prints the current version unchanged, and exits 0, when nothing since that tag is a `feat`, a
-   `fix` or a breaking change, so equality is the "nothing to bump" case and it fails with *"No
-   feat/fix or breaking-change commit since `<tag>`, so there is nothing to bump. Re-run with an
-   explicit version to force one."* — unless that tag is on `HEAD` itself, which is a re-run of a
-   run that derived its version.
+   when `github.ref` is not `refs/heads/main`, and `ci-green` and the release job wait on it, so
+   such a run is red and nothing is built or published (only the read-only `audit` runs anyway).
+   The ruleset cannot express this: tag protection stops a tag from *moving*, not from being created
+   on the wrong commit. The second line of defence is the `release` environment — add a deployment
+   branch rule limiting it to `main`, and required reviewers if a release should need a second pair
+   of eyes.
+2. **Require CI green, and audit again.** The release does not repeat what CI already proved. The
+   `ci-green` job runs `require-ci-green` from
+   [`leinardi/gh-composite-actions`](https://github.com/leinardi/gh-composite-actions): `ci.yaml`'s
+   `ci-result` must have passed on the push of this exact commit to `main`, in that run's newest
+   attempt, or the release fails without building anything. Only the time-sensitive check runs
+   again: the `audit` job runs `make audit-deps` (govulncheck), because advisories are published
+   every day and the dependencies CI scanned may have one now. It needs nothing and nothing needs
+   it, so it runs beside the build; step 8 waits for it. [What CI proves for a
+   release](#what-ci-proves-for-a-release) lists what moved where.
+3. **Resolve the version**, with gh-composite-actions' `release-version`. Only strict
+   `vMAJOR.MINOR.PATCH` tags are releases, `^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`
+   (`RELEASE_TAG_REGEX` in the workflow is the same regex), with no leading zeros, no pre-release and
+   no build metadata. An explicit input must match it. Otherwise the highest strict tag reachable
+   from `HEAD` is the current version, and `svu next` is given that exact tag as `--tag.pattern`,
+   never a glob (a glob such as `v[0-9]*.[0-9]*.[0-9]*` also matches `v1.2.3-rc.1`). svu is
+   installed (`setup-svu`) only when the version is derived, so a version typed by hand releases
+   even while GitHub's release downloads fail. With no strict tag reachable, a run with no version
+   fails and asks for one. `svu` prints the current version unchanged, and exits 0, when nothing
+   since that tag is a `feat`, a `fix` or a breaking change, so equality is the "nothing to bump"
+   case and it fails with *"No feat/fix or breaking-change commit since `<tag>`, so there is nothing
+   to bump. Re-run with an explicit version to force one."* — unless that tag is on `HEAD` itself,
+   which is a re-run of a run that derived its version.
 
    The version must then be **higher than every version already released**, whether it was derived
    or typed. Tags here are immutable and the release is marked latest, so publishing a `v1.1.1`
    after `v1.2.0` would create a permanent lower tag and hand everyone following the "latest" link
    an older binary. The only version a run may reuse is the one it is recovering, and only while it
    is still the highest release: goreleaser marks every release it publishes as latest and pushes
-   its cask to the tap, so re-running an older version would hand both an older binary. Unlike the
-   sibling repositories, that recovery is refused. A branch whose history does not contain the
+   its cask to the tap, so re-running an older version would hand both an older binary.
+   `release-version` allows such a recovery, as the sibling repositories do; here a step right after
+   it refuses one. A branch whose history does not contain the
    highest release — for example one tagged on a merge commit that was later rewritten — derives
    from an older base and so fails that check; the failure names the out-of-history tag, and an
    explicit version higher than it is the way out.
@@ -129,13 +139,14 @@ exists, and everything after it is idempotent.
    the nearest tag, because `latest` is a separate pointer that the ruleset deliberately leaves
    mutable.
 
-   The baseline for the notes is the previous release tag — read from `HEAD^` on a recovery, since
-   the tag being released is on `HEAD` already and describing from there would compare the catalog
-   against itself.
+   The baseline for the notes is the previous release tag (`release-version`'s `previous`), read from
+   `HEAD^` on a recovery, since the tag being released is on `HEAD` already and describing from
+   there would compare the catalog against itself.
 4. **Write the catalog notes**, and apply the catalog version rule below.
 5. **Check the tag.** If `refs/tags/<version>` already exists on the remote, the run continues only
    when it points at `HEAD` — a re-run recovering a failed publish. Pointing anywhere else is a hard
-   failure.
+   failure, and so is a `git ls-remote` that fails: only an answer that names no such ref reads as
+   absent.
 6. **Tag locally.** `git tag -a`, and nothing is pushed. goreleaser only checks that the tag exists
    locally on `HEAD` (`git describe --exact-match`), never on the remote, so building against a
    local-only tag is supported. That is also why the changelog uses `use: git`: the GitHub compare
@@ -143,15 +154,20 @@ exists, and everything after it is idempotent.
 7. **`goreleaser check`**, then **`goreleaser release --clean --skip=publish`**: builds, archives,
    packages, checksums and signs, with nothing pushed anywhere. A configuration error, a build error
    or a cosign error stops the run here, with no tag on the remote and nothing to clean up.
-8. **A dry run stops here**, having written the release notes and the artifact list to the job
+8. **Require the audit, then gate the tag.** `require-job-success` waits for this run's `audit` job
+   and fails unless it passed in the current attempt. Then the highest released version is read
+   again, from the **remote** this time: concurrency serializes this workflow, but a tag can arrive
+   from outside it, and the check in step 3 ran several minutes of building ago. A version that is
+   no longer the highest fails here, with nothing pushed. The `git ls-remote` is its own assignment
+   under `set -e`, so a failed lookup stops the step instead of reading as "no tags". A dry run
+   makes both checks, so it fails wherever a real run would.
+9. **A dry run stops here**, having written the release notes and the artifact list to the job
    summary and uploaded `dist/` as a workflow artifact. This is the review step: the version is
    resolved, the notes are rendered and everything is built, without a tag, a release, a cask commit
    or a Cloudsmith upload.
-9. **`git push origin <version>`** — the point of no return. Immediately before pushing, the highest
-   released version is read again, from the **remote** this time: concurrency serializes this
-   workflow, but a tag can arrive from outside it, and the check in step 3 ran several minutes of
-   building ago. A version that is no longer the highest fails here, with nothing pushed.
-10. **`goreleaser release --clean`** again: it rebuilds and publishes — creating the GitHub release
+10. **`git push origin <version>`** — the point of no return. The checkout keeps no credentials
+    (`persist-credentials: false`); the token reaches this one `git` command as a header.
+11. **`goreleaser release --clean`** again: it rebuilds and publishes — creating the GitHub release
     with `target_commitish: {{ .FullCommit }}`, uploading every artifact and pushing the cask to the
     tap. Rebuilding is safe because the build is reproducible: everything stamped into an artifact
     comes from the commit rather than from the clock — `.Tag`, `.FullCommit`, `.CommitDate` and
@@ -160,13 +176,16 @@ exists, and everything after it is idempotent.
     the dry run inspected. Verified by building the same commit twice and comparing SHA-256. The
     package half of that was not true for v0.5.0, whose deb and rpm carried the build clock and so
     differed between the two builds of the one release run; the archives always matched.
-11. **Attest** the archives, packages and checksum file.
-12. **`cloudsmith push deb|rpm ... --republish`** for each package.
+12. **Attest** the archives, packages and checksum file.
+13. **`cloudsmith push deb|rpm ... --republish`** for each package.
 
 ### Recovering a failed publish
 
-Re-run the workflow with the **same version, given explicitly**. Everything after the tag push is
-idempotent by construction:
+Dispatch the workflow again with the **same version, given explicitly**, or re-run the failed run
+with **"Re-run all jobs"** — never "Re-run failed jobs". Only the current attempt's `audit` counts:
+"Re-run failed jobs" does not re-run a job that passed, and `require-job-success` never trusts an
+earlier attempt's pass, so the release job would wait for an audit that is not coming and fail.
+Everything after the tag push is idempotent by construction:
 
 - the tag check passes, because the tag points at `HEAD`, and the push step is skipped;
 - `release.mode: replace` and `replace_existing_artifacts: true` refresh the GitHub release instead
@@ -186,10 +205,11 @@ Semantic versioning, derived from Conventional Commits by [`svu`](https://github
 `feat` is a minor, `fix` is a patch, `!` or `BREAKING CHANGE:` is a major, and everything else
 (`build`, `chore`, `ci`, `docs`, `perf`, `refactor`, `revert`, `style`, `test`) bumps nothing — so a
 performance improvement, refactor or revert that users should receive is committed as a `fix` (or
-`feat`). `svu` is a single Go binary installed with the toolchain already on the runner, it reads
-tags and commit messages, and it does nothing else — goreleaser already renders the changelog, so a
-second changelog engine would be one more thing to keep in step. Its version is pinned in the
-workflow by hand, because dependabot does not track a `go install` argument.
+`feat`). `svu` is a single binary that reads tags and commit messages and does nothing else —
+goreleaser already renders the changelog, so a second changelog engine would be one more thing to
+keep in step. gh-composite-actions' `setup-svu` installs it from its release archive, checked
+against a SHA-256 pinned in the action, so its version moves with the action's pin, which dependabot
+updates.
 
 One project-specific rule sits on top: **any change to `internal/catalog/models.yaml` that adds or
 moves a byte this binary can send to a monitor is at least a minor release, and is called out at the
@@ -218,8 +238,8 @@ models removed, and a last section naming any entry whose evidence, notes or sou
 last one exists so that "no catalog change" can only mean the file is identical, rather than meaning
 the bytes happen to match. It also prints `enabled=true|false`, which is what the workflow acts on:
 
-- derived version, patch bump, `enabled=true` → the workflow uses `svu minor` instead and prints a
-  notice;
+- derived version, patch bump, `enabled=true` → the workflow raises it to the next minor after the
+  previous release (what `svu minor` prints) and prints a notice;
 - explicit version, patch bump, `enabled=true` → the workflow fails and names the minor to pass. An
   explicit input is a choice; the rule outranks it.
 
@@ -237,18 +257,18 @@ The commit-message changelog is grouped underneath: `feat(catalog)` and `fix(cat
 recovery re-run rebuilds a tagged commit and has to produce the same artifacts; a goreleaser
 released in between could change them, which would defeat the reproducibility the rebuild depends
 on. `ci.yaml` checks the configuration against the same pin, so `goreleaser check` validates against
-the binary that will actually build the release. Like `SVU_VERSION`, it is a human's job to bump.
+the binary that will actually build the release. It is a human's job to bump.
 
-**Every action is pinned to a full commit SHA**, with the version in a trailing comment, in all
-three workflows. A tag is a mutable pointer: `@v7` resolves to whatever that tag points at on the
+**Every action is pinned to a full commit SHA**, with the version in a trailing comment, in every
+workflow. A tag is a mutable pointer: `@v7` resolves to whatever that tag points at on the
 day the job runs, and an action that moves — or whose repository is compromised — would execute
 inside the release job, which holds `contents: write`, an OIDC identity good for Cloudsmith, and the
 tap token. A SHA cannot be moved. Dependabot updates the pins and rewrites the comment, so this
-costs nothing to maintain. `svu` and `govulncheck` are pinned the same way, as versions in
-`SVU_VERSION` and in `GOVULNCHECK_VERSION` in `.mk/audit-deps.mk` (the `make audit-deps` target both
-workflows and the pre-commit hook run), because dependabot cannot see a `go install` or `go run`
-argument; those two are a human's job to bump. Pinning the scanner does not pin what it knows about:
-govulncheck fetches the vulnerability database at run time.
+costs nothing to maintain. `govulncheck` is pinned as a version, `GOVULNCHECK_VERSION` in
+`.mk/audit-deps.mk` (the `make audit-deps` target both workflows and the pre-commit hook run),
+because dependabot cannot see a `go run` argument; it is a human's job to bump. Pinning the
+scanner does not pin what it knows about: govulncheck fetches the vulnerability database at run
+time.
 
 **The vulnerability scan runs on the toolchain the release builds with.** Both workflows call
 `setup-go` with `go-version-file: go.mod` and then `govulncheck` directly, rather than using
@@ -268,13 +288,15 @@ any branch, which is the very thing the `guard` job exists to prevent.
 ## CI
 
 [`.github/workflows/ci.yaml`](../.github/workflows/ci.yaml) runs on every pull request, on pushes to
-`main` and on dispatch.
+`main` and on dispatch. A pull request's runs share one concurrency group, so a newer push cancels
+the older run; every other run gets a group of its own and is never cancelled or replaced, because
+the release requires CI to have passed on the push of the exact commit it releases.
 
 | Job | Runner | What it does |
 | --- | --- | --- |
 | `pre-commit-all` | ubuntu | Every pre-commit hook on every file, minus `go-test-repo-mod` and `audit-deps-go`, which `test` and `govulncheck` run; fails if a hook changed or created a file. |
 | `scripts` | ubuntu | The shell tests of the licence-header script, in scratch git repositories. |
-| `test` | ubuntu + macos | `make go-test` (`go test -race ./...`) on both, so each backend's build-tagged tests run. |
+| `test` | ubuntu + macos | `make go-test` (`go test -race ./...`) on both, so each backend's build-tagged tests run. Defined in [`go-test.yaml`](../.github/workflows/go-test.yaml), which the Go cache warm-up runs too. |
 | `cross` | ubuntu | `make go-build-cross`, `make go-vet-cross`, `make go-lint-cross`. |
 | `lint-macos` | macos | `golangci-lint run ./...` natively, the only look at `internal/backend/m1ddc` under its tag. |
 | `govulncheck` | ubuntu | Vulnerability scan of the module, test files included. |
@@ -285,9 +307,9 @@ any branch, which is the very thing the `guard` job exists to prevent.
 | `shellcheck` | ubuntu, pull requests | Shell linting. |
 | `yamllint` | ubuntu, pull requests | YAML linting. |
 | `conventional-commits` | ubuntu, pull requests | Every commit message in the range, because the release version is derived from them. |
-| `ci-result` | ubuntu | Needs every job above except the reviewdog annotation jobs, and fails unless each succeeded; `conventional-commits` may be skipped off pull requests. The one required check. |
+| `ci-result` | ubuntu | Needs every job above except the reviewdog annotation jobs, and fails unless each succeeded; `conventional-commits` may be skipped off pull requests. The one required check, and the job the release's `require-ci-green` reads. |
 
-Three things there are deliberate:
+Four things there are deliberate:
 
 - **`test` runs on both a Linux and a macOS runner.** Each backend sits behind a build tag, so a
   linter or a compiler running on one OS does not analyse the other's files at all, and three real
@@ -305,11 +327,48 @@ Three things there are deliberate:
   `~/.cache/pre-commit` on every push to `main` that touches `.pre-commit-config.yaml`, under the
   key the reviewdog composite actions read. It matters more here than in the sibling repositories:
   the `golangci-lint` hook builds the linter from source on a cold cache.
+- **Only `main` writes a cache.** A pull request can read the caches saved on `main`, and nothing a
+  pull request saves is readable by `main` or by another pull request, so a save anywhere else
+  would only spend the repository's cache quota. The Go module and build cache is saved by
+  [`go-cache-warmup.yaml`](../.github/workflows/go-cache-warmup.yaml) alone: it runs
+  `go-test.yaml` on both OSes on every push to `main` that touches Go code, `go.mod`, `go.sum`,
+  `models.yaml`, test data or the build files (and weekly, so GitHub does not evict the entry), and
+  saves one entry per OS keyed by commit, then prunes all but the newest two of each with
+  gh-composite-actions' `prune-caches`. Every CI Go job sets `setup-go` up with `cache: false` and
+  restores that entry, never saving; the keys fall back from the exact `go.sum` to the Go version to
+  the OS, so a dependency bump still starts warm. The native macOS lint's own `golangci-lint`
+  cache is saved on `main` only. The release restores and saves nothing: it builds from a clean
+  cache.
 
 The `pre-commit-hooks` job sets Go up before the composite action, because `go-generate-catalog` and
 the `golangci-lint` hooks need a toolchain matching `go.mod` and the action installs only
 `pre-commit`. `go-generate-catalog` is in that job on purpose: a pull request that edits
 `models.yaml` without regenerating what is built from it gets the diff posted as a review comment.
+
+## What CI proves for a release
+
+The release used to repeat `test`, `cross` and `govulncheck` before building. It now requires CI
+green on the exact commit instead (`require-ci-green`: the newest run of `ci.yaml` for the push of
+that SHA to `main`, its newest attempt, exactly one `ci-result` job concluded success), and keeps
+only the check whose answer changes with the calendar.
+
+| Check | CI (`ci-result` needs it) | Release |
+| --- | --- | --- |
+| `make go-test` with `-race`, Linux and macOS | `test` | dropped: covered by `ci-green` |
+| `make go-build-cross`, `go-vet-cross`, `go-lint-cross` | `cross` | dropped: covered by `ci-green` |
+| Native macOS lint | `lint-macos` | never ran here; covered by `ci-green` |
+| Every pre-commit hook on every file | `pre-commit-all` | never ran here; covered by `ci-green` |
+| Hook script tests | `scripts` | never ran here; covered by `ci-green` |
+| `goreleaser check` | `release-config` | still runs, against the same pinned goreleaser |
+| govulncheck (`make audit-deps`) | `govulncheck` | still runs: `audit`, in parallel with the build, required before anything is published |
+| Build, package, sign | not run | runs: the only build of the shipped artifacts |
+
+What that relies on: the commit is the same (the gate compares the run's `head_sha` with the
+release's), the Go toolchain is resolved the same way (`go-version-file: go.mod` with
+`check-latest`, so a Go patch released between CI and the release would build with a newer patch
+than CI tested), and goreleaser is the pinned one in both workflows. CI does not build the release
+artifacts themselves: goreleaser's cross-compiled builds, archives, packages and signatures are
+produced only by the release, and `goreleaser check` is the extent of CI's view of them.
 
 ## Before the first release
 
@@ -356,12 +415,13 @@ Setup that is done by hand, once, in this order.
    rulesets are managed as code in
    [`leinardi/gh-leinardi-iac`](https://github.com/leinardi/gh-leinardi-iac), in the `repo_monmux`
    module of `stacks/github-repos/repos.tf`, never by hand: a change is a pull request there. The
-   one required check is `ci-result`, set there as
-   `default_branch_required_checks = ["ci-result"]`. It needs every gating job of `ci.yaml`, so a
-   new job becomes required by joining its `needs`, not the ruleset; GitHub counts a skipped
-   required job as passing, which is why the jobs themselves are not listed. Once the ruleset is
-   applied, open one pull request and confirm the check reports under exactly the name
-   `ci-result`: a required check that never reports blocks every merge.
+   one required check is to be `ci-result`, set there as
+   `default_branch_required_checks = ["ci-result"]`; it is not set yet. Until it is, nothing stops a
+   merge on a red CI, though the release still refuses a commit whose CI did not pass. It needs
+   every gating job of `ci.yaml`, so a new job becomes required by joining its `needs`, not the
+   ruleset; GitHub counts a skipped required job as passing, which is why the jobs themselves are
+   not listed. Once the ruleset is applied, open one pull request and confirm the check reports
+   under exactly the name `ci-result`: a required check that never reports blocks every merge.
 6. **Labels.** `catalog`, for monitor reports and catalog pull requests; confirm `dependencies` and
    `ci` exist for dependabot.
 7. **The release itself.** Record the hardware checklist in [testing.md](testing.md) for every model

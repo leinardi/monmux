@@ -35,6 +35,13 @@ Hardware validation is a checklist the human runs; agents prepare the commands a
 
 CI runs no monmux command at all; a workflow that did would be a monitor write by automation.
 
+The release re-runs nothing CI proved: it requires `ci.yaml`'s `ci-result` to have passed on the
+push of the exact commit it releases (gh-composite-actions' `require-ci-green`), runs govulncheck
+again beside the build, and builds the artifacts with goreleaser. A check the release relies on
+must therefore be a job in `ci-result`'s `needs`. Only `main` writes caches
+(`go-cache-warmup.yaml`, `pre-commit-warmup.yaml`); every other run restores them —
+[`docs/release.md`](docs/release.md#what-ci-proves-for-a-release).
+
 ## What this is
 
 `monmux` is a cross-platform Go CLI that switches **supported monitors** between video inputs, with

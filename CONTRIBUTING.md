@@ -15,7 +15,8 @@ compile-check and vet both OS backends whichever host you are on, and everything
 backend is tag-free and tested on both. Note that your local linter only ever sees your host's
 backend — see [docs/testing.md](docs/testing.md). CI closes that gap: it runs the tests on a Linux
 and a macOS runner, and lints both backends natively, one job per OS —
-[docs/release.md](docs/release.md).
+[docs/release.md](docs/release.md). A release does not run those again: it requires CI to have
+passed on the commit it releases, so a red `main` cannot be released.
 
 ## The rule: no AI agent writes to a monitor
 
