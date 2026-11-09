@@ -82,6 +82,25 @@ then publish in whatever order they finished — a lower version landing last wo
 it. Nothing is ever cancelled either: a run killed between the tag push and the Cloudsmith upload is
 the one state this pipeline has to be recovered from by hand.
 
+### Dependabot releases
+
+A merge of a Dependabot pull request releases the next patch on its own, with no dispatch, when
+everything since the last release is Dependabot's and at least one of its commits is a `fix(deps)`
+(a Go module update). The workflow also runs on every push to `main`: its `dependabot` job calls
+gh-reusable-workflows' `dependabot-release` with `ecosystems: gomod`, which checks from the API
+alone that every unreleased commit is Dependabot's own (committed by GitHub) or the merge of its
+pull request, that the change only moves action pins and the versions of those ecosystems' files,
+and that CI passed on the push. Then the release runs as a dispatch would, with that patch as an
+explicit version. Anything else is a green no-op with a notice: a `chore(deps)` merge (actions,
+pre-commit, development dependencies) ships nothing, and a human commit waiting to be released
+leaves the release to a dispatch.
+
+A push that merges a Dependabot pull request takes the same `release` group as a dispatch, so the
+two never publish at once and a lower version never moves `latest` after a higher one. Every other
+push runs in a group of its own and only skips the `dependabot` job. GitHub keeps one pending run
+per group: a Dependabot merge that arrives while a release runs and a dispatch waits replaces that
+dispatch, which shows as cancelled; dispatch it again.
+
 The job order exists because **tags in this repository are immutable**. The "Immutable tags" ruleset
 covers `~ALL` tags except `v[0-9]` and `v[1-9][0-9]`, blocks update, deletion and non-fast-forward,
 and has no bypass actors, so the familiar "delete the tag on failure" cleanup step cannot work here

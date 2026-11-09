@@ -30,15 +30,36 @@ on:
         description: "Dry run: build and sign, stop before the tag is pushed"
         type: boolean
         default: false
+  # A push that merges a Dependabot pull request, and leaves only Dependabot's
+  # work unreleased with at least one fix(deps) (a Go module update), releases
+  # the next patch on its own (the dependabot job). Every other push stops at
+  # that job: the release stays a human's dispatch.
+  push:
+    branches:
+      - main
 
 # One release at a time, and never cancelled. Two dispatches in flight together
 # would each check "higher than every released version" against the same latest
 # tag, both pass, and then publish in whatever order they happened to finish - a
-# lower version landing last would take `latest` with it. A second dispatch waits
-# for the first instead of racing it, and a run that has started is never killed
-# part-way through publishing.
+# lower version landing last would take `latest` with it. A second dispatch
+# waits for the first instead of racing it, and a run that has started is never
+# killed part-way through publishing. A push that merges a Dependabot pull
+# request is the one push that may release (the dependabot job below), so it
+# takes the same group: a Dependabot release and a dispatch never publish at
+# once, and a lower version can never move `latest` after a higher one. Every
+# other push only runs the skipped dependabot job, in a group of its own, so it
+# never queues behind a release or replaces a waiting dispatch. GitHub keeps one
+# pending run per group: a Dependabot merge arriving while a release runs and a
+# dispatch waits replaces that dispatch (cancelled, dispatch it again), which is
+# rare.
 concurrency:
-  group: release
+  group: >-
+    ${{
+      (github.event_name == 'workflow_dispatch'
+        || (startsWith(github.event.head_commit.message, 'Merge pull request #')
+          && contains(github.event.head_commit.message, '/dependabot/')))
+      && 'release' || github.run_id
+    }}
   cancel-in-progress: false
 
 permissions:
@@ -68,7 +89,29 @@ jobs:
   # being created from the wrong commit. The second line of defence is the
   # `release` environment, whose deployment branch rule is configured by hand -
   # docs/release.md.
+  #
+  # On a push, the dependabot job decides: it releases only when everything
+  # since the last release is Dependabot's, changes only action pins and the
+  # gomod updates' files, holds a fix(deps), and CI passed on the push
+  # (gh-reusable-workflows' dependabot-release.md). Its version is explicit
+  # here.
+  dependabot:
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    uses: leinardi/gh-reusable-workflows/.github/workflows/dependabot-release.yaml@de01bef0599aae3ab1d10e74c51b0031788b6d11 # v1.7.0
+    with:
+      ecosystems: gomod
+
   guard:
+    needs: dependabot
+    # A dispatch skips the dependabot job; always() keeps this job from being
+    # skipped with it.
+    if: >-
+      always()
+      && (github.event_name == 'workflow_dispatch' || needs.dependabot.outputs.release == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -92,6 +135,11 @@ jobs:
   # still builds, packages and signs them, with goreleaser.
   ci-green:
     needs: guard
+    # On a dispatch the dependabot job is skipped, and a skipped job anywhere up
+    # the chain skips this one under the implicit success(), even though guard
+    # passed. So the condition is explicit: guard passed, and the run is not
+    # cancelled.
+    if: ${{ !cancelled() && needs.guard.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -109,6 +157,12 @@ jobs:
   # the release job waits for it to pass, in this run attempt, right before its
   # first step that publishes anything.
   audit:
+    needs: dependabot
+    # A dispatch skips the dependabot job; always() keeps this job from being
+    # skipped with it.
+    if: >-
+      always()
+      && (github.event_name == 'workflow_dispatch' || needs.dependabot.outputs.release == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -139,8 +193,12 @@ jobs:
 
   release:
     needs:
+      # For a Dependabot release's version, below.
+      - dependabot
       - guard
       - ci-green
+    # Explicit for the same reason as ci-green's.
+    if: ${{ !cancelled() && needs.guard.result == 'success' && needs.ci-green.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Created on first run with no protection rules, which changes nothing by
@@ -196,7 +254,7 @@ jobs:
       # Only to derive a version: a version typed by hand releases even while
       # GitHub's release downloads fail.
       - name: Install svu
-        if: inputs.version == ''
+        if: github.event_name == 'workflow_dispatch' && inputs.version == ''
         uses: leinardi/gh-composite-actions/setup-svu@addc113a34e0a96ca2e08218380fdecad2fdd230 # v1.4.2
 
       # Explicit, or derived by svu from the commits since the highest strict
@@ -207,7 +265,7 @@ jobs:
         id: version
         uses: leinardi/gh-composite-actions/release-version@addc113a34e0a96ca2e08218380fdecad2fdd230 # v1.4.2
         with:
-          version: ${{ inputs.version }}
+          version: ${{ github.event_name == 'workflow_dispatch' && inputs.version || needs.dependabot.outputs.version }}
 
       # release-version lets a recovery re-run reuse its version whatever was
       # released since. Not here: goreleaser marks every release it publishes
