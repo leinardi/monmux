@@ -99,7 +99,7 @@ jobs:
 
     steps:
       - name: Require CI green on this commit
-        uses: leinardi/gh-composite-actions/require-ci-green@2115c9766c690e2e98afdeb64425c761aa86b072 # v1.4.0
+        uses: leinardi/gh-composite-actions/require-ci-green@addc113a34e0a96ca2e08218380fdecad2fdd230 # v1.4.2
         with:
           accepted-events: push
 
@@ -197,7 +197,7 @@ jobs:
       # GitHub's release downloads fail.
       - name: Install svu
         if: inputs.version == ''
-        uses: leinardi/gh-composite-actions/setup-svu@2115c9766c690e2e98afdeb64425c761aa86b072 # v1.4.0
+        uses: leinardi/gh-composite-actions/setup-svu@addc113a34e0a96ca2e08218380fdecad2fdd230 # v1.4.2
 
       # Explicit, or derived by svu from the commits since the highest strict
       # vX.Y.Z tag reachable from HEAD; higher than every release already
@@ -205,7 +205,7 @@ jobs:
       # docs/release.md has the rules.
       - name: Resolve the version to release
         id: version
-        uses: leinardi/gh-composite-actions/release-version@2115c9766c690e2e98afdeb64425c761aa86b072 # v1.4.0
+        uses: leinardi/gh-composite-actions/release-version@addc113a34e0a96ca2e08218380fdecad2fdd230 # v1.4.2
         with:
           version: ${{ inputs.version }}
 
@@ -358,7 +358,7 @@ jobs:
       # docs/release.md. A dry run waits for it too, so it reports the audit a
       # real run would face.
       - name: Require the audit to have passed
-        uses: leinardi/gh-composite-actions/require-job-success@2115c9766c690e2e98afdeb64425c761aa86b072 # v1.4.0
+        uses: leinardi/gh-composite-actions/require-job-success@addc113a34e0a96ca2e08218380fdecad2fdd230 # v1.4.2
         with:
           job: audit
           timeout: "15"
