@@ -16,6 +16,7 @@ redaction exists to keep out of a public issue.
 
 * [ ] I have checked that there are no duplicate active or recent issues describing this problem.
 * [ ] I am using the latest release, or have reproduced this on `main`.
+* [ ] This is not a security vulnerability (those go through the private process in SECURITY.md).
 * [ ] If this is about a monitor that is not in the catalog, I am filing a **Monitor report**
   instead.
 
