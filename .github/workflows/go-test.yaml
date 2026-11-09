@@ -1,0 +1,91 @@
+name: Go tests
+
+# Reusable: CI calls it for every run (restore only) and go-cache-warmup.yaml calls it on main
+# (restore and save). GitHub only lets a pull request read caches saved on its own ref or on the
+# default branch, so main is where the shared build and test cache has to come from, and a pull
+# request that saved its own would only spend the repository's cache quota.
+#
+# No job here runs monmux against hardware: the test suite refuses to start a process by
+# construction, so a runner needs neither ddcutil nor m1ddc - AGENTS.md, docs/testing.md.
+on:
+  workflow_call:
+    inputs:
+      save-cache:
+        description: Save the Go build and test cache after the run.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  go-test:
+    # Both OSes, because a backend's build-tagged tests only ever compile on
+    # their own. The macOS runner needs no m1ddc: nothing here executes it.
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # cache: false - setup-go's own cache saves on every event, pull requests included; the
+      # restore and the main-only save below replace it.
+      - name: Set up Go
+        id: setup-go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: false
+
+      - name: Locate the Go caches
+        id: go-env
+        shell: bash
+        run: |
+          {
+            echo "gocache=$(go env GOCACHE)"
+            echo "gomodcache=$(go env GOMODCACHE)"
+          } >> "$GITHUB_OUTPUT"
+
+      # The key ends in the commit, so main saves a new entry per change; the prefix fallbacks let
+      # every other run start from the newest main entry and rebuild only what changed. GOCACHE
+      # also carries test results, so unchanged packages report (cached).
+      #
+      # The last fallback drops the Go version: Dependabot can rewrite the go.mod directive to a
+      # full patch (`go 1.26` to `go 1.26.0`), which moves setup-go off the patch main resolves,
+      # and every version-qualified key would miss on exactly the pull requests that need the
+      # cache. Entries built by another toolchain are keyed by build ID and go unused; the module
+      # cache carries over intact.
+      - name: Restore the Go cache
+        id: restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ steps.go-env.outputs.gocache }}
+            ${{ steps.go-env.outputs.gomodcache }}
+          key: go-test-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-test-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.sum') }}-
+            go-test-${{ runner.os }}-${{ runner.arch }}-go${{ steps.setup-go.outputs.go-version }}-
+            go-test-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Run the test suite
+        run: make go-test
+
+      - name: Save the Go cache
+        if: ${{ inputs.save-cache && !cancelled() && steps.restore.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ steps.go-env.outputs.gocache }}
+            ${{ steps.go-env.outputs.gomodcache }}
+          key: ${{ steps.restore.outputs.cache-primary-key }}

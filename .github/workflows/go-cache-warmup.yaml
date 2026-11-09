@@ -1,0 +1,71 @@
+name: Go Cache Warm-up
+
+# Keeps a main-branch Go build and test cache for every other run to restore (go-test.yaml has the
+# key and its fallbacks; ci.yaml's Go jobs restore it and never save). This is the only writer:
+# GitHub lets a pull request read caches saved on main, and nothing a pull request saves is readable
+# by main or by another pull request.
+#
+# Triggered by the merges that invalidate that cache rather than by the clock, so it bills minutes
+# only when main actually changed and the saved entry matches the newest main, which is also what
+# lets a pull request get cached test results back. cancel-in-progress collapses a burst of merges
+# into a single run. The weekly schedule is eviction insurance: GitHub drops a cache nothing has
+# read for seven days.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "**.go"
+      - "**/testdata/**"
+      - go.mod
+      - go.sum
+      - internal/catalog/models.yaml
+      - Makefile
+      - .mk/**
+      - .github/workflows/go-test.yaml
+      - .github/workflows/go-cache-warmup.yaml
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: go-cache-warmup-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  go-test:
+    uses: ./.github/workflows/go-test.yaml
+    permissions:
+      contents: read
+    with:
+      # A dispatch from another branch runs the tests but saves nothing: only main writes the cache.
+      save-cache: ${{ github.ref == 'refs/heads/main' }}
+
+  # Each run saves a new entry per OS, keyed by commit; keep only the newest two of each so the
+  # repository cache quota is not spent on stale builds. One prefix per OS, so a run that saved
+  # only one OS cannot prune the other's last entry.
+  prune:
+    needs: go-test
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+
+    steps:
+      - name: Delete the older Linux Go caches
+        uses: leinardi/gh-composite-actions/prune-caches@2115c9766c690e2e98afdeb64425c761aa86b072 # v1.4.0
+        with:
+          ref: refs/heads/main
+          key-prefix: go-test-Linux-
+          keep: "2"
+
+      - name: Delete the older macOS Go caches
+        uses: leinardi/gh-composite-actions/prune-caches@2115c9766c690e2e98afdeb64425c761aa86b072 # v1.4.0
+        with:
+          ref: refs/heads/main
+          key-prefix: go-test-macOS-
+          keep: "2"
