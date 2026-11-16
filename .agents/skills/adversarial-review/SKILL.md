@@ -20,64 +20,30 @@ state, or failure point where it fails — not to praise it, not to restyle it. 
 finds nothing is only credible after you have actively tried to break the changed behaviour
 and failed.
 
-This skill is the **entry point for reviewing any change in this repository, in any
-language**. It does not replace the project's authorities — it routes to them. `AGENTS.md`,
-the documentation and `go-style-guide` own the rules; this skill owns the mindset, the
-routing, and the report.
+This skill routes to the project's authorities rather than replacing them: `AGENTS.md`, the
+documentation and `go-style-guide` own the rules.
 
-Copy this checklist and tick items as you go:
+## Hard rule: reviewing never writes to a monitor
 
-```text
-Review progress:
-- [ ] 0. Nothing run that writes to a monitor (AGENTS.md HARD RULE)
-- [ ] 1. Scope chosen; diff, stated intent and every changed file read in full
-- [ ] 2. AGENTS.md read; skills and docs from §2 loaded for every changed path
-- [ ] 3. Repository invariants checked
-- [ ] 4. Adversarial passes run; every candidate confirmed or dropped
-- [ ] 5. Always-on passes (a)–(e) run
-- [ ] 6. Gates run; `git status` checked for hook rewrites; skipped gates marked unverified
-- [ ] 7. Report written: findings, open questions, hardware commands for the human (marked
-        unresolved), verdict, gates run and not run
-```
+The HARD RULE in `AGENTS.md` applies to review exactly as it applies to implementation: run only
+the commands it lists as allowed, and no test or script that executes the real `ddcutil` or
+`m1ddc`. Anything a reviewer wants proven on real hardware goes into the report as a command for
+the human to run, never executed here.
 
-## 0. The hard rule, during review too
+## Scope
 
-**Reviewing never writes to a monitor.** The HARD RULE in `AGENTS.md` applies to review
-exactly as it applies to implementation: run only the commands it lists as allowed, and no
-test or script that executes the real `ddcutil` or `m1ddc`. Anything a reviewer wants proven
-on real hardware goes into the report as a command for the human to run, never executed here.
+When invoked directly: review the scope the user gives (`gh pr view <n>` for intent, then `gh pr
+diff <n>`); with none, the uncommitted work (`git diff HEAD` plus untracked files, which no diff
+shows); on a clean tree, `git diff main...HEAD`. Never review from a description of the change.
 
-## 1. Establish the diff (what am I reviewing?)
+Read the stated **intent** (`git log --oneline` for the range, any linked issue or PR body): a
+change that does something other than what it claims is a finding. Read every changed file in
+full, not just the hunks, and for non-trivial changes the callers, implementations, tests and
+docs of what changed, found with a reference search, not assumed from the diff: a signature or
+behaviour change is only safe if every call site agrees. A change under a build tag needs its
+counterpart on the other OS checked too.
 
-Never review from memory or from the user's description of the change — read the actual
-diff. Pick the scope from what the user said:
-
-| User intent | Command |
-| --- | --- |
-| "my work" / "before I commit" / uncommitted | `git status --short`, then `git diff HEAD`; read untracked files too, which no diff shows |
-| staged changes only | `git diff --staged` |
-| a branch / "this PR" / "ready to merge" | `git diff main...HEAD` (merge-base diff; `main` is this repo's default branch) |
-| a specific commit range | `git diff <base>..<head>` |
-| a GitHub PR number | `gh pr view <n>` for intent, then `gh pr diff <n>` |
-
-If the user names no scope, review the uncommitted work (first row); if the tree is
-clean, review the branch against `main` (third row).
-
-Also read `git log --oneline` for the range and any linked issue/PR body — the stated
-**intent** is what you check the code against. A change that works but does something other
-than what it claims is a finding, and so is a commit whose type ships the wrong version: `svu`
-derives the release from Conventional Commits, so a change users should receive typed `chore`,
-`docs`, `refactor` or `perf` never ships, a stray `!` cuts a major, and a word ending in `feat` or
-`fix` right before a colon anywhere in a subject counts as that type. PRs land as merge commits, so
-every commit in the range counts, not just the title (`AGENTS.md`, `docs/release.md`).
-
-Read every changed file in full, not just the hunks. A hunk looks correct in isolation and
-wrong against the 40 lines above it that git didn't show you. For non-trivial changes, also
-read the callers, implementations, tests and docs of what changed — found with a reference
-search, not assumed from the diff: a signature or behaviour change is only safe if every call
-site agrees. A change under a build tag needs its counterpart on the other OS checked too.
-
-## 2. Load project authority (path → authority)
+## Authority (path → authority)
 
 Always read `AGENTS.md`. Then, for each changed path, load the matching skill or document
 **before** judging that file — it is the source of truth for the rules, and violations there
@@ -106,10 +72,10 @@ still notices. A test that passes because its input is empty, its walk found no 
 allowlist entry outlived the line it excused, or its rule never ran is a false pass.
 
 No matching document (bash, Makefile, plain YAML, Markdown)? Fall back to `AGENTS.md`, the
-invariants in §3 and the passes in §4. **Same rigor** — an unmatched area is not a lighter
+invariants and passes below. **Same rigor** — an unmatched area is not a lighter
 review.
 
-## 3. Repository invariants
+## Repository invariants
 
 `AGENTS.md`'s fail-closed invariants 1–6 and its two blast-radius rules (*Never add a raw VCP
 command*, *Backends only execute a `Command` produced by `Plan`*) are the checklist: read them
@@ -137,6 +103,13 @@ a diff:
 - **Raw VCP and `Plan`/`Execute`.** A new exported `Operation` constructor, a settable `Value`,
   a mechanism parsed from user input, or any backend method that accepts a path, argv, or
   `Command` from a caller is critical.
+- **Commit type matches whether it ships** (`AGENTS.md`'s release table, *Commit messages*).
+  `svu` derives the release from Conventional Commits, so a change users should receive typed
+  `chore`, `docs`, `refactor` or `perf` never ships, a stray `!` cuts a major, and a word ending
+  in `feat` or `fix` right before a colon anywhere in a subject counts as that type. A release
+  that adds or moves a byte monmux can send is at least a minor (the catalog rule), never a
+  patch. PRs land as merge commits, so every commit in the range counts, not just the title
+  (`docs/release.md`).
 
 Review-only invariants that AGENTS.md states briefly or not at all:
 
@@ -164,25 +137,18 @@ Review-only invariants that AGENTS.md states briefly or not at all:
 - **Every Go file carries the Apache 2.0 header** from
   `.idea/copyright/Apache_2_0.xml`.
 
-## 4. Adversarial passes
+## Adversarial passes
 
-Do not skim for style. Run these passes, each with a "how would I make this fail" framing.
+Beyond the generic passes (logic, nil and empty input, aliasing, error handling, concurrency,
+resources, security), run these with a "how would I make this fail" framing, and name one
+concrete failing input per candidate rather than asserting "looks fine".
 
-### Language-agnostic
-
-- **Generic passes**: correctness and logic, boundaries and nil/empty, aliasing, error
-  handling, concurrency, resources and security. For each, name one concrete failing input and
-  trace it end to end rather than asserting "looks fine".
-- **Contract drift**: does the code do what the commit message / PR / issue claims? A public
-  signature, flag, config key, JSON field, refusal reason, exit code, output format or catalog
-  entry changed without updating every consumer and the docs (§5 (e)).
-- **Tests**: does the diff add or change a test for the behaviour it introduces? A test that
-  passes against the *old* code (asserts nothing new), that asserts on a fake's recorded calls
-  instead of the decision that produced them, or that was weakened/deleted to make the change
-  pass — all findings. A bug fix with no regression test is a gap worth flagging.
-
-### monmux-specific
-
+- **Contract drift:** a public signature, flag, config key, JSON field, refusal reason, exit
+  code, output format or catalog entry changed without updating every consumer and the docs
+  (*Docs drift* below).
+- **Tests:** a test that passes against the *old* code, that asserts on a fake's recorded calls
+  instead of the decision that produced them, or that was weakened or deleted to make the change
+  pass is a finding. A bug fix with no regression test is a gap worth flagging.
 - **Identification:** malformed or truncated EDID, missing descriptor, absent
   or non-alphanumeric serial, two attached displays matching the same model,
   one matching and one not, an identity that matches two catalog entries, a
@@ -224,29 +190,21 @@ Do not skim for style. Run these passes, each with a "how would I make this fail
 - **Cross-OS:** does the change still build with `GOOS=darwin`? Does a shared
   file reference a Linux-only symbol? Does a `select` package change leave
   `select_other.go` wrong?
-- **Tests:** a dropped refusal-reason check, a fixture with a real serial, a new
+- **monmux test gaps:** a dropped refusal-reason check, a fixture with a real serial, a new
   refusal reason without a test, and a new catalog input without a
   planned-command test are findings.
 
-For each candidate defect:
-
-1. Reproduce it with a focused test, or trace one concrete input through the code to the wrong
-   result.
-2. Confirmed: it is a finding. Record the input and the wrong behavior.
-3. Not confirmed: dig once more (callers, tests, config path). Still not confirmed: drop it.
-   A vague "consider" is not a finding.
-
-## 5. Always-on passes
+## Always-on passes
 
 The passes above are shaped by the diff. These run on **every** review, whatever changed.
 
 ### (a) What reaches a monitor
 
-Ask the one question the HARD RULE and §3 are built on: does this change create a new place where
-something from outside monmux — a flag, a config key, an environment variable, a tool's output
-— becomes a byte sent to a monitor, a write decision, or a program that gets executed? If it
-does, walk the identify-before-writing, enabled-inputs, raw-VCP and `Plan`/`Execute` items of
-§3 against it.
+Ask the one question the HARD RULE and the invariants are built on: does this change create a
+new place where something from outside monmux — a flag, a config key, an environment variable,
+a tool's output — becomes a byte sent to a monitor, a write decision, or a program that gets
+executed? If it does, walk the identify-before-writing, enabled-inputs, raw-VCP and
+`Plan`/`Execute` invariants against it.
 
 ### (b) Deletion smell
 
@@ -297,38 +255,26 @@ The user-facing contract is written down more than once and can disagree silentl
 A surface the code has and the docs do not mention is a finding; so is a documented one nothing
 implements, and so is a default in the docs that differs from the code.
 
-## 6. Verify before you trust (don't hand-wave the gates)
+## Gates
 
-Static reading misses things. Use focused tests while investigating (`go test
-./internal/<pkg> -run <Name>`), then run the gates the change owes and treat a failure it
-caused as a confirmed finding with the output attached. Verification is read-only by
-construction: the test suite executes no external binary, and no gate here writes to a
-monitor.
+Do not re-run the repository's gates (`make go-test`, `make go-vet`, `make check`, the `*-cross`
+targets, `make audit-deps`, `make verify-scripts`). The implementer is expected to run them and CI
+runs them again, but do not assume either happened: report the verification evidence you actually
+have (under adversarial-review-loop, `verification.txt` when supplied, which is the implementer's
+claim and not proof; when invoked directly, the CI status or gate output in the PR or session) and
+what is missing, such as a backend or shared-file change with no cross-OS build or lint reported.
+Judge what is missing against `AGENTS.md`'s *Validation matrix*: every changed path owes the checks
+its row names. A failure in that evidence caused by the change is a confirmed finding. Never say
+that a check you did not see passed, and a skipped test (`SKIP` in `-v` output) is not a pass. When
+invoked directly, one focused test (`go test ./internal/<pkg> -run <Name>`) may be run to confirm a
+single suspected finding, never a full suite or gate; the suite executes no external binary. A
+candidate that is neither reproduced nor traced end to end is dropped: a vague "consider" is not a
+finding.
 
-| Diff touched | Run |
-| --- | --- |
-| any Go source or test | `make go-test` (race detector on), `make go-vet`, then `make check` |
-| `internal/backend/ddcutil`, `internal/backend/m1ddc`, `select`, or any shared file | additionally `make go-build-cross`, `make go-vet-cross` and `make go-lint-cross` — `make check` lints only the host's backend |
-| `go.mod`, `go.sum`, or dependencies | additionally `make go-tidy` and `make audit-deps` (govulncheck; network required) |
-| `internal/catalog` or `docs/compatibility.md` | `make go-test` — the compatibility test is the gate |
-| build, Makefile, `.mk/`, or CI | `make go-build`, `go test ./test/toolchain/` and `make check` |
-| `test/**` | `go test -count=1 ./test/...` |
-| `scripts/check-*.sh`, `scripts/lib/` | `make verify-scripts` |
-| docs or skill only | `make check` and inspect the rendered content and links |
+Hardware behaviour is never something you run. A finding that can only be settled on real
+hardware gets the exact command for the human to run and is marked unresolved.
 
-The suite is fast, isolated and hermetic, so a source change normally warrants the full suite
-rather than only targeted tests.
-
-golangci-lint may not be on `PATH`; run it through pre-commit. Several hooks rewrite files
-(prettier, markdownlint, the golangci formatters): check `git status` afterwards and report a
-rewrite as a finding instead of reviewing the rewritten tree. A skipped test is not a pass —
-check the `-v` output for `SKIP`. If a gate cannot run, say why and mark that risk unverified
-rather than implying it passed.
-
-Hardware behaviour is never a gate you run. If a finding can only be settled on real hardware,
-write the exact command for the human to run and mark the finding unresolved.
-
-## 7. Report
+## Report
 
 Rank by severity, worst first. A write that can happen without an exact catalog match, a raw
 VCP path, a lost re-verification, a false "nothing was written" promise, a serial leak, or a
@@ -342,7 +288,7 @@ already catch unless it changes meaning or breaks a required gate. For each find
 ```
 
 Findings first, then open questions or assumptions, then any hardware checks the human must
-run, then a one-line verdict: **block**, **approve with nits**, or **approve** — plus which
-verification gates you actually ran and which you couldn't. If you found nothing, state what you
+run, then a one-line verdict: **block**, **approve with nits**, or **approve**, and one line:
+`Verification evidence: seen … / missing …`. If you found nothing, state what you
 tried to break so the "no findings" is credible. Be blunt; do not soften a real defect to be
 polite, and do not invent findings to look thorough.
