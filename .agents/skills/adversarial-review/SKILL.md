@@ -261,10 +261,11 @@ them and CI runs them again, but do not assume either happened: report the verif
 evidence you actually have (under adversarial-review-loop, `verification.txt` when supplied,
 which is the implementer's claim and not proof; when invoked directly, the CI status or gate
 output in the PR or session) and what is missing, such as a backend or shared-file change with
-no cross-OS build or lint reported. Never say that a check you did not see passed, and a
-skipped test (`SKIP` in `-v` output) is not a pass. When invoked directly, one focused test
-(`go test ./internal/<pkg> -run <Name>`) may be run to confirm a single suspected finding, never
-a full suite or gate; the suite executes no external binary. A candidate that is neither
+no cross-OS build or lint reported. A failure in that evidence caused by the change is a
+confirmed finding. Never say that a check you did not see passed, and a skipped test (`SKIP` in
+`-v` output) is not a pass. When invoked directly, one focused test (`go test ./internal/<pkg>
+-run <Name>`) may be run to confirm a single suspected finding, never a full suite or gate; the
+suite executes no external binary. A candidate that is neither
 reproduced nor traced end to end is dropped: a vague "consider" is not a finding.
 
 Hardware behaviour is never something you run. A finding that can only be settled on real
