@@ -103,6 +103,13 @@ a diff:
 - **Raw VCP and `Plan`/`Execute`.** A new exported `Operation` constructor, a settable `Value`,
   a mechanism parsed from user input, or any backend method that accepts a path, argv, or
   `Command` from a caller is critical.
+- **Commit type matches whether it ships** (`AGENTS.md`'s release table, *Commit messages*).
+  `svu` derives the release from Conventional Commits, so a change users should receive typed
+  `chore`, `docs`, `refactor` or `perf` never ships, a stray `!` cuts a major, and a word ending
+  in `feat` or `fix` right before a colon anywhere in a subject counts as that type. A release
+  that adds or moves a byte monmux can send is at least a minor (the catalog rule), never a
+  patch. PRs land as merge commits, so every commit in the range counts, not just the title
+  (`docs/release.md`).
 
 Review-only invariants that AGENTS.md states briefly or not at all:
 
@@ -129,11 +136,6 @@ Review-only invariants that AGENTS.md states briefly or not at all:
   doc example is critical.
 - **Every Go file carries the Apache 2.0 header** from
   `.idea/copyright/Apache_2_0.xml`.
-- **Commit type matches whether it ships.** `svu` derives the release from Conventional
-  Commits, so a change users should receive typed `chore`, `docs`, `refactor` or `perf` never
-  ships, a stray `!` cuts a major, and a word ending in `feat` or `fix` right before a colon
-  anywhere in a subject counts as that type. PRs land as merge commits, so every commit in the
-  range counts, not just the title (`AGENTS.md`, `docs/release.md`).
 
 ## Adversarial passes
 
@@ -188,7 +190,7 @@ concrete failing input per candidate rather than asserting "looks fine".
 - **Cross-OS:** does the change still build with `GOOS=darwin`? Does a shared
   file reference a Linux-only symbol? Does a `select` package change leave
   `select_other.go` wrong?
-- **Tests:** a dropped refusal-reason check, a fixture with a real serial, a new
+- **monmux test gaps:** a dropped refusal-reason check, a fixture with a real serial, a new
   refusal reason without a test, and a new catalog input without a
   planned-command test are findings.
 
@@ -255,18 +257,19 @@ implements, and so is a default in the docs that differs from the code.
 
 ## Gates
 
-Do not re-run the repository's gates (`make go-test`, `make go-vet`, `make check`, the
-`*-cross` targets, `make audit-deps`, `make verify-scripts`). The implementer is expected to run
-them and CI runs them again, but do not assume either happened: report the verification
-evidence you actually have (under adversarial-review-loop, `verification.txt` when supplied,
-which is the implementer's claim and not proof; when invoked directly, the CI status or gate
-output in the PR or session) and what is missing, such as a backend or shared-file change with
-no cross-OS build or lint reported. A failure in that evidence caused by the change is a
-confirmed finding. Never say that a check you did not see passed, and a skipped test (`SKIP` in
-`-v` output) is not a pass. When invoked directly, one focused test (`go test ./internal/<pkg>
--run <Name>`) may be run to confirm a single suspected finding, never a full suite or gate; the
-suite executes no external binary. A candidate that is neither
-reproduced nor traced end to end is dropped: a vague "consider" is not a finding.
+Do not re-run the repository's gates (`make go-test`, `make go-vet`, `make check`, the `*-cross`
+targets, `make audit-deps`, `make verify-scripts`). The implementer is expected to run them and CI
+runs them again, but do not assume either happened: report the verification evidence you actually
+have (under adversarial-review-loop, `verification.txt` when supplied, which is the implementer's
+claim and not proof; when invoked directly, the CI status or gate output in the PR or session) and
+what is missing, such as a backend or shared-file change with no cross-OS build or lint reported.
+Judge what is missing against `AGENTS.md`'s *Validation matrix*: every changed path owes the checks
+its row names. A failure in that evidence caused by the change is a confirmed finding. Never say
+that a check you did not see passed, and a skipped test (`SKIP` in `-v` output) is not a pass. When
+invoked directly, one focused test (`go test ./internal/<pkg> -run <Name>`) may be run to confirm a
+single suspected finding, never a full suite or gate; the suite executes no external binary. A
+candidate that is neither reproduced nor traced end to end is dropped: a vague "consider" is not a
+finding.
 
 Hardware behaviour is never something you run. A finding that can only be settled on real
 hardware gets the exact command for the human to run and is marked unresolved.
