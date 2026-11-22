@@ -980,6 +980,15 @@ have not moved: a mechanism existing is not evidence that a model uses it.
 command is sent twice: the first write bounces back to DisplayPort. monmux performs exactly one
 write, so a row for it would not reproduce the reported switch.
 
+The 38WN95C is reported switching through its picture-by-picture control, `VCP 0xD7` from the
+ordinary source address: `5` turns PBP on, then `2` turns it off with the sub picture full screen.
+That is two writes, with a hotplug and an EDID change between them, which monmux's last-moment
+re-verify would see as the display moving. It also names no input: the result is whichever sub
+input the OSD has set for PBP, which monmux cannot read. The report says both directions work
+over the monitor's USB HID bridge, which neither ddcutil nor m1ddc drives. Over the video cable
+only the active input's port answers DDC/CI. It is one report, and its firmware analysis has not
+been reproduced: <https://github.com/rockowitz/ddcutil/issues/100#issuecomment-7070881098>.
+
 **An input named only by its value.** "0x90 works" says which byte was sent, not which socket lit
 up. The 35WN75C-B, 27BP85UN, 27GR83Q-B, 34GP63A-B, 32UN880P-B, 34WN650, 32UN650K, 32QN55T and
 39GX950B reports stop there, so there is nothing to key an entry on.
@@ -997,7 +1006,10 @@ cannot check is worse than no entry, so there is none.
 **A negative result.** There is no slot for "this model is known not to switch". The 27GP850P-B,
 27GN850-B, 27GN950, 34GN850-B, 38WN95C-W, 43UN700-B, 27UL600, 27GP95R, 40BP95C-W, the 2016 29UM69G-B
 and one 2025 45GX950A have all been reported as not switching over this channel, and one 38WN95CP-W
-was bricked by an unrelated DDC write. Those reports are written into the notes above where they
+was bricked by an unrelated DDC write. For the 38WN95C there is a reported cause: on firmware 3.9
+the side-channel handler replaces the requested input with the current one before switching, so
+the screen blanks and comes back unchanged, and `VCP 0x60` is not used for switching at all — the
+same report as the PBP route above. Those reports are written into the notes above where they
 touch an entry, and nowhere else. Treat this page as "no evidence of a problem", never as "known
 good".
 
