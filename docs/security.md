@@ -13,7 +13,11 @@ this project is always to refuse.
 ### Wrong values
 
 **Risk.** A value that means "switch to USB-C" on one model means something else on another, and
-manufacturer-specific registers are not a documented, portable interface.
+manufacturer-specific registers are not a documented, portable interface. On an LG 38WN95C, some
+codes on the `0x50` side channel (`0xF5`, `0xF0`, `0xE4`, `0xE9` and `0xF9`) are reported to reset
+the monitor or write to its EEPROM, and the same report ties the bricked 38WN95CP-W in ddcutil
+issue #419 to that family:
+<https://github.com/rockowitz/ddcutil/issues/100#issuecomment-7070881098>.
 
 **Mitigation.** A value can only reach a monitor if it is written in the catalog next to evidence
 that someone tested it on that exact model. The catalog is `internal/catalog/models.yaml`, rendered
